@@ -176,7 +176,6 @@ def smoothing(region_lists, mutations, window):
 
     return region_lists
 
-
 # Clusters
 def find_locals_old(regions):
     """
