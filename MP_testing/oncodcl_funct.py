@@ -3,13 +3,14 @@ import gzip
 import math as m
 import re
 from collections import defaultdict
-import logging
-import daiquiri
-
-
 import numpy as np
+#import daiquiri
 from intervaltree import IntervalTree
 from bgreference import hg19
+
+
+#daiquiri.setup()
+#logger = daiquiri.getlogger()
 
 
 def regions(input_regions):
@@ -90,7 +91,7 @@ def pre_smoothing(symbol, chromosome, regions, signatures):
 
         # search trinucleotide probabilities
         for n in range(1, len(sequence) - 1):  # start to end
-            ref_tri = sequence[n - 1:n + 2]
+            ref_tri = sequence[n-1:n+2]
             two_n = n2.search(ref_tri)
             one_n = n1.search(ref_tri)
             if two_n is None:
@@ -140,14 +141,15 @@ def tukey(window):
     return filter_
 
 
-def smoothing(region_lists, window):
+def smoothing(region_lists, mutations, window):
     """
     Given a gene,
-    :param region_lists: dict, dictionary containing genomic positions, probabilities and mutations lists for a gene
+    :param region_lists: dict, dictionary containing genomic and probabilities lists for a gene
+    :param mutations:
     :param window:
-    :return: dict, region_lists with new keys 'binary' and 'mut_by_pos'
+    :return: dict, region_lists with new keys 'binary' and 'mutations'
         binary: length == genomic, smoothing score curve
-        mut_by_pos: length == genomic, number of mutations per position
+        mutations: length == genomic, number of mutations per position
     """
     # Define smoothing window
     window += 1 - window % 2
@@ -156,24 +158,23 @@ def smoothing(region_lists, window):
     binary = np.zeros(len(region_lists['genomic']) + window - 1)  # binary cds with borders added
     mutations_a = np.zeros(len(region_lists['genomic']) + window - 1)  # mutations cds with borders added
 
-    indexes = np.searchsorted(np.array(region_lists['genomic']), region_lists['mutations'])
+    indeces = np.searchsorted(np.array(region_lists['genomic']), mutations)
 
-    for index in indexes:
+    for index in indeces:
         try:
             binary[index: index + window] += smooth
             mutations_a[index + window // 2] += 1
         except ValueError as e:
-            print('Ranges problem: %s' % e)
+            print('Ranges problem: %s' %e)
 
     # Remove the extra bases at the beginning and at the end
     binary = binary[window // 2: - window // 2 + 1]
     mutations_a = mutations_a[window // 2: - window // 2 + 1]
 
     region_lists['binary'] = binary
-    region_lists['mut_by_pos'] = mutations_a
+    region_lists['mutations'] = mutations_a
 
     return region_lists
-
 
 # Clusters
 def find_locals(regions):
@@ -199,7 +200,7 @@ def find_locals(regions):
         indexes.append([0, i, b])
 
     # for start +1, end -1 of binary array
-    for i in range(1, length - 1):
+    for i in range(1, length-1):
         a = regions['binary'][i - 1]
         b = regions['binary'][i]
         c = regions['binary'][i + 1]
@@ -238,30 +239,30 @@ def raw_clusters(indexes):
     """
 
     clusters = defaultdict(dict)
-
+    
     # Iterate through all maxs in indexes
-    j = 0
+    j = 0 
     generator_maxs = (i for i in indexes if i[0] == 1)
-
+        
     for maximum in generator_maxs:
         i = indexes.index(maximum)
-        clusters[j]['max'] = [maximum[1], maximum[2]]
+        clusters[j]['max'] = [maximum[1], maximum[2]]     
 
         # if it's not the first nor the last cluster
-        if i != 0 and i != len(indexes) - 1:
+        if i != 0 and i != len(indexes)-1: 
             clusters[j]['min_l'] = [indexes[i - 1][1], indexes[i - 1][2]]
             clusters[j]['min_r'] = [indexes[i + 1][1], indexes[i + 1][2]]
 
         # if it's the first cluster
-        elif i == 0:
+        elif i == 0: 
             clusters[j]['min_l'] = []
             clusters[j]['min_r'] = [indexes[i + 1][1], indexes[i + 1][2]]
 
         # if it's the last cluster
-        elif i == len(indexes) - 1:
+        elif i == len(indexes)-1: 
             clusters[j]['min_l'] = [indexes[i - 1][1], indexes[i - 1][2]]
             clusters[j]['min_r'] = []
-
+        
         j += 1
 
     return clusters
@@ -279,12 +280,12 @@ def merge_clusters(clusters, maxs, window):
     """
     maxs_set = set(maxs)
 
-    iterate = 1
-    while iterate != 0:  # Iterate until no clusters updates occur
+    iterate = 1 
+    while iterate != 0: # Iterate until no clusters updates occur
         stop = 0
         for x in range(len(clusters.keys())):
 
-            # When x is a key in clusters and min_r exists (clusters without min_r don't do merging):
+            # When x is a key in clusters and min_r exists (clusters without min_r don't do merging): 
             if x in clusters.keys():
                 if clusters[x]['min_r'] != []:
                     # Define the interval of search
@@ -316,11 +317,12 @@ def merge_clusters(clusters, maxs, window):
     return clusters
 
 
-def clusters_mut(clusters, regions):
+def clusters_mut(clusters, regions, mutations):
     """
     Calculates the number of mutations within a cluster
     :param clusters: dictionary of dictionary containing clusters
-    :param regions: dictionary containing information for a gene (symbol, genomic, binary, mutations, mut_by_pos)
+    :param regions: dictionary containing information for a gene (symbol, genomic, binary, mutations)
+    :param mutations: list of mutations for a region
     :return:
         clusters: dictionary of dictionaries with new key 'n_mutations' added
     """
@@ -340,7 +342,7 @@ def clusters_mut(clusters, regions):
 
         # add else here!
 
-        cluster_muts = [i for i in regions['mutations'] if left <= i <= right]
+        cluster_muts = [i for i in mutations if left <= i <= right]
         clusters[cluster]['n_mutations'] = len(cluster_muts)
 
     return clusters
@@ -361,19 +363,19 @@ def score_clusters(clusters, regions):
 
         if values['min_l'] and values['min_r']:
             for position in range(values['min_l'][0], values['min_r'][0] + 1):  # include mins
-                fraction_mut = regions['mut_by_pos'][position]
+                fraction_mut = regions['mutations'][position]
                 distance = abs(values['max'][0] - position)
                 score.append(fraction_mut / m.pow(root, distance))
 
         elif not values['min_l']:
             for position in range(values['max'][0] + 1, values['min_r'][0] + 1):
-                fraction_mut = regions['mut_by_pos'][position]
+                fraction_mut = regions['mutations'][position]
                 distance = abs(values['max'][0] - position)
                 score.append(fraction_mut / m.pow(root, distance))
 
         elif not values['min_r']:
             for position in range(values['min_l'][0], values['max'][0]):
-                fraction_mut = regions['mut_by_pos'][position]
+                fraction_mut = regions['mutations'][position]
                 distance = abs(values['max'][0] - position)
                 score.append(fraction_mut / m.pow(root, distance))
 
@@ -385,10 +387,11 @@ def score_clusters(clusters, regions):
     return clusters
 
 
-def clustering(regions, window):
+def clustering(regions, mutations, window):
     """
     Given a gene, calculate and score its clusters
     :param regions: dictionary containing information for a gene (symbol, genomic, binary, mutations)
+    :param mutations: list of mutations for a region
     :param window: int, clustering window for clusters merging
     :return: dictionary of dictionaries of clusters within a region
     """
@@ -396,9 +399,9 @@ def clustering(regions, window):
     indexes, maxs_list = find_locals(regions=regions)
     r_clusters = raw_clusters(indexes)
     m_clusters = merge_clusters(clusters=r_clusters, maxs=maxs_list, window=window)
-    f_clusters = clusters_mut(clusters=m_clusters, regions=regions)
+    f_clusters = clusters_mut(clusters=m_clusters, regions=regions, mutations=mutations)
     s_clusters = score_clusters(clusters=f_clusters, regions=regions)
-
+    
     return s_clusters
 
 

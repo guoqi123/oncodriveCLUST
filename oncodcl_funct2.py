@@ -1,9 +1,14 @@
 # Oncodriveclustl functions 2
+import os.path
 import numpy as np
 from collections import defaultdict
 import pickle
+import logging
+import daiquiri
+from concurrent.futures import ProcessPoolExecutor as Pool
 
 import oncodcl_funct as odf
+
 
 
 # Global variables
@@ -21,79 +26,104 @@ def normalize(probs):
     return [prob_factor * p for p in probs]
 
 
-def simulate(array_positions, n_mutations, pos_prob):
+def analysis(region_lists):
+    """
+    Calculate smoothing, clustering and gene score
+    :param region_lists: dict, keys 'genomic', 'probs', 'mutations', 'windows'
+    :return: int, gene score
+    """
+    region_smooth = odf.smoothing(region_lists, window=region_lists['windows'][0])
+    clusters = odf.clustering(regions=region_smooth, window=region_lists['windows'][1])
+    n_clusters, gene_score = odf.score_gene(clusters=clusters, cutoff=2)
+
+    return gene_score
+
+
+def simulate(region_lists, pos_prob, n_mut, n_sim):
     """Simulate mutations considering the signature
-    :param array_positions: array genomic positions
-    :param n_mutations: int, number of mutations to simulate
+    :param region_lists: array genomic positions
     :param pos_prob: array, raw probabilities
+    :param n_mut: int, number of mutations to simulate
+    :param n_sim: int, number of simulations
     :return: list
     """
 
     # Normalize probabilities
     norm_prob = normalize(pos_prob)
 
-    # Calculate list of simulated mutations
-    if len(array_positions) == len(norm_prob):
-        sim_mutations = np.random.choice(array_positions, size=n_mutations, replace=True, p=norm_prob)
-        return sim_mutations
+    # Generate simulated mutations
+    if len(region_lists['genomic']) == len(norm_prob):
+        for i in range(n_sim):
+            region_lists['mutations'] = np.random.choice(region_lists['genomic'], size=n_mut, replace=True, p=norm_prob)
+            yield region_lists
     else:
-        return []
+        for i in range(n_sim):
+            logger.debug('Pre-smoothing...')
+            region_lists['mutations'] = []
+            yield region_lists
 
 
-def analysis(region_arrays, mutations, window_s, window_c):
+def get_p(observed, simulations):
     """
-    Calculate smoothing, clustering and gene score
-    :param region_arrays: dict, keys 'genomic', 'probs'.
-    :param mutations: list, list of mutations, mutations == genomic positions
-    :param window_s: int, smoothing window
-    :param window_c: int, clustering window
-    :return: int, gene score
+    Calculate p value
+    :return: float, p-value
     """
-    region_smooth = odf.smoothing(region_arrays, mutations, window=window_s)
-
-    clusters = odf.clustering(regions=region_smooth, mutations=mutations, window=window_c)
-    n_clusters, gene_score = odf.score_gene(clusters=clusters, cutoff=2)
-
-    return gene_score
+    return len([x for x in simulations if x >= observed]) / len(simulations)
 
 
-def run_region(arguments, n_simulations=100):
+def run_region(arguments):
     """
     Given a gene, calculate the observed and simulated scores
-    :param arguments: tuple (symbol, regions, chromosome, mutations)
+    :param arguments: tuple (symbol, regions, chromosome, mutations,
+    n_simulations, smooth_window, cluster_window, cores)
         symbol: gene name
         regions: list of intervaltrees
-    :param n_simulations: int, number of simulations
+        chromosome: str, chromosome of the genomic element analysed
+        mutations: list, list of mutations (genomic positions)
+        n_simulations: int, number of simulations
+        smooth_window: int, smoothing window
+        cluster_window: int, clustering window
+        cores: int, number of cpus
     :return:
         symbol: str, gene
-        gene_results_d: dict, keys 'obs', 'sim'
+        observed: float, observed gene score
+        p_value: float, p-value
     """
-    gene_results_d = defaultdict()
-    symbol, regions, chromosome, mutations = arguments
+    global logger
+    logger = daiquiri.getLogger()
 
-    # Calculate arrays
-    """
-    region_lists['symbol']
-    region_lists['genomic']
-    region_lists['probs']
+    symbol, regions, chromosome, mutations, n_simulations, smooth_window, cluster_window, cores = arguments
 
-    """
-    region_arrays = odf.pre_smoothing(symbol, chromosome, regions, signatures)
+    # Read signatures
+    if os.path.isfile('signature.pickle'):
+        signatures = pickle.load(open("signature.pickle", "rb"))
+        signatures = signatures['probabilities']
+        logger.debug('Signatures read')
 
-    # Analysis of the observed mutations
-    observed_results = analysis(region_arrays, mutations, window_s=50, window_c=50)
-    gene_results_d['obs'] = observed_results
+        # Calculate lists of genomic positions and probabilities
+        logger.debug('Pre-smoothing...')
+        region_lists = odf.pre_smoothing(symbol, chromosome, regions, signatures)
+        region_lists['mutations'] = mutations
+        region_lists['windows'] = [smooth_window, cluster_window]
+        logger.debug('Pre-smoothing done')
 
-    # Analysis of the simulated mutations
-    simulations = []
-    for _ in range(n_simulations):
-        simulated_mutations = simulate(
-            array_positions=region_arrays['genomic'],
-            n_mutations=len(mutations),
-            pos_prob=region_arrays['probs'])
-        simulated_results = analysis(region_arrays, simulated_mutations, window_s=50, window_c=50)
-        simulations.append(simulated_results)
+        # Analysis of the observed mutations
+        observed = analysis(region_lists)
+        logger.debug('Observed mutations analyzed')
 
-    gene_results_d['sim'] = simulations
 
-    return symbol, gene_results_d
+        # Simulate mutations (generator)
+        sim_scores = []
+        simulations = simulate(region_lists,region_lists['probs'],len(mutations),n_simulations)
+        # Multiprocess
+        logger.debug('Start simulations...')
+        with Pool(max_workers=cores) as executor:
+            for score in executor.map(analysis, simulations):
+                sim_scores.append(score)
+
+        p_value = get_p(observed, sim_scores)
+
+        return symbol, observed, p_value
+
+    else:
+        logger.critical('File \'signatures.pickle\' not found')
