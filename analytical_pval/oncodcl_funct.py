@@ -12,10 +12,14 @@ from intervaltree import IntervalTree
 from bgreference import hg19
 
 
-def regions(input_regions):
+BAD_ENSEMBL_IDS = ('ENSGR', )
+
+
+def regions(input_regions, elements):
     """
     Parse input regions
     :param input_regions: path tab file chr \t start \t end \t strand  \t ensembl id \t ensembl id \t symbol
+    :param elements: set, list of element to analyze. If the set is empty all the elements will be analyzed
     :return:
         trees: dictionary of dictionary of intervaltrees (trees) containing intervals of genomic regions by chromosome.
         regions_d: dictionary containing a list of tuples with the coding sequences of each gene.
@@ -29,7 +33,9 @@ def regions(input_regions):
         for line in fd:
             line = line.decode()  # binary to readable
             chromosome, start, end, strand, ensid, _, symbol = line.strip().split('\t')
-            if 'ENSGR' not in ensid:
+            if elements and symbol not in elements:
+                continue
+            if all([i not in ensid for i in BAD_ENSEMBL_IDS]):
                 trees[chromosome][int(start): int(end) + 1] = symbol  # int, +1 end
                 regions_d[symbol].append((int(start), int(end) + 1))
                 chromosomes_d[symbol] = chromosome

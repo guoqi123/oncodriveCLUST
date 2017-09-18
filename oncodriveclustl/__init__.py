@@ -1,0 +1,5 @@
+__version__ = '0.0.1'
+__author__ = ''
+__author_email__ = ''
+__description__ = 'Oncodriveclustl is a program that looks for mutational hotspots'
+__long_description__ = 'Oncodriveclustl is a program that looks for mutational hotspots'

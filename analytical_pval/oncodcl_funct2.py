@@ -10,12 +10,6 @@ from concurrent.futures import ProcessPoolExecutor as Pool
 import oncodcl_funct as odf
 
 
-
-# Global variables
-import_signatures = pickle.load(open("/home/carnedo/projects/oncodriveclustl/signatures/SKCM.pickle", "rb"))
-signatures = import_signatures['probabilities']
-
-
 def normalize(probs):
     """
     Given an array of probabilities, normalize them to 1
@@ -68,7 +62,8 @@ def get_p(observed, simulations):
     Calculate p value
     :return: float, p-value
     """
-    return len([x for x in simulations if x >= observed]) / len(simulations)
+
+    return (len([x for x in simulations if x >= observed]) + 1) / len(simulations)
 
 
 def run_region(arguments):

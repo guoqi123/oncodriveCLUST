@@ -10,7 +10,7 @@ from bgreference import hg19
 
 
 # Configure the colorlog module
-logger = colorlog.getLogger()
+# logger = colorlog.getLogger()
 
 
 def set_logger(level):
@@ -108,6 +108,11 @@ class Signature:
 @click.option('--start_at_0', is_flag=True)
 def main(input_file, output_file, start_at_0, log_level):
     """Calculate the signature of a dataset"""
+    global logger
+
+    # Configure the colorlog module
+    logger = colorlog.getLogger()
+
     set_logger(log_level)
     signature = Signature(start_at_0=start_at_0)
     signature.calculate(input_file)
