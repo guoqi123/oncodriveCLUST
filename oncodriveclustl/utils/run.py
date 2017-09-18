@@ -224,7 +224,6 @@ class Experiment:
                 logger.debug('Calculating pre-smoothing...')
                 element_lists = self.pre_smoothing(element)
 
-
                 # Calculate observed mutations results
                 obs_clusters, obs_score = self.analysis(element_lists, analysis_mode='obs')
                 logger.debug('Observed mutations analyzed')
@@ -236,7 +235,6 @@ class Experiment:
                 # Get simulated mutations (generator)
                 logger.debug('Calculating simulated mutations...')
                 simulations = self.simulate(element, element_lists)
-                print(element_lists.keys())
 
                 # Calculate simulated mutations results
                 logger.debug('Start simulations...')
