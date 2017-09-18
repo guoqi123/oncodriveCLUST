@@ -1,0 +1,33 @@
+Oncodriveclustl
+
+# Run for 1 gene
+
+python main.py
+-i /workspace/projects/oncodriveclustl/inputs/mutations/pancanatlas/SKCM.txt
+-o outputs/testing.txt
+-oc outputs/testing_clusters.txt
+-r /workspace/projects/oncodriveclustl/inputs/regions/02_cds.regions.gz
+-e NRAS
+-n 1000
+-c 4
+
+# Run for n genes in a file
+
+python main.py
+-i /workspace/projects/oncodriveclustl/inputs/mutations/pancanatlas/SKCM.txt
+-o outputs/testing.txt
+-oc outputs/testing_clusters.txt
+-r /workspace/projects/oncodriveclustl/inputs/regions/02_cds.regions.gz
+-ef /workspace/projects/oncodriveclustl/inputs/elements/random_100.txt
+-n 1000
+-c 4
+
+# Run for whole dataset
+
+python main.py
+-i /workspace/projects/oncodriveclustl/inputs/mutations/pancanatlas/SKCM.txt
+-o outputs/testing.txt
+-oc outputs/testing_clusters.txt
+-r /workspace/projects/oncodriveclustl/inputs/regions/02_cds.regions.gz
+-n 1000
+-c 4
