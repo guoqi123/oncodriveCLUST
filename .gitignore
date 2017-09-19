@@ -2,6 +2,7 @@ logs
 .ipynb_checkpoints
 testing
 example
+oncodriveclustl/cache
 
 # Intellij IDEA files
 .idea
