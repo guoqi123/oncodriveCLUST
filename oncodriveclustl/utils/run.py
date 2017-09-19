@@ -197,37 +197,41 @@ class Experiment:
         return (len([x for x in simulations if x >= observed]) + 1) / len(simulations)
 
     def post_process(self, item):
-        element, genomic, mutations, sim_clusters_list, sim_scores_list = item
+        try:
+            element, genomic, mutations, sim_clusters_list, sim_scores_list = item
 
-        # Statistics: number of clusters per simulation
-        mean_sim_clusters = np.mean(sim_clusters_list)
-        std_sim_clusters = np.std(sim_clusters_list)
-        median_sim_clusters = np.median(sim_clusters_list)
+            # Statistics: number of clusters per simulation
+            mean_sim_clusters = np.mean(sim_clusters_list)
+            std_sim_clusters = np.std(sim_clusters_list)
+            median_sim_clusters = np.median(sim_clusters_list)
 
-        # Statistics: element score per simulation
-        mean_sim_score = np.mean(sim_scores_list)
-        std_sim_score = np.std(sim_scores_list)
-        median_sim_score = np.median(sim_scores_list)
+            # Statistics: element score per simulation
+            mean_sim_score = np.mean(sim_scores_list)
+            std_sim_score = np.std(sim_scores_list)
+            median_sim_score = np.median(sim_scores_list)
 
-        # Calculate observed mutations results
-        obs_clusters, obs_score = self.analysis(genomic, mutations, analysis_mode='obs')
-        logger.debug('Observed mutations analyzed')
+            # Calculate observed mutations results
+            obs_clusters, obs_score = self.analysis(genomic, mutations, analysis_mode='obs')
+            logger.debug('Observed mutations analyzed')
 
-        # Significance
-        empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
-        sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
-        pvalue_generator = ap.AnalyticalPvalue()
-        analytical_pvalue, bandwidth = pvalue_generator.calculate(obs_score, sim_scores_list_1000)
-        logger.debug('P-values calculated')
+            # Significance
+            empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
+            sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
+            pvalue_generator = ap.AnalyticalPvalue()
+            analytical_pvalue, bandwidth = pvalue_generator.calculate(obs_score, sim_scores_list_1000)
+            logger.debug('P-values calculated')
 
-        # Get GCG boolean
-        cgc = element in self.cgc_genes
+            # Get GCG boolean
+            cgc = element in self.cgc_genes
 
-        return element, \
-            (len(genomic), len(self.mutations_d[element]), len(obs_clusters.keys()),
-                mean_sim_clusters, median_sim_clusters, std_sim_clusters, obs_score, mean_sim_score,
-                median_sim_score, std_sim_score, empirical_pvalue, analytical_pvalue, cgc), \
-            (obs_clusters, cgc)
+            return element, \
+                (len(genomic), len(self.mutations_d[element]), len(obs_clusters.keys()),
+                    mean_sim_clusters, median_sim_clusters, std_sim_clusters, obs_score, mean_sim_score,
+                    median_sim_score, std_sim_score, empirical_pvalue, analytical_pvalue, cgc), \
+                (obs_clusters, cgc)
+        except Exception as e:
+            logger.error("At element {}. {}".format(element, str(e)))
+            return element, None, None
 
     def run(self):
         """
@@ -280,8 +284,9 @@ class Experiment:
                 # Post processing
                 post_item = [(e, genomic[e], mutations[e], sim_clusters_list[e], sim_scores_list[e]) for e in elements]
                 for e, er, cr in tqdm(executor.map(self.post_process, post_item), total=len(post_item), desc="post processing".rjust(30)):
-                    elements_results[e] = er
-                    clusters_results[e] = cr
+                    if er is not None:
+                        elements_results[e] = er
+                        clusters_results[e] = cr
 
         return elements_results, clusters_results
 
