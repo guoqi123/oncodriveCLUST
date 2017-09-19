@@ -177,16 +177,19 @@ class Experiment:
     def simulate_and_analysis(self, item):
         element, genomic, probs, n_sim = item
 
-        sim_scores_chunk = []
-        sim_cluster_chunk = []
+        try:
+            sim_scores_chunk = []
+            sim_cluster_chunk = []
 
-        mutations = np.random.choice(genomic, size=(n_sim, len(self.mutations_d[element])), p=probs)
-        for i in range(n_sim):
-            cutoff_clusters, gene_score = self.analysis(genomic, mutations[i])
-            sim_scores_chunk.append(gene_score)
-            sim_cluster_chunk.append(len(cutoff_clusters))
+            mutations = np.random.choice(genomic, size=(n_sim, len(self.mutations_d[element])), p=probs)
+            for i in range(n_sim):
+                cutoff_clusters, gene_score = self.analysis(genomic, mutations[i])
+                sim_scores_chunk.append(gene_score)
+                sim_cluster_chunk.append(len(cutoff_clusters))
 
-        return element, sim_scores_chunk, sim_cluster_chunk
+            return element, sim_scores_chunk, sim_cluster_chunk
+        except Exception as e:
+            return element, None, e
 
     @staticmethod
     def empirical_pvalue(observed, simulations):
@@ -277,8 +280,11 @@ class Experiment:
                 for element, sim_scores_chunk, sim_cluster_chunk in tqdm(
                         executor.map(self.simulate_and_analysis, simulations), total=len(simulations), desc="simulations".rjust(30)
                 ):
-                    sim_scores_list[element] += sim_scores_chunk
-                    sim_clusters_list[element] += sim_cluster_chunk
+                    if sim_scores_chunk is not None:
+                        sim_scores_list[element] += sim_scores_chunk
+                        sim_clusters_list[element] += sim_cluster_chunk
+                    else:
+                        logger.error("At element {}. {}".format(element, str(sim_cluster_chunk)))
 
                 # Post processing
                 post_item = [(e, genomic[e], mutations[e], sim_clusters_list[e], sim_scores_list[e]) for e in elements]
