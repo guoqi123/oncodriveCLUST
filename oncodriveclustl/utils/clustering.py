@@ -3,7 +3,7 @@ import math as m
 from collections import defaultdict
 
 
-def find_locals(element_lists):
+def find_locals(binary):
     """
     Find local maximum and minimum
     :param element_lists: dict, dictionary containing information for an element
@@ -13,12 +13,12 @@ def find_locals(element_lists):
     """
     indexes = []
     maxs = []
-    length = len(element_lists['binary'])
+    length = len(binary)
 
     # for max or min in first position
     i = 0
-    b = element_lists['binary'][i]
-    c = element_lists['binary'][i + 1]
+    b = binary[i]
+    c = binary[i + 1]
     if c <= b != 0:
         indexes.append([1, i, b])
         maxs.append(i)
@@ -27,9 +27,9 @@ def find_locals(element_lists):
 
     # for start +1, end -1 of binary array
     for i in range(1, length - 1):
-        a = element_lists['binary'][i - 1]
-        b = element_lists['binary'][i]
-        c = element_lists['binary'][i + 1]
+        a = binary[i - 1]
+        b = binary[i]
+        c = binary[i + 1]
         # Max
         # When max score is equal in contiguous positions, assumes the first as max
         if a < b >= c:
@@ -44,8 +44,8 @@ def find_locals(element_lists):
 
     # for max or min in last position
     i = length - 1
-    a = element_lists['binary'][i - 1]
-    b = element_lists['binary'][i]
+    a = binary[i - 1]
+    b = binary[i]
     if b > a:
         indexes.append([1, i, b])
         maxs.append(i)
@@ -140,7 +140,7 @@ def merge_clusters(maxs, clusters, window):
     return clusters
 
 
-def clusters_mut(clusters, element_lists):
+def clusters_mut(clusters, genomic, mutations):
     """
     Calculates the number of mutations within a cluster
     :param clusters: dict of dict
@@ -149,24 +149,24 @@ def clusters_mut(clusters, element_lists):
     for cluster, values in clusters.items():
 
         if values['min_l'] and values['min_r']:
-            left = int(element_lists['genomic'][values['min_l'][0]])
-            right = int(element_lists['genomic'][values['min_r'][0]])
+            left = int(genomic[values['min_l'][0]])
+            right = int(genomic[values['min_r'][0]])
 
         elif not values['min_l']:
-            left = int(element_lists['genomic'][values['max'][0]])
-            right = int(element_lists['genomic'][values['min_r'][0]])
+            left = int(genomic[values['max'][0]])
+            right = int(genomic[values['min_r'][0]])
 
         else:   # elif not values['min_r']:
-            left = int(element_lists['genomic'][values['min_l'][0]])
-            right = int(element_lists['genomic'][values['max'][0]])
+            left = int(genomic[values['min_l'][0]])
+            right = int(genomic[values['max'][0]])
 
-        cluster_muts = [i for i in element_lists['mutations'] if left <= i <= right]
+        cluster_muts = [i for i in mutations if left <= i <= right]
         clusters[cluster]['n_mutations'] = len(cluster_muts)
 
     return clusters
 
 
-def score_clusters(clusters, element_lists, method):
+def score_clusters(clusters, mutations, mut_by_pos, method):
     """
     Score clusters
     :param clusters: dict of dict
@@ -177,7 +177,7 @@ def score_clusters(clusters, element_lists, method):
     root = m.sqrt(2)
 
     for cluster, values in clusters.items():
-        score = []
+        score = 0
 
         # Define cluster borders
         if values['min_l'] and values['min_r']:
@@ -191,13 +191,13 @@ def score_clusters(clusters, element_lists, method):
             b = values['max'][0]
 
         # Calculate score per cluster iterating through positions
-        denom = len(element_lists['mutations'])
+        denom = len(mutations)
         for position in range(a, b+1):
-            mutations = element_lists['mut_by_pos'][position]
+            muts = mut_by_pos[position]
             if method != 'nobias':
-                mutations /= denom
+                muts /= denom
             distance = abs(values['max'][0] - position)
-            score.append(mutations / m.pow(root, distance))
+            score += (muts / m.pow(root, distance))
 
         # for position in range(a, b+1):
         #     mutations = element_lists['mut_by_pos'][position] / len(element_lists['mutations'])
@@ -205,6 +205,6 @@ def score_clusters(clusters, element_lists, method):
         #     score.append(mutations / m.pow(root, distance))
 
         # Update score
-        clusters[cluster]['score'] = sum(score)
+        clusters[cluster]['score'] = score
 
     return clusters

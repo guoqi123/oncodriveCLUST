@@ -1,10 +1,11 @@
 # Import modules
 import gzip
-from collections import defaultdict
-
 import daiquiri
 import pickle
+
+from collections import defaultdict
 from intervaltree import IntervalTree
+from os import path
 
 
 def read_regions(input_regions, elements):
@@ -27,7 +28,8 @@ def read_regions(input_regions, elements):
     regions_d = defaultdict(list)
     chromosomes_d = defaultdict()
 
-    with open('./data/02_cds.regions.mapping.pickle', 'rb') as fd:
+    # TODO remove this hardcoded file?
+    with open(path.join(path.dirname(__file__), '../data/02_cds.regions.mapping.pickle'), 'rb') as fd:
         dict_ids = pickle.load(fd)
 
     with gzip.open(input_regions, 'rb') as fd:  # rb for binary <-- gz

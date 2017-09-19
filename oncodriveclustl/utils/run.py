@@ -57,6 +57,11 @@ class Experiment:
         self.cores = cores
         self.seed = seed
 
+        # Read CGC
+        # TODO Remove this hardcoded file
+        with open(os.path.join(os.path.dirname(__file__), '../data/CGCMay17_cancer_types_TCGA.tsv'), 'r') as fd:
+            self.cgc_genes = set([line.split('\t')[0] for line in fd])
+
     @staticmethod
     def tukey(window):
         """Tukey smoothing function generates tukey_filter for smoothing
@@ -89,7 +94,6 @@ class Experiment:
         """
 
         nucleot = {'A', 'C', 'G', 'T'}
-        element_lists = defaultdict()
         genomic = []
         probabilities = []
 
@@ -97,13 +101,15 @@ class Experiment:
         n2 = re.compile('[N]{2}')
 
         # Read signatures.pickle
-        pickle_path = './cache/signature.pickle'
+
+        # TODO remove this hardcoded path
+        pickle_path = os.path.join(os.path.dirname(__file__),'../cache/signature.pickle')
         if os.path.isfile(pickle_path):
             signatures = pickle.load(open(pickle_path, "rb"))
             signatures = signatures['probabilities']
             logger.debug('Signatures read')
         else:
-            logger.critical('File \'signatures.pickle\' not found')
+            raise RuntimeError('File \'signatures.pickle\' not found')
 
         # Iterate through tuples of coordinates, get genomic regions and sequence
         for pos in self.regions_d[element]:
@@ -141,31 +147,9 @@ class Experiment:
             for position in positions:
                 genomic.append(position)
 
-        element_lists['genomic'] = genomic
-        element_lists['probs'] = self.normalize(probabilities)
-        element_lists['mutations'] = self.mutations_d[element]
+        return genomic, self.normalize(probabilities), self.mutations_d[element]
 
-        return element_lists
-
-    def simulate(self, element, element_lists):
-        """Simulate mutations considering the signature
-        :param element: element to simulate mutations
-        :param element_lists: dict of lists, genomic coordinates and probabilities per position
-        :return: list
-        """
-
-        # Generate simulated mutations
-        if len(element_lists['genomic']) == len(element_lists['probs']):
-            for i in range(self.n_simulations):
-                element_lists['mutations'] = np.random.choice(element_lists['genomic'], size=len(self.mutations_d[element]), replace=True, p=element_lists['probs'])
-                yield element_lists
-        else:
-            for i in range(self.n_simulations):
-                logger.debug('Simulation error!')
-                element_lists['mutations'] = []
-                yield element_lists
-
-    def analysis(self, element_lists, analysis_mode = 'sim'):
+    def analysis(self, genomic, mutations, analysis_mode = 'sim'):
         """
         Calculate smoothing, clustering and element score for either observed or simulated mutations
         :param element_lists: dict, keys 'genomic', 'probs', 'mutations'
@@ -175,20 +159,34 @@ class Experiment:
             int, gene score
         """
 
-        smooth = smo.smooth(element_lists, window=self.smooth_window, tukey_filter=self.tukey_filter)
+        binary, mut_by_pos = smo.smooth(genomic, mutations, window=self.smooth_window, tukey_filter=self.tukey_filter)
         logger.debug('Smoothing calculated')
 
-        indexes, maxs = clu.find_locals(element_lists=smooth)
+        indexes, maxs = clu.find_locals(binary.tolist())
         r_clusters = clu.raw_clusters(indexes=indexes)
         m_clusters = clu.merge_clusters(maxs=maxs, clusters=r_clusters, window=self.cluster_window)
-        mut_clusters = clu.clusters_mut(clusters=m_clusters, element_lists=smooth)
-        scored_clusters = clu.score_clusters(clusters=mut_clusters, element_lists=smooth, method=self.cluster_score)
+        mut_clusters = clu.clusters_mut(m_clusters, genomic, mutations)
+        scored_clusters = clu.score_clusters(mut_clusters, mutations, mut_by_pos, self.cluster_score)
         logger.debug('Clusters calculated')
 
         cutoff_clusters, gene_score = score.element_score(clusters=scored_clusters, cutoff=self.cluster_mutations_cutoff, mode=analysis_mode, method=self.element_score)
         logger.debug('Element score calculated')
 
         return cutoff_clusters, gene_score
+
+    def simulate_and_analysis(self, item):
+        element, genomic, probs, n_sim = item
+
+        sim_scores_chunk = []
+        sim_cluster_chunk = []
+
+        mutations = np.random.choice(genomic, size=(n_sim, len(self.mutations_d[element])), p=probs)
+        for i in range(n_sim):
+            cutoff_clusters, gene_score = self.analysis(genomic, mutations[i])
+            sim_scores_chunk.append(gene_score)
+            sim_cluster_chunk.append(len(cutoff_clusters))
+
+        return element, sim_scores_chunk, sim_cluster_chunk
 
     @staticmethod
     def empirical_pvalue(observed, simulations):
@@ -197,6 +195,39 @@ class Experiment:
         :return: float, p-value
         """
         return (len([x for x in simulations if x >= observed]) + 1) / len(simulations)
+
+    def post_process(self, item):
+        element, genomic, mutations, sim_clusters_list, sim_scores_list = item
+
+        # Statistics: number of clusters per simulation
+        mean_sim_clusters = np.mean(sim_clusters_list)
+        std_sim_clusters = np.std(sim_clusters_list)
+        median_sim_clusters = np.median(sim_clusters_list)
+
+        # Statistics: element score per simulation
+        mean_sim_score = np.mean(sim_scores_list)
+        std_sim_score = np.std(sim_scores_list)
+        median_sim_score = np.median(sim_scores_list)
+
+        # Calculate observed mutations results
+        obs_clusters, obs_score = self.analysis(genomic, mutations, analysis_mode='obs')
+        logger.debug('Observed mutations analyzed')
+
+        # Significance
+        empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
+        sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
+        pvalue_generator = ap.AnalyticalPvalue()
+        analytical_pvalue, bandwidth = pvalue_generator.calculate(obs_score, sim_scores_list_1000)
+        logger.debug('P-values calculated')
+
+        # Get GCG boolean
+        cgc = element in self.cgc_genes
+
+        return element, \
+            (len(genomic), len(self.mutations_d[element]), len(obs_clusters.keys()),
+                mean_sim_clusters, median_sim_clusters, std_sim_clusters, obs_score, mean_sim_score,
+                median_sim_score, std_sim_score, empirical_pvalue, analytical_pvalue, cgc), \
+            (obs_clusters, cgc)
 
     def run(self):
         """
@@ -207,78 +238,90 @@ class Experiment:
         clusters_results = defaultdict()
 
         # Filter elements >= cutoff mutations
-        elements = [elem for elem in self.regions_d.keys() if len(self.mutations_d[elem]) >= self.element_mutations_cutoff]
-        logger.info('Calculating results {} element{}...'.format(len(elements), 's' if len(elements) > 1 else ''))
+        all_elements = [elem for elem in self.regions_d.keys() if len(self.mutations_d[elem]) >= self.element_mutations_cutoff]
+        logger.info('Calculating results {} element{}...'.format(len(all_elements), 's' if len(all_elements) > 1 else ''))
 
-        # Read CGC
-        gcg_genes = set([line.split('\t')[0] for line in open('./data/CGCMay17_cancer_types_TCGA.tsv', 'r')])
+        # Performance tunning
+        pf_num_elements = 100
+        pf_num_simulations = 100000
 
         # Run analysis on each element
-        with tqdm(total=len(elements)) as pbar:
+        all_elements = list(chunkizator(all_elements, pf_num_elements))
+        for i, elements in enumerate(all_elements, start=1):
+            simulations = []
+            genomic = {}
+            mutations = {}
+            logger.info("Iteration {} of {}".format(i, len(all_elements)))
+
             for element in elements:
-                pbar.update(1)
-                sim_scores_list = []
-                sim_clusters_list = []
 
                 # Get element pre-smoothing, common for observed and simulated mutations
                 logger.debug('Calculating pre-smoothing...')
-                element_lists = self.pre_smoothing(element)
-
-                # Calculate observed mutations results
-                obs_clusters, obs_score = self.analysis(element_lists, analysis_mode='obs')
-                logger.debug('Observed mutations analyzed')
-
-                # Remove key:value from elements_lists (k:v are calculated on each simulation analysis)
-                for key in ['mut_by_pos', 'binary']:
-                    del element_lists[key]
-
-                # Get simulated mutations (generator)
-                logger.debug('Calculating simulated mutations...')
-                simulations = self.simulate(element, element_lists)
+                genomic[element], probs, mutations[element] = self.pre_smoothing(element)
 
                 # Calculate simulated mutations results
                 logger.debug('Start simulations...')
-                with Pool(max_workers=self.cores) as executor:
-                    for sim_clusters, sim_score in map(self.analysis, simulations):
-                        sim_scores_list.append(sim_score)
-                        sim_clusters_list.append(len(sim_clusters.keys()))
 
-                    # Statistics: number of clusters per simulation
-                    mean_sim_clusters = np.mean(sim_clusters_list)
-                    std_sim_clusters = np.std(sim_clusters_list)
-                    median_sim_clusters = np.median(sim_clusters_list)
+                element_size = ((len(self.mutations_d[element]) * self.n_simulations) // pf_num_simulations) + 1
+                chunk_size = (self.n_simulations // element_size) + 1
+                simulations += [(element, genomic[element], probs, n_sim) for n_sim in partitions_list(self.n_simulations, chunk_size)]
 
-                    # Statistics: element score per simulation
-                    mean_sim_score = np.mean(sim_scores_list)
-                    std_sim_score = np.std(sim_scores_list)
-                    median_sim_score = np.median(sim_scores_list)
+            with Pool(max_workers=self.cores) as executor:
 
-                logger.debug('Simulated mutations analyzed')
+                # Process simulations
+                sim_scores_list = defaultdict(list)
+                sim_clusters_list = defaultdict(list)
+                for element, sim_scores_chunk, sim_cluster_chunk in tqdm(
+                        executor.map(self.simulate_and_analysis, simulations), total=len(simulations), desc="simulations".rjust(30)
+                ):
+                    sim_scores_list[element] += sim_scores_chunk
+                    sim_clusters_list[element] += sim_cluster_chunk
 
-                # Significance
-                empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
-                sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
-                analytical_pvalue, bandwidth = ap.AnalyticalPvalue().calculate(obs_score, sim_scores_list_1000)
-                logger.debug('P-values calculated')
-
-                # Get GCG boolean
-                cgc = element in gcg_genes
-
-                elements_results[element] = (len(element_lists['genomic']),
-                                             len(self.mutations_d[element]),
-                                             len(obs_clusters.keys()),
-                                             mean_sim_clusters,
-                                             median_sim_clusters,
-                                             std_sim_clusters,
-                                             obs_score,
-                                             mean_sim_score,
-                                             median_sim_score,
-                                             std_sim_score,
-                                             empirical_pvalue,
-                                             analytical_pvalue,
-                                             cgc)
-
-                clusters_results[element] = (obs_clusters,
-                                             cgc)
+                # Post processing
+                post_item = [(e, genomic[e], mutations[e], sim_clusters_list[e], sim_scores_list[e]) for e in elements]
+                for e, er, cr in tqdm(executor.map(self.post_process, post_item), total=len(post_item), desc="post processing".rjust(30)):
+                    elements_results[e] = er
+                    clusters_results[e] = cr
 
         return elements_results, clusters_results
+
+
+def partitions_list(total_size, chunk_size):
+    """
+    Create a list of values less or equal to chunk_size that sum total_size
+
+    :param total_size: Total size
+    :param chunk_size: Chunk size
+    :return: list of integers
+    """
+    partitions = [chunk_size for _ in range(total_size // chunk_size)]
+
+    res = total_size % chunk_size
+    if res != 0:
+        partitions += [res]
+
+    return partitions
+
+
+def chunkizator(iterable, size=1000):
+    """
+    Creates chunks from an iterable
+
+    Args:
+        iterable:
+        size (int): elements in the chunk
+
+    Returns:
+        list. Chunk
+
+    """
+    s = 0
+    chunk = []
+    for i in iterable:
+        if s == size:
+            yield chunk
+            chunk = []
+            s = 0
+        chunk.append(i)
+        s += 1
+    yield chunk

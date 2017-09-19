@@ -183,7 +183,9 @@ def main(input_file,
     logger.info('Computing signatures...')
     obj = sign.Signature(start_at_0=True)
     obj.calculate(input_file)
-    obj.save('cache/signature.pickle')
+
+    # TODO remove this hardcoded file?
+    obj.save(os.path.join(os.path.dirname(__file__), 'cache/signature.pickle'))
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
@@ -202,6 +204,7 @@ def main(input_file,
     write_cluster_results(results=clusters_results, output_file=output_file_clusters, sorter=sorted_list_elements)
     logger.info('Clusters results calculated')
     logger.info('Finished')
+
 
 if __name__ == '__main__':
     main()
