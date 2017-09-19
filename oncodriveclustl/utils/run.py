@@ -230,8 +230,7 @@ class Experiment:
                     median_sim_score, std_sim_score, empirical_pvalue, analytical_pvalue, cgc), \
                 (obs_clusters, cgc)
         except Exception as e:
-            logger.error("At element {}. {}".format(element, str(e)))
-            return element, None, None
+            return element, None, e
 
     def run(self):
         """
@@ -287,6 +286,8 @@ class Experiment:
                     if er is not None:
                         elements_results[e] = er
                         clusters_results[e] = cr
+                    else:
+                        logger.error("At element {}. {}".format(e, str(cr)))
 
         return elements_results, clusters_results
 
