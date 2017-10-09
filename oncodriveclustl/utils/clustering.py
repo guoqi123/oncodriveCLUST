@@ -2,55 +2,67 @@
 import math as m
 from collections import defaultdict
 
+from oncodriveclustl.utils import sequence as seq
 
-def find_locals(binary):
+
+def find_locals(binary, regions):
     """
     Find local maximum and minimum
-    :param element_lists: dict, dictionary containing information for an element
+    :param binary: length == genomic, smoothing score curve
+    :param regions: list of tuples with genomic positions of an element.
     :return:
-        idexes: list of tuples of 3 elements (min or max, cds region, smoothing score). Min == 0, max == 1
+        idexes: list of tuples of 4 elements (min or max, cds region, smoothing score, genomic position).
+                min == 0, max == 1
         maxs: list of positions of maximum in cds
     """
     indexes = []
     maxs = []
     length = len(binary)
+    genomic = seq.get_genomic(regions)
 
-    # for max or min in first position
-    i = 0
-    b = binary[i]
-    c = binary[i + 1]
-    if c <= b != 0:
-        indexes.append([1, i, b])
-        maxs.append(i)
-    elif b <= c != 0:
-        indexes.append([0, i, b])
+    # For first position
+    b = binary[0]
+    c = binary[1]
+    if c < b:
+        indexes.append((1, 0, b, genomic[0]))
+        maxs.append(0)
+    elif b < c:
+        indexes.append((0, 0, b, genomic[0]))
+    else:  # when b = c
+        pass
 
-    # for start +1, end -1 of binary array
+    # For start +1, end -1 of binary array
     for i in range(1, length - 1):
         a = binary[i - 1]
         b = binary[i]
         c = binary[i + 1]
         # Max
-        # When max score is equal in contiguous positions, assumes the first as max
-        if a < b >= c:
-            indexes.append([1, i, b])
+        if a < b >= c:  # when max score is equal in contiguous positions, assumes the first as max
+            indexes.append((1, i, b, genomic[i]))
             # Get a list of maximums sorted by position
             maxs.append(i)
         # Min
-        elif a >= b <= c:
-            # get a 'false' minimum where minimum score is equal in contiguous positions
-            if a or c != 0:
-                indexes.append([0, i, b])
+        elif a > b:
+            if b < c:
+                indexes.append((0, i, b, genomic[i]))
+            if b == c:
+                indexes.append((0, i, b, genomic[i]))
+        elif a == b < c:
+            indexes.append((0, i, b, genomic[i]))
+        else:  # a = b = c
+            pass
 
     # for max or min in last position
     i = length - 1
     a = binary[i - 1]
     b = binary[i]
     if b > a:
-        indexes.append([1, i, b])
+        indexes.append((1, i, b, genomic[i]))
         maxs.append(i)
     elif b < a:
-        indexes.append([0, i, b])
+        indexes.append((0, i, b, genomic[i]))
+    else:
+        pass
 
     return indexes, maxs
 
@@ -58,8 +70,9 @@ def find_locals(binary):
 def raw_clusters(indexes):
     """
     Define a cluster per maximum found in a region
-    :param indexes: list of tuples of 3 elements (min or max, cds region, smoothing score). Min == 0, max == 1
-    :return:
+    :param indexes: list of tuples of 4 elements (min or max, cds region, smoothing score, genomic position).
+    Min == 0, max == 1
+    :return: clusters, dict of dict
     """
 
     clusters = defaultdict(dict)
@@ -70,29 +83,29 @@ def raw_clusters(indexes):
 
     for maximum in generator_maxs:
         i = indexes.index(maximum)
-        clusters[j]['max'] = [maximum[1], maximum[2]]
+        clusters[j]['max'] = (maximum[1], maximum[2], maximum[3])
 
         # if it's not the first nor the last cluster
         if i != 0 and i != len(indexes) - 1:
-            clusters[j]['min_l'] = [indexes[i - 1][1], indexes[i - 1][2]]
-            clusters[j]['min_r'] = [indexes[i + 1][1], indexes[i + 1][2]]
+            clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2], indexes[i - 1][3])
+            clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2], indexes[i + 1][3])
 
         # if it's the first cluster
         elif i == 0:
-            clusters[j]['min_l'] = []
-            clusters[j]['min_r'] = [indexes[i + 1][1], indexes[i + 1][2]]
+            clusters[j]['left_m'] = (maximum[1], maximum[2], maximum[3])
+            clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2], indexes[i + 1][3])
 
         # if it's the last cluster
         elif i == len(indexes) - 1:
-            clusters[j]['min_l'] = [indexes[i - 1][1], indexes[i - 1][2]]
-            clusters[j]['min_r'] = []
+            clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2], indexes[i - 1][3])
+            clusters[j]['right_m'] = (maximum[1], maximum[2], maximum[3])
 
         j += 1
 
     return clusters
 
 
-def merge_clusters(maxs, clusters, window):
+def merge_clusters(clusters, maxs, window):
     """
     Given a number of clusters in a region, iterate through them to merge them if their maximums
     are closer than a given length.
@@ -100,6 +113,7 @@ def merge_clusters(maxs, clusters, window):
     :param maxs: list of maximum positions in a region
     :param window: clustering window
     :return:
+        clusters: dict of dict
     """
     maxs_set = set(maxs)
 
@@ -107,32 +121,40 @@ def merge_clusters(maxs, clusters, window):
     while iterate != 0:  # Iterate until no clusters updates occur
         stop = 0
         for x in range(len(clusters.keys())):
-
-            # When x is a key in clusters and min_r exists (clusters without min_r don't do merging):
+            # When x is a key in clusters
             if x in clusters.keys():
-                if clusters[x]['min_r']:
+                maximum = clusters[x]['max']
+                left_margin = clusters[x]['left_m']
+                right_margin = clusters[x]['right_m']
+
+                if right_margin != maximum:
                     # Define the interval of search
-                    search_r = set(range(clusters[x]['max'][0] + 1, clusters[x]['min_r'][0] + window + 1))
+                    search_r = set(range(maximum[0] + 1, right_margin[0] + window + 1))
 
                     # When the intersection between the positions of the search and the maximums is not empty
                     if search_r.intersection(maxs_set) != set():
-                        # Analyze only the closest max
-                        intersect_max = maxs.index(sorted(list(search_r.intersection(maxs_set)))[0])
+
+                        # Analyze only the closest cluster
+                        intersect_cluster = maxs.index(sorted(list(search_r.intersection(maxs_set)))[0])
                         stop = 1
 
                         # When the testing max is greater or equal than the intersected max,
                         # expand the right border and delete intersected cluster from clusters
-                        if clusters[x]['max'][1] >= clusters[intersect_max]['max'][1]:
-                            clusters[x]['min_r'] = clusters[intersect_max]['min_r']
-                            del clusters[intersect_max]
-                            maxs_set.remove(maxs[intersect_max])
+                        if maximum[1] >= clusters[intersect_cluster]['max'][1]:
+                            clusters[x]['right_m'] = clusters[intersect_cluster]['right_m']
+                            del clusters[intersect_cluster]
+                            maxs_set.remove(maxs[intersect_cluster])
 
                         # When the testing max is smaller than the intersected max,
                         # expand the left border of intersected max and remove the testing cluster (i)
-                        elif clusters[x]['max'][1] < clusters[intersect_max]['max'][1]:
-                            clusters[intersect_max]['min_l'] = clusters[x]['min_l']
+                        elif maximum[1] < clusters[intersect_cluster]['max'][1]:
+                            clusters[intersect_cluster]['left_m'] = left_margin
                             del clusters[x]
                             maxs_set.remove(maxs[x])
+                        else:  # they are equal
+                            pass
+                else:  # they are equal
+                    pass
 
         if stop == 0:
             iterate = 0
@@ -140,69 +162,55 @@ def merge_clusters(maxs, clusters, window):
     return clusters
 
 
-def clusters_mut(clusters, genomic, mutations):
+def clusters_mut(clusters, regions, mutations):
     """
     Calculates the number of mutations within a cluster
     :param clusters: dict of dict
+    :param regions: list of tuples with genomic positions of an element.
+    :param mutations: list, list of mutations
     :return:
+        clusters: dict of dict
     """
+
+    genomic = seq.get_genomic(regions)
+
     for cluster, values in clusters.items():
-
-        if values['min_l'] and values['min_r']:
-            left = int(genomic[values['min_l'][0]])
-            right = int(genomic[values['min_r'][0]])
-
-        elif not values['min_l']:
-            left = int(genomic[values['max'][0]])
-            right = int(genomic[values['min_r'][0]])
-
-        else:   # elif not values['min_r']:
-            left = int(genomic[values['min_l'][0]])
-            right = int(genomic[values['max'][0]])
-
+        # Define cluster borders
+        left = int(genomic[values['left_m'][0]])
+        right = int(genomic[values['right_m'][0]])
+        # Search mutations
         cluster_muts = [i for i in mutations if left <= i <= right]
         clusters[cluster]['n_mutations'] = len(cluster_muts)
 
     return clusters
 
 
-def score_clusters(clusters, mutations, mut_by_pos, method):
+def score_clusters(clusters, mutations, regions, method):
     """
     Score clusters
     :param clusters: dict of dict
+    :param mutations: list, list of mutations
+    :param regions: list of tuples with genomic positions of an element.
     :param method: str, clustering scoring method
     :return:
     """
 
     root = m.sqrt(2)
+    mut_by_pos = seq.get_mutations(mutations)
+    genomic = seq.get_genomic(regions)
 
     for cluster, values in clusters.items():
         score = 0
 
-        # Define cluster borders
-        if values['min_l'] and values['min_r']:
-            a = values['min_l'][0]
-            b = values['min_r'][0]
-        elif not values['min_l']:
-            a = values['max'][0]
-            b = values['min_r'][0]
-        else:
-            a = values['min_l'][0]
-            b = values['max'][0]
-
         # Calculate score per cluster iterating through positions
         denom = len(mutations)
-        for position in range(a, b+1):
-            muts = mut_by_pos[position]
+        for position in range(values['left_m'][0], values['right_m'][0]+1):
+            coordinate = genomic[position]
+            muts = mut_by_pos.get(coordinate, 0)
             if method != 'nobias':
                 muts /= denom
             distance = abs(values['max'][0] - position)
             score += (muts / m.pow(root, distance))
-
-        # for position in range(a, b+1):
-        #     mutations = element_lists['mut_by_pos'][position] / len(element_lists['mutations'])
-        #     distance = abs(values['max'][0] - position)
-        #     score.append(mutations / m.pow(root, distance))
 
         # Update score
         clusters[cluster]['score'] = score
