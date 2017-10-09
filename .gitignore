@@ -1,8 +1,12 @@
 logs
 .ipynb_checkpoints
+ipynb
 testing
 example
+OLD_CODE
 oncodriveclustl/cache
+oncodriveclustl/outputs
+
 
 # Intellij IDEA files
 .idea
