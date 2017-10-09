@@ -257,17 +257,16 @@ def main(input_file,
     regions_d, chromosomes_d, mutations_d = pars.parse(regions_file, elements, input_file)
 
     # Compute dataset trinucleotide signatures
-
-    # TODO Remove this hardcoded file
-    dataset = input_file.split('/')[-1][:-4]
-    path_pickle = 'cache/' + dataset + '.pickle'
-    path_pickle = os.path.join(os.path.dirname(__file__), path_pickle)
+    dataset = input_file.split('/')[-1][:-4] + '.pickle'
+    path_cache = output_directory + '/cache'
+    os.makedirs(path_cache, exist_ok=True)
+    path_pickle = path_cache + '/' + dataset
 
     if not os.path.isfile(path_pickle):
         logger.info('Computing signatures...')
         obj = sign.Signature(start_at_0=True)
         obj.calculate(input_file)
-        obj.save(os.path.join(os.path.dirname(__file__), path_pickle))
+        obj.save(path_pickle)
         logger.info('Signatures computed')
     else:
         logger.info('Signatures computed')
