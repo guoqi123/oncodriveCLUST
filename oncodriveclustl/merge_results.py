@@ -1,37 +1,9 @@
+# Import modules
 import os
+import re
+
 import click
 import pandas as pd
-from statsmodels.sandbox.stats.multicomp import multipletests as mlpt
-
-
-def mtc(p_value):
-    """
-    Calculate q-value
-    :param p_value: array
-    :return: q_value
-    """
-    return mlpt(p_value, alpha=0.05, method='fdr_bh')[1]
-
-
-def qval_format(file, pvalue):
-    """
-    File format with symbol, score, p-value, cgc, q-value
-    :param file: file to format in place
-    :param pvalue: reference p-value, empirical or analytical
-    :return:
-    """
-
-    if pvalue == 'empirical':
-        column = 'E_PVAL'
-    else:
-        column = 'A_PVAL'
-
-    # Format and calculate multiple test correction
-    df = pd.read_csv(file, sep='\t', header=0)
-    q_values = pd.DataFrame(mtc(df.loc[:, column]))
-    df['QVAL'] = q_values
-    df.sort_values(by=['QVAL', 'SCORE_OBS', 'CGC'], ascending=[True, False, False], inplace=True)
-    df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False)
 
 
 def read_write_elements(directory, efile, afile):
@@ -107,25 +79,53 @@ def read_write_clusters(directory, elements_file, clusters_file):
     df.to_csv(path_or_buf=clusters_file, sep='\t', na_rep='', index=False)
 
 
-@click.command()
-@click.option('--fdr', is_flag=True, help='Calculate multiple test correction')
-@click.option('-o', '--output-directory', default=None, required=True, type=click.Path(exists=True),
-              help='Directory containing result files')
-def main(output_directory, fdr):
-    """Merge results from oncodriveclustl"""
+def merge(directory):
+    """Merge results from a given directory
+    :param directory: directory to merge results into .tab files"""
 
     # Files to write
-    experiment = output_directory+'/'+output_directory.split('/')[-1]
-    ef_empirical = experiment+'_elements_empirical.tab'
-    ef_analytical = experiment+'_elements_analytical.tab'
-    cf_empirical = experiment+'_clusters_empirical.tab'
-    cf_analytical = experiment+'_clusters_analytical.tab'
+    experiment = directory + '/' + directory.split('/')[-1]
+    ef_empirical = experiment + '_elements_empirical.tab'
+    ef_analytical = experiment + '_elements_analytical.tab'
+    cf_empirical = experiment + '_clusters_empirical.tab'
+    cf_analytical = experiment + '_clusters_analytical.tab'
 
-    read_write_elements(directory=output_directory, efile=ef_empirical, afile=ef_analytical)
-    read_write_clusters(directory=output_directory, elements_file=ef_empirical, clusters_file=cf_empirical)
-    read_write_clusters(directory=output_directory, elements_file=ef_analytical, clusters_file=cf_analytical)
+    read_write_elements(directory=directory, efile=ef_empirical, afile=ef_analytical)
+    read_write_clusters(directory=directory, elements_file=ef_empirical, clusters_file=cf_empirical)
+    read_write_clusters(directory=directory, elements_file=ef_analytical, clusters_file=cf_analytical)
 
+def get_tree(directory):
+    """Return path and subdirectories"""
 
+    rtab = re.compile('.*tab')
+    rtxt = re.compile('.*txt')
+
+    for entry in os.scandir(directory):
+        if entry.is_dir(follow_symlinks=False):
+            if not entry.name.startswith('.') and entry.path.split('/')[-1] != 'cache':
+
+                # Get list of content in path
+                content = os.listdir(entry.path)
+
+                # Search for .tab and .txt files
+                tab_files = list(filter(rtab.match, content))
+                txt_files = list(filter(rtxt.match, content))
+
+                if txt_files and not tab_files:
+                    print('Results merged in: ', entry.path)
+                    merge(entry.path)
+
+                get_tree(entry.path)
+
+@click.command()
+@click.option('-o', '--output-directory', default=None, required=True, type=click.Path(exists=True),
+              help='Directory containing result files')
+def main(output_directory):
+    """Merge results from oncodriveclustl
+    :param output_directory: output directory path"""
+
+    get_tree(output_directory)
+    #merge(output_directory)
 
 if __name__ == '__main__':
     main()
