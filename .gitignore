@@ -4,8 +4,12 @@ ipynb
 testing
 example
 OLD_CODE
+outputs
 oncodriveclustl/cache
 oncodriveclustl/outputs
+dataset_randomizator
+postprocessing
+postprocess
 
 
 # Intellij IDEA files

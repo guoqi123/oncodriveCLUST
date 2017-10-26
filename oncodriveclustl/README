@@ -8,5 +8,4 @@ python main.py
 -r /workspace/projects/oncodriveclustl/inputs/regions/02_cds.regions.gz
 -n 1000
 -sim hotspot
--simw 30
 -c 4

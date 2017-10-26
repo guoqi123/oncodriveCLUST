@@ -67,7 +67,7 @@ def write_cluster_results(results, dir, file, sorter):
 
     sorterindex = dict(zip(sorter, range(len(sorter))))
     output_file = dir+'/clusters_'+file+'.tsv'
-    header = ['RANK','SYMBOL', 'CLUSTER', 'N', 'LEFT_M', 'MAX', 'RIGHT_M', 'WIDTH', 'MUT', 'SCORE', 'CGC']
+    header = ['RANK','SYMBOL', 'CGC', 'CLUSTER', 'N', 'LEFT_M', 'MAX', 'RIGHT_M', 'WIDTH', 'MUT', 'SCORE']
     with open(output_file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
         for element, values in results.items():
@@ -76,7 +76,7 @@ def write_cluster_results(results, dir, file, sorter):
                 rank = sorterindex[element]
                 for c, v in clustersinfo.items():
                     fd.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                            rank, element, v['mode'], c, v['left_m'][0], v['max'][0], v['right_m'][0], abs(v['right_m'][0]-v['left_m'][0]), v['n_mutations'], v['score'], cgc))
+                            rank, element, cgc, v['mode'], c, v['left_m'][0], v['max'][0], v['right_m'][0], abs(v['right_m'][0]-v['left_m'][0]), v['n_mutations'], v['score']))
     # Sort
     df = pd.read_csv(output_file, sep='\t', header=0)
     df.sort_values(by=['RANK', 'SCORE'], ascending=[True, False], inplace=True)
@@ -94,6 +94,7 @@ def write_info(input_file,
     cluster_window,
     cluster_score,
     element_score,
+    kmer,
     n_simulations,
     simulation_mode,
     simulation_window,
@@ -112,6 +113,7 @@ def write_info(input_file,
         :param cluster_window: int, clustering window
         :param cluster_score: cluster score method
         :param element_score: element score method
+        :param kmer: int, number of nucleotides of the signature
         :param n_simulations: int, number of simulations
         :param simulation_mode: str, simulation mode
         :param simulation_window: int, window to simulate mutations in hotspot mode
@@ -127,12 +129,13 @@ def write_info(input_file,
         with open(info_file, 'w') as fd:
             fd.write('input_file: {}\noutput_directory: {}\nregions_file: {}\nelements_file: {}\n'
                      'elements: {}\nelement_mutations: {}\ncluster_mutations: {}\nsmooth_window: {}\n'
-                     'cluster_window: {}\ncluster_score: {}\nelement_score: {}\nn_simulations: {}\n'
+                     'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
+                     'kmer: {}\nn_simulations: {}\n'
                      'simulation_mode: {}\nsimulation_window: {}\ncores: {}\nseed: {}\n'
                      'log_level: {}\n'.format(input_file,
                         output_directory,regions_file,
                       elements_file,elements,element_mutations,cluster_mutations,smooth_window,cluster_window,
-                      cluster_score,element_score,n_simulations,simulation_mode, simulation_window,
+                      cluster_score,element_score,kmer,n_simulations,simulation_mode, simulation_window,
                       cores,seed,log_level))
     else:
         pass
@@ -160,6 +163,8 @@ def write_info(input_file,
               type=click.Choice(['nobias', 'fmutations']))
 @click.option('-es', '--element-score', default='mean', help='Element score formula',
               type=click.Choice(['sum', 'mean']))
+@click.option('-kmer', '--kmer', default='3', help='Number of nucleotides of the signature',
+              type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
 @click.option('-sim', '--simulation-mode', default='segment', help='Simulation mode',
@@ -183,6 +188,7 @@ def main(input_file,
          cluster_window,
          cluster_score,
          element_score,
+         kmer,
          n_simulations,
          simulation_mode,
          simulation_window,
@@ -201,6 +207,7 @@ def main(input_file,
     :param cluster_window: int, clustering window
     :param cluster_score: cluster score method
     :param element_score: element score method
+    :param kmer: int, number of nucleotides of the signature
     :param n_simulations: int, number of simulations
     :param simulation_mode: str, simulation mode
     :param simulation_window: int, window to simulate mutations in hotspot mode
@@ -234,6 +241,7 @@ def main(input_file,
                            str(cluster_window),
                            cluster_score,
                            element_score,
+                           kmer,
                            str(n_simulations),
                            simulation_mode,
                            str(simulation_window),
@@ -256,15 +264,15 @@ def main(input_file,
     logger.info('Parsing input regions and input mutations...')
     regions_d, chromosomes_d, mutations_d = pars.parse(regions_file, elements, input_file)
 
-    # Compute dataset trinucleotide signatures
-    dataset = input_file.split('/')[-1][:-4] + '.pickle'
+    # Compute dataset kmer signatures
+    dataset = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
     path_cache = output_directory + '/cache'
     os.makedirs(path_cache, exist_ok=True)
     path_pickle = path_cache + '/' + dataset
 
     if not os.path.isfile(path_pickle):
         logger.info('Computing signatures...')
-        obj = sign.Signature(start_at_0=True)
+        obj = sign.Signature(start_at_0=True, nucleotides=int(kmer))
         obj.calculate(input_file)
         obj.save(path_pickle)
         logger.info('Signatures computed')
@@ -278,6 +286,7 @@ def main(input_file,
                                 element_mutations, cluster_mutations,
                                 smooth_window, cluster_window,
                                 cluster_score, element_score,
+                                int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
                                 cores, seed
                                 ).run()
@@ -293,8 +302,8 @@ def main(input_file,
 
     # Write info
     write_info(input_file,output_directory,regions_file,elements_file,elements,element_mutations,
-         cluster_mutations,smooth_window,cluster_window,cluster_score,element_score,n_simulations,simulation_mode,
-         simulation_window,cores,seed,log_level)
+         cluster_mutations,smooth_window,cluster_window,cluster_score,element_score,int(kmer),
+         n_simulations,simulation_mode,simulation_window,cores,seed,log_level)
 
 if __name__ == '__main__':
     main()

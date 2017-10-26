@@ -26,7 +26,7 @@ setup(
     license="Apache License 2",
     keywords="",
     url="https://bitbucket.org/bbglab/oncodriveclustl",
-    download_url="https://bitbucket.org/bbglab/oncodriveclutl/get/" + __version__ + ".tar.gz",
+    download_url="https://bitbucket.org/bbglab/oncodriveclustl/get/" + __version__ + ".tar.gz",
     long_description=__long_description__,
     install_requires=install_requires,
     entry_points={

@@ -1,8 +1,6 @@
 # Import modules
 import os.path
-import re
 from concurrent.futures import ProcessPoolExecutor as Pool
-import math as m
 
 import daiquiri
 import pickle
@@ -26,7 +24,7 @@ class Experiment:
 
     def __init__(self, regions_d, chromosomes_d, mutations_d, path_pickle,
                  element_mutations_cutoff, cluster_mutations_cutoff, smooth_window, cluster_window,
-                 cluster_score, element_score, n_simulations, simulation_mode, simulation_window, cores, seed):
+                 cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores, seed):
         """Initialize the Experiment class
         :param regions_d: dict, dictionary containing genomic regions from all analyzed elements
         :param chromosomes_d: dict, dictionary containing chromosomes from all analyzed elements
@@ -37,6 +35,7 @@ class Experiment:
         :param cluster_window: int, clustering window
         :param cluster_score: cluster score method
         :param element_score: element score method
+        :param kmer: int, number of nucleotides of the signature
         :param n_simulations: int, number of simulations
         :param cores: int, number of CPUs to use
         :param seed: int, seed
@@ -55,6 +54,7 @@ class Experiment:
         self.cluster_window = cluster_window
         self.cluster_score = cluster_score
         self.element_score = element_score
+        self.kmer = kmer
         self.n_simulations = n_simulations
         self.simulation_mode = simulation_mode
         #self.simulation_window = simulation_window + (1 - simulation_window % 2)
@@ -90,21 +90,20 @@ class Experiment:
         prob_factor = 1 / sum(probs)
         return [prob_factor * p for p in probs]
 
-    def pre_smoothing(self, element):
+    def pre_smoothing(self, element, kmer=3):
         """
         Generate genomic, mutation probabilities per position and mutations lists of an element
         :param element: element to calculate pre-smoothing
+        :param kmer: int, number of nucleotides of the signature
         :return:
-            genomic: list containing all genomic positions in the element analyzed
             list of length == genomic, contains mutation probabilities per position
             list containing genomic positions of mutations within an element
         """
+        genomic = seq.get_genomic(self.regions_d[element])
+        delta = 1 if kmer == 3 else 2
 
         nucleot = {'A', 'C', 'G', 'T'}
         probabilities = []
-
-        n1 = re.compile('[N]')
-        n2 = re.compile('[N]{2}')
 
         # Read dataset.pickle
         if os.path.isfile(self.path_pickle):
@@ -114,39 +113,43 @@ class Experiment:
         else:
             raise RuntimeError('File \'signatures.pickle\' not found')
 
-        # Iterate through tuples of coordinates, get genomic regions and sequence
+
+
+        regions=0
+        nu=0
+        sequ=0
+        # Iterate through tuples of coordinates, get genomic regions' sequence
         for pos in self.regions_d[element]:
-            positions = range(pos[0], pos[1] + 1)
-            sequence = hg19(self.chromosomes_d[element], pos[0] - 1, len(positions) + 2)  # start -1, end +1
+            regions+=1
+            start = pos[0]-delta
+            end = pos[1] - pos[0] + 1 + delta*2
+            sequence = hg19(self.chromosomes_d[element], start, end)  # genomic start -delta, genomic end +delta
+            sequ+=len(sequence)-2
 
-            # Search trinucleotide probabilities
-            for n in range(1, len(sequence) - 1):  # start to end
-                ref_tri = sequence[n - 1:n + 2]
-                two_n = n2.search(ref_tri)
-                one_n = n1.search(ref_tri)
-                if two_n is None:
-                    # No N
-                    if one_n is None:
-                        prob = 0
-                        for nuc in nucleot.difference({ref_tri[1]}):
-                            search = (ref_tri, ref_tri[0] + nuc + ref_tri[2])
-                            prob += signatures[search]
-                        probabilities.append(prob)
-                    # One N
-                    else:
-                        new_tris = set()
-                        prob = 0
-                        for nuc in nucleot:
-                            new_tris.add(re.sub('N', nuc, ref_tri))
-                        for reference in new_tris:
-                            for change in new_tris.difference(set([reference])):
-                                search = (reference, change)
-                                prob += signatures[search]
-                        probabilities.append(prob)
-                # Two or three N
+            # Search kmer probabilities
+            for n in range(delta, len(sequence)-delta):  # start to end
+                nu+=1
+                ref_kmer = sequence[n - delta: n + delta + 1]
+                N = ref_kmer.count('N')
+                if N == 0:
+                    prob = 0
+                    for alt in nucleot.difference({ref_kmer[kmer//2]}):  # mutation probability to any other kmer
+                        alt_kmer = ref_kmer[: kmer//2] + alt + ref_kmer[kmer//2 + 1:]
+                        prob += signatures[(ref_kmer, alt_kmer)]
+                elif N == 1:
+                    prob = 0
+                    n_index = ref_kmer.index('N')
+                    for nuc in nucleot: # All possible reference kmers
+                        new_ref = ref_kmer[:n_index] + nuc + ref_kmer[n_index + 1:]
+
+                        for alt in nucleot.difference({new_ref[kmer//2]}):
+                            alt_kmer = new_ref[:kmer//2] + alt + new_ref[kmer//2 + 1:]
+                            prob += signatures[(new_ref, alt_kmer)]
                 else:
-                    probabilities.append(0)
+                    prob= 0
+                probabilities.append(prob)
 
+        #print(element, len(genomic), len(probabilities), regions, nu, sequ)
         return probabilities, self.mutations_d[element]
 
     def analysis(self, element, mutations, analysis_mode='sim'):
@@ -375,7 +378,7 @@ class Experiment:
             for element in elements:
                 # Get element pre-smoothing, common for observed and simulated mutations
                 logger.debug('Calculating pre-smoothing...')
-                probs, mutations[element] = self.pre_smoothing(element)
+                probs, mutations[element] = self.pre_smoothing(element, kmer=self.kmer)
 
                 # Calculate observed mutations results
                 observed_clusters_d[element], observed_scores_d[element] = self.analysis(element,
