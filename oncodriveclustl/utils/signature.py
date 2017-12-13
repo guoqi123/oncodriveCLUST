@@ -1,7 +1,7 @@
 # Import modules
 import pickle
 import csv
-
+import gzip
 import colorlog
 import click
 from tqdm import tqdm
@@ -49,7 +49,6 @@ class Signature:
         self.start_at_0 = start_at_0
         fx = self.triplets if nucleotides == 3 else self.pentamers
         self.signatures = {'counts': fx(), 'probabilities': fx()}
-
     @staticmethod
     def triplets():
         """Create a dictionary with all the possible triplets
@@ -94,14 +93,17 @@ class Signature:
             signatures = pickle.load(fd)
         return signatures
 
-    def calculate(self, mutations_file):
+    def calculate(self, mutations_file, gz):
         """Calculate the signature of a dataset"""
         parser = Parser()
 
         # Take into account if the mutations are 0 based or 1 based
         offset = 1 if self.start_at_0 is True else 2
 
-        with open(mutations_file, 'r') as csvfile:
+        read_function = open if gz is False else gzip.open
+        mode = 'r' if gz is False else 'rt'
+
+        with read_function(mutations_file, mode) as csvfile:
             fd = csv.DictReader(csvfile, delimiter='\t')
             count = 0
             for line in tqdm(fd):
@@ -109,19 +111,23 @@ class Signature:
                 position = int(line[parser.POSITION])
                 ref = line[parser.REF]
                 alt = line[parser.ALT]
-                mutation_type = line[parser.TYPE]
-                if mutation_type != 'subs':
-                    continue
-                if self.nucleotides == 3:
-                    signature_ref = hg19(chromosome, position - 1, 3).upper()
-                    signature_alt = ''.join([signature_ref[0], alt, signature_ref[-1]])
+                # Read substitutions only
+                if len(ref) == 1 and len(alt) == 1:
+                    if ref != '-' and alt != '-':
+                        if self.nucleotides == 3:
+                            signature_ref = hg19(chromosome, position - 1, 3).upper()
+                            signature_alt = ''.join([signature_ref[0], alt, signature_ref[-1]])
+                        else:
+                            signature_ref = hg19(chromosome, position - 2, 5).upper()
+                            signature_alt = ''.join(
+                                [signature_ref[0], signature_ref[1], alt, signature_ref[-2], signature_ref[-1]])
+                        self.signatures['counts'][(signature_ref, signature_alt)] += 1
+                        count += 1
+                    else:
+                        continue
                 else:
-                    signature_ref = hg19(chromosome, position - 2, 5).upper()
-                    signature_alt = ''.join(
-                        [signature_ref[0], signature_ref[1], alt, signature_ref[-2], signature_ref[-1]]
-                    )
-                self.signatures['counts'][(signature_ref, signature_alt)] += 1
-                count += 1
+                    continue
+
         self.signatures['probabilities'] = {k: v / count for k, v in self.signatures['counts'].items()}
 
 

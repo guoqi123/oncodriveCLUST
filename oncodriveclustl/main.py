@@ -260,12 +260,15 @@ def main(input_file,
         )
         logger.info(', '.join(elements))
 
+    # Define if gzip compressed input file or not
+    gz = True if '.gz' in input_file else False
+
     # Parse regions and dataset mutations
     logger.info('Parsing input regions and input mutations...')
-    regions_d, chromosomes_d, mutations_d = pars.parse(regions_file, elements, input_file)
+    regions_d, chromosomes_d, mutations_d = pars.parse(regions_file, elements, input_file, gz)
 
     # Compute dataset kmer signatures
-    dataset = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
+    dataset = 'dataset_kmer'+kmer+'.pickle'
     path_cache = output_directory + '/cache'
     os.makedirs(path_cache, exist_ok=True)
     path_pickle = path_cache + '/' + dataset
@@ -273,7 +276,7 @@ def main(input_file,
     if not os.path.isfile(path_pickle):
         logger.info('Computing signatures...')
         obj = sign.Signature(start_at_0=True, nucleotides=int(kmer))
-        obj.calculate(input_file)
+        obj.calculate(input_file, gz)
         obj.save(path_pickle)
         logger.info('Signatures computed')
     else:

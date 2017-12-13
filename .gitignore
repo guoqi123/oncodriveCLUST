@@ -3,6 +3,7 @@ logs
 ipynb
 testing
 example
+Gantt
 OLD_CODE
 outputs
 oncodriveclustl/cache
@@ -10,7 +11,11 @@ oncodriveclustl/outputs
 dataset_randomizator
 postprocessing
 postprocess
-
+oncodriveclustl.ipynb
+dataset_randomizator.py
+Distance_mutations.ipynb
+oncodriveclustl/count_mutations.py
+oncodriveclustl/mutations_intogen_local.txt
 
 # Intellij IDEA files
 .idea
