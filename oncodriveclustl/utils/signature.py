@@ -8,6 +8,8 @@ import click
 import daiquiri
 from tqdm import tqdm
 
+from oncodriveclustl.utils import preprocessing as pre
+
 
 class Parser:
     """Class to parse the datasets with somatic mutations"""
@@ -96,32 +98,20 @@ class Signature:
             signatures = pickle.load(fd)
         return signatures
 
-    def calculate(self, mutations_file, gz):
+    def calculate(self, mutations_file):
         """Calculate the signature of a dataset
         :param mutations_file: path to file containing mutations
-        :param gz: boolean, True if gz compressed mutations file
         :return: None
         """
         parser = Parser()
 
-        read_function = open if gz is False else gzip.open
-        mode = 'r' if gz is False else 'rt'
-        if '.tab' in mutations_file:
-            delimiter = '\t'
-        elif '.in' in mutations_file:
-            delimiter = '\t'
-        elif '.txt' in mutations_file:
-            delimiter = '\t'
-        elif '.csv' in mutations_file:
-            delimiter = ','
-        else:
-            logger.critical('Mutations file format not recognized. Please, provide tabular or csv formatted data')
-            quit()
+        read_function, mode, delimiter = pre.check_tabular_csv(mutations_file)
 
-        with read_function(mutations_file, mode) as csvfile:
-            fd = csv.DictReader(csvfile, delimiter=delimiter)
+        with read_function(mutations_file, mode) as read_file:
+            fd = csv.DictReader(read_file, delimiter=delimiter)
             count = 0
             for line in tqdm(fd):
+                # TODO: check header is True
                 chromosome = line[parser.CHROMOSOME]
                 position = int(line[parser.POSITION])
                 ref = line[parser.REF]
@@ -177,7 +167,7 @@ class Signature:
 @click.option('--log-level', default='info', help='verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--start_at_0', is_flag=True)
-def main(input_file, output_file, genome, kmer, start_at_0, log_level, gz):
+def main(input_file, output_file, genome, kmer, start_at_0, log_level):
     """Calculate the signature of a dataset"""
 
     global logger
@@ -185,7 +175,7 @@ def main(input_file, output_file, genome, kmer, start_at_0, log_level, gz):
 
     # Calculate signatures
     obj = Signature(kmer=int(kmer), genome=genome, log_level=log_level, start_at_0=start_at_0)
-    obj.calculate(input_file, gz)
+    obj.calculate(input_file)
     obj.save(output_file)
 
 if __name__ == '__main__':

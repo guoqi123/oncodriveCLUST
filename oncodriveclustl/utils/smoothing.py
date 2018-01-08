@@ -1,7 +1,7 @@
 # Import modules
 import numpy as np
 
-from utils import sequence as seq
+from oncodriveclustl.utils import sequence as seq
 
 
 def smooth(regions_d, mutations, window, tukey_filter):

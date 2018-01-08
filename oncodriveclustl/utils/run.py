@@ -8,11 +8,11 @@ from collections import defaultdict
 from tqdm import tqdm
 import numpy as np
 
-from utils import smoothing as smo
-from utils import clustering as clu
-from utils import score
-from utils import sequence as seq
-from utils import analyticalpval as ap
+from oncodriveclustl.utils import smoothing as smo
+from oncodriveclustl.utils import clustering as clu
+from oncodriveclustl.utils import score
+from oncodriveclustl.utils import sequence as seq
+from oncodriveclustl.utils import analyticalpval as ap
 
 # Logger
 logger = daiquiri.getLogger()
@@ -411,7 +411,7 @@ class Experiment:
                 for element in noclusters_elements:
                     sim_scores_list[element] = sim_clusters_list[element] = float('nan')
 
-                # Post processing
+                # Post process
                 post_item_analyzed = [(e, observed_clusters_d[e], observed_scores_d[e],
                                        sim_clusters_list[e], sim_scores_list[e]) for e in elements]
                 post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan')) for

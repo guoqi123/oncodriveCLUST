@@ -2,7 +2,7 @@
 import math as m
 from collections import defaultdict
 
-from utils import sequence as seq
+from oncodriveclustl.utils import sequence as seq
 
 
 def find_locals(binary, regions):

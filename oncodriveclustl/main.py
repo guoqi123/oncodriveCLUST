@@ -6,9 +6,9 @@ import click
 import daiquiri
 import pandas as pd
 
-from utils import signature as sign
-from utils import parsing as pars
-from utils import run as exp
+from oncodriveclustl.utils import signature as sign
+from oncodriveclustl.utils import parsing as pars
+from oncodriveclustl.utils import run as exp
 
 
 # Global variables
@@ -275,7 +275,7 @@ def main(input_file,
 
     # Parse regions and dataset mutations
     logger.info('Parsing input regions and input mutations...')
-    regions_d, chromosomes_d, mutations_d, gz = pars.parse(regions_file, elements, input_file)
+    regions_d, chromosomes_d, mutations_d = pars.parse(regions_file, elements, input_file)
 
     mut = 0
     elem = 0
@@ -295,7 +295,7 @@ def main(input_file,
     if not os.path.isfile(path_pickle):
         logger.info('Computing signatures...')
         obj = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), log_level=log_level)
-        obj.calculate(input_file, gz)
+        obj.calculate(input_file)
         obj.save(path_pickle)
         logger.info('Signatures computed')
     else:
