@@ -85,7 +85,7 @@ def write_element_results(genome, results, directory, file, qvalue, gzip):
                      'SCORE_OBS', 'MEAN_SIM_SCORE', 'MEDIAN_SIM_SCORE', 'SD_SIM_SCORE',
                      'E_PVAL', 'E_QVAL', 'A_PVAL', 'A_QVAL', 'CGC']]
         except Exception as e:
-            logger.error('{} in {}. Impossible to calculate q-values'.format(e, file.name))
+            logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
 
     if gzip is True:
         output_file = output_file + '.gz'

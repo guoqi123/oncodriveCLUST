@@ -59,8 +59,12 @@ def read_mutations(input_mutations, trees):
     read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
 
     with read_function(input_mutations, mode) as read_file:
-        fd = csv.DictReader(read_file, delimiter=delimiter)
+        fd = csv.DictReader(read_file, delimiter='\t')
+        # i = 0
         for line in fd:
+        #     if i == 0:
+        #         print(line)
+        #         i = 1
             chromosome = line['CHROMOSOME']
             position = int(line['POSITION'])
             ref = line['REF']
