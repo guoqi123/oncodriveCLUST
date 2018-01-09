@@ -3,6 +3,8 @@ import gzip
 import zipfile
 import csv
 
+import daiquiri
+
 
 
 def check_compression(file):
@@ -13,26 +15,30 @@ def check_compression(file):
             comp: str
     """
 
+    global logger
+    logger = daiquiri.getLogger()
+
     # zip_file = zipfile.is_zipfile(file)
     # if zip_file is True:
     #     comp = 'zip'
-    # else:
-    # TODO: improve!
+
     try:
         with gzip.open(file, 'rb') as fd:
             for line in fd:
-                line = line.decode()  # binary to readable
+                line = line.decode()
                 # print(line)
                 comp = 'gz'
                 break
     except OSError:
-        # try
-        with open(file, 'r') as fd:
-            for line in fd:
-                # print(line)
-                comp = 'None'
-                break
-        # except
+        try:
+            with open(file, 'r') as fd:
+                for line in fd:
+                    # print(line)
+                    comp = 'None'
+                    break
+        except Exception as e:
+            logger.critical('{}. Incorrect file format for {}'.format(e, file))
+            quit()
 
     return comp
 
@@ -42,6 +48,8 @@ def check_tabular_csv(file):
     Check input file tabular or csv format
     :param file: path to file
     :return:
+            read function
+            read mode
             file delimiter
     """
 
@@ -62,14 +70,20 @@ def check_tabular_csv(file):
             if comp != 'None':
                 line = line.decode()
             dialect = csv.Sniffer().sniff(line, delimiters=None)
-            #header = csv.Sniffer().has_header(line)
-            # print(dialect.delimiter)
-            #print(header)
+            chr = 'CHROMOSOME' in line
+            pos = 'POSITION' in line
+            ref = 'REF' in line
+            alt = 'ALT' in line
             break
+
+    if chr == pos == ref == alt == True:
+        header = True
+    else:
+        logger.critical('{} does not contain header'.format(file))
+        quit()
 
     return read_function, mode, dialect.delimiter
 
-# TODO: check header
 #
 # file_txt = '/home/carnedo/projects/inputs/mutations/pancanatlas/ACC.txt'
 # file_csv = '/home/carnedo/projects/inputs/mutations/pancanatlas/ACC_csv.csv'

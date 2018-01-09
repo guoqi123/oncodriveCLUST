@@ -6,7 +6,7 @@ import daiquiri
 from collections import defaultdict
 from intervaltree import IntervalTree
 
-from oncodriveclustl.utils import preprocessing as ppro
+from oncodriveclustl.utils import preprocessing as prep
 
 
 def read_regions(input_regions, elements):
@@ -24,7 +24,7 @@ def read_regions(input_regions, elements):
     regions_d = defaultdict(list)
     chromosomes_d = defaultdict()
 
-    comp = ppro.check_compression(input_regions)
+    comp = prep.check_compression(input_regions)
 
     if comp == 'gz':
         with gzip.open(input_regions, 'rb') as fd:
@@ -56,12 +56,11 @@ def read_mutations(input_mutations, trees):
         mutations_d: dictionary, key = element, value = list of mutations per element
     """
     mutations_d = defaultdict(list)
-    read_function, mode, delimiter = ppro.check_tabular_csv(input_mutations)
+    read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
 
     with read_function(input_mutations, mode) as read_file:
         fd = csv.DictReader(read_file, delimiter=delimiter)
         for line in fd:
-            # TODO: check header is True
             chromosome = line['CHROMOSOME']
             position = int(line['POSITION'])
             ref = line['REF']

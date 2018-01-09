@@ -1,5 +1,4 @@
 # Import modules
-import logging
 import pickle
 import csv
 import gzip
@@ -8,7 +7,7 @@ import click
 import daiquiri
 from tqdm import tqdm
 
-from oncodriveclustl.utils import preprocessing as pre
+from oncodriveclustl.utils import preprocessing as prep
 
 
 class Parser:
@@ -49,8 +48,12 @@ class Signature:
             from bgreference import hg19 as genome_build
         elif genome == 'mm10':
             from bgreference import mm10 as genome_build
-        else:
+        elif genome == 'c3h':
             from bgreference import c3h as genome_build
+        elif genome == 'car':
+            from bgreference import car as genome_build
+        else:
+            from bgreference import cast as genome_build
 
         return genome_build
 
@@ -105,13 +108,12 @@ class Signature:
         """
         parser = Parser()
 
-        read_function, mode, delimiter = pre.check_tabular_csv(mutations_file)
+        read_function, mode, delimiter = prep.check_tabular_csv(mutations_file)
 
         with read_function(mutations_file, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
             count = 0
             for line in tqdm(fd):
-                # TODO: check header is True
                 chromosome = line[parser.CHROMOSOME]
                 position = int(line[parser.POSITION])
                 ref = line[parser.REF]

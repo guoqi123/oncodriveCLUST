@@ -94,8 +94,12 @@ class Experiment:
             from bgreference import hg19 as genome_build
         elif genome == 'mm10':
             from bgreference import mm10 as genome_build
-        else:
+        elif genome == 'c3h':
             from bgreference import c3h as genome_build
+        elif genome == 'car':
+            from bgreference import car as genome_build
+        else:
+            from bgreference import cast as genome_build
 
         return genome_build
 
@@ -418,7 +422,7 @@ class Experiment:
                                  e in belowcutoff_elements]
                 total_items = post_item_analyzed + post_item_nan
 
-                for e, er, cr in tqdm(executor.map(self.post_process, total_items), total=len(total_items),
+                for e, er, cr in tqdm(map(self.post_process, total_items), total=len(total_items),
                                       desc="post processing".rjust(30)):
                     elements_results[e] = er
                     clusters_results[e] = cr

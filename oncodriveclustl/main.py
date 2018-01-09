@@ -4,11 +4,11 @@ import os
 
 import click
 import daiquiri
-import pandas as pd
 
 from oncodriveclustl.utils import signature as sign
 from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import run as exp
+from oncodriveclustl.utils import postprocessing as postp
 
 
 # Global variables
@@ -21,132 +21,6 @@ LOGS = {
 }
 
 
-def write_element_results(genome, results, dir, file):
-    """Save results to the output file
-    :param genome: reference genome
-    :param results: dict, dictionary of results, keys are element's symbols
-    :param dir: str, output directory
-    :param file: str, output file, if elements in elements file
-    :return: None
-    """
-
-    header = ['SYM', 'LEN', 'N_MUT',
-              'CLU', 'MEAN_SIM_CLU', 'MEDIAN_SIM_CLU', 'SD_SIM_CLU',
-              'SCORE_OBS', 'MEAN_SIM_SCORE', 'MEDIAN_SIM_SCORE', 'SD_SIM_SCORE',
-              'E_PVAL', 'A_PVAL', 'CGC']
-
-    output_file = dir+'/elements_'+file+'.txt'
-    with open(output_file, 'w') as fd:
-        fd.write('{}\n'.format('\t'.join(header)))
-        for gene_name, values in results.items():
-            length, muts, obs_clusters, mean_sim_clusters, median_sim_clusters, std_sim_clusters, obs_score, \
-            mean_sim_score, median_sim_score, std_sim_score, epval, apval, cgc = values
-            if genome != 'hg19':
-                cgc = 'Non Available'
-            if obs_clusters and type(obs_clusters) != float:
-                fd.write('{}\t{}\t{}\t{}\t{:.4f}\t{}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\t{}\t{}\t{}\n'.format(
-                   gene_name, length, muts, obs_clusters, mean_sim_clusters, median_sim_clusters, std_sim_clusters,
-                    obs_score, mean_sim_score, median_sim_score, std_sim_score, epval, apval, cgc))
-            else:
-                fd.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                    gene_name, length, muts, obs_clusters, mean_sim_clusters, median_sim_clusters, std_sim_clusters,
-                    obs_score, mean_sim_score, median_sim_score, std_sim_score, epval, apval, cgc))
-    # Sort
-    df = pd.read_csv(output_file, sep='\t', header=0)
-    df.sort_values(by=['E_PVAL', 'SCORE_OBS', 'CGC'], ascending=[True, False, False], inplace=True)
-    df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
-
-    return output_file
-
-
-def write_cluster_results(genome, results, dir, file, sorter):
-    """Save results to the output file
-    :param genome: reference genome
-    :param results: dict, dictionary of results, keys are element's symbols
-    :param dir: str, output directory
-    :param file: str, output file, if elements in elements file
-    :param sorter: list, element symbols ranked by elements p-value
-    :return: None
-    """
-
-    sorterindex = dict(zip(sorter, range(len(sorter))))
-    output_file = dir+'/clusters_'+file+'.tsv'
-    header = ['RANK','SYMBOL', 'CGC', 'CLUSTER', 'N', 'LEFT_M', 'MAX', 'RIGHT_M', 'WIDTH', 'MUT', 'SCORE']
-    with open(output_file, 'w') as fd:
-        fd.write('{}\n'.format('\t'.join(header)))
-        for element, values in results.items():
-            clustersinfo, cgc = values
-            if genome != 'hg19':
-                cgc = 'Non Available'
-            if clustersinfo and type(clustersinfo) != float:
-                rank = sorterindex[element]+1
-                for c, v in clustersinfo.items():
-                    fd.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                            rank, element, cgc, v['mode'], c, v['left_m'][0], v['max'][0], v['right_m'][0], abs(v['right_m'][0]-v['left_m'][0]), v['n_mutations'], v['score']))
-    # Sort
-    df = pd.read_csv(output_file, sep='\t', header=0)
-    df.sort_values(by=['RANK', 'SCORE'], ascending=[True, False], inplace=True)
-    df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
-
-
-def write_info(input_file,
-    output_directory,
-    regions_file,
-    genome,
-    elements_file,
-    elements,
-    element_mutations,
-    cluster_mutations,
-    smooth_window,
-    cluster_window,
-    cluster_score,
-    element_score,
-    kmer,
-    n_simulations,
-    simulation_mode,
-    simulation_window,
-    cores,
-    seed,
-    log_level):
-    """Write info to output
-        :param input_file: input file
-        :param output_directory: output directory path
-        :param regions_file: path input genomic regions, tab file
-        :param genome: genome to use
-        :param elements_file: file containing one element per row
-        :param elements: element symbol or file containing elements
-        :param element_mutations: int, cutoff of element mutations
-        :param cluster_mutations: int, cutoff of cluster mutations
-        :param smooth_window: int, smoothing window
-        :param cluster_window: int, clustering window
-        :param cluster_score: cluster score method
-        :param element_score: element score method
-        :param kmer: int, number of nucleotides of the signature
-        :param n_simulations: int, number of simulations
-        :param simulation_mode: str, simulation mode
-        :param simulation_window: int, window to simulate mutations in hotspot mode
-        :param cores: int, number of CPUs to use
-        :param seed: int, seed
-        :param log_level: verbosity of the logger
-        :return: None
-    """
-
-    info_file = output_directory + '/' + output_directory.split('/')[-1] + '.info'
-
-    if not os.path.isfile(info_file):
-        with open(info_file, 'w') as fd:
-            fd.write('input_file: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\nelements_file: {}\n'
-                     'elements: {}\nelement_mutations: {}\ncluster_mutations: {}\nsmooth_window: {}\n'
-                     'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
-                     'kmer: {}\nn_simulations: {}\n'
-                     'simulation_mode: {}\nsimulation_window: {}\ncores: {}\nseed: {}\n'
-                     'log_level: {}\n'.format(input_file,output_directory,regions_file,genome,
-                      elements_file,elements,element_mutations,cluster_mutations,smooth_window,cluster_window,
-                      cluster_score,element_score,kmer,n_simulations,simulation_mode, simulation_window,
-                      cores,seed,log_level))
-    else:
-        pass
-
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
@@ -158,16 +32,16 @@ def write_info(input_file,
               help='File with the symbol of the elements to analyze')
 @click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
               help='Symbol of the element to analyze')
-@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg19', 'mm10', 'c3h']),
-              help="genome to use")
+@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg19', 'mm10', 'c3h', 'car', 'cast']),
+              help='Genome to use')
 @click.option('-emut', '--element-mutations', type=click.INT, default=2,
               help='Cutoff of element mutations. Default is 2')
 @click.option('-cmut', '--cluster-mutations', type=click.INT, default=2,
               help='Cutoff of cluster mutations. Default is 2')
 @click.option('-sw', '--smooth-window', type=click.INT, default=50,
-              help='smoothing window. Default is 50')
+              help='Smoothing window. Default is 50')
 @click.option('-cw', '--cluster-window', type=click.INT, default=50,
-              help='cluster window. Default is 50')
+              help='Cluster window. Default is 50')
 @click.option('-cs', '--cluster-score', default='nobias', help='Cluster score formula',
               type=click.Choice(['nobias', 'fmutations']))
 @click.option('-es', '--element-score', default='mean', help='Element score formula',
@@ -177,15 +51,17 @@ def write_info(input_file,
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
 @click.option('-sim', '--simulation-mode', default='element', help='Simulation mode',
-              type=click.Choice(['segment', 'hotspot', 'element']))
+              type=click.Choice(['hotspot', 'element']))
 @click.option('-simw', '--simulation-window', type=click.INT, default=20,
               help='Simulation window. Default is 20')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
               help='Number of cores to use in the computation. By default it uses all the available cores.')
 @click.option('--seed', type=click.INT, default=None,
               help='seed to use in the simulations')
-@click.option('--log-level', default='info', help='verbosity of the logger',
+@click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
+@click.option('--qvalue', is_flag=True, help='Calculate empirical and analytical q-values',)
+@click.option('--gzip', is_flag=True, help='Gzip compress files',)
 def main(input_file,
          output_directory,
          regions_file,
@@ -204,7 +80,9 @@ def main(input_file,
          simulation_window,
          cores,
          seed,
-         log_level):
+         log_level,
+         qvalue,
+         gzip):
     """Oncodriveclustl is a program that looks for mutational hotspots
     :param input_file: input file
     :param output_directory: output directory
@@ -225,6 +103,8 @@ def main(input_file,
     :param cores: int, number of CPUs to use
     :param seed: int, seed
     :param log_level: verbosity of the logger
+    :param qvalue: bool, True calculates empirical and analytical q-values
+    :param gzip: bool, True generates gzip compressed output file
     :return: None
     """
 
@@ -242,6 +122,7 @@ def main(input_file,
         daiquiri.output.STDERR,
         daiquiri.output.File(filename=output_file+'.log', directory=output_directory)
     ))
+    global logger
     logger = daiquiri.getLogger()
     logger.debug(' '.join([input_file,
                            output_directory,
@@ -256,7 +137,9 @@ def main(input_file,
                            str(n_simulations),
                            simulation_mode,
                            str(simulation_window),
-                           str(cores)]))
+                           str(cores),
+                           str(qvalue),
+                           str(gzip)]))
 
     logger.info('Initializing OncodriveCLUSTL...')
 
@@ -314,19 +197,19 @@ def main(input_file,
                                 ).run()
 
     # Write results
-    elements_path = write_element_results(genome=genome, results=elements_results, dir=output_directory, file=output_file)
-    logger.info('Element results calculated')
-    df = pd.read_csv(elements_path, sep='\t')
-    sorted_list_elements = df['SYM'].tolist()
-    write_cluster_results(genome=genome, results=clusters_results, dir=output_directory, file=output_file,
-                          sorter=sorted_list_elements)
+    sorted_list_elements = postp.write_element_results(genome=genome, results=elements_results,
+                                                       directory=output_directory, file=output_file,
+                                                       qvalue=qvalue, gzip=gzip)
+    logger.info('Elements results calculated')
+    postp.write_cluster_results(genome=genome, results=clusters_results, directory=output_directory, file=output_file,
+                                sorter=sorted_list_elements, gzip=gzip)
     logger.info('Clusters results calculated')
     logger.info('Finished')
 
     # Write info
-    write_info(input_file,output_directory,regions_file,genome,elements_file,elements,element_mutations,
+    postp.write_info(input_file,output_directory,regions_file,genome,elements_file,elements,element_mutations,
          cluster_mutations,smooth_window,cluster_window,cluster_score,element_score,int(kmer),
-         n_simulations,simulation_mode,simulation_window,cores,seed,log_level)
+         n_simulations,simulation_mode,simulation_window,cores,seed,log_level, qvalue, gzip)
 
 if __name__ == '__main__':
     main()

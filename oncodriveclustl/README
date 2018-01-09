@@ -1,11 +1,14 @@
 Oncodriveclustl
 
-# Run for whole dataset
+# Run for whole dataset, calculate q-values and gzip compress data
 
 python main.py
 -i /workspace/projects/oncodriveclustl/inputs/mutations/pancanatlas/SKCM.txt
--o /workspace/projects/oncodriveclustl/.../SKCM/20171009
+-o /workspace/projects/oncodriveclustl/.../SKCM
 -r /workspace/projects/oncodriveclustl/inputs/regions/02_cds.regions.gz
--n 1000
+-n 10000
 -sim hotspot
+-simw 40
 -c 4
+--qvalue
+--gzip

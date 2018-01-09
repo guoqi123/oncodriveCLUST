@@ -12,7 +12,8 @@ install_requires = [
     'tqdm',
     'colorlog',
     'scipy',
-    'scikit-learn'
+    'scikit-learn',
+    'statsmodels'
 ]
 
 
