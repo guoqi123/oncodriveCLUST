@@ -22,6 +22,8 @@ def check_compression(file):
     # if zip_file is True:
     #     comp = 'zip'
 
+    # TODO check that file exists
+
     try:
         with gzip.open(file, 'rb') as fd:
             for line in fd:
@@ -84,7 +86,10 @@ def check_tabular_csv(file):
 
     return read_function, mode, dialect.delimiter
 
-#
+
+# TODO: check non overlapping regions
+
+
 # file_txt = '/home/carnedo/projects/inputs/mutations/pancanatlas/ACC.txt'
 # file_csv = '/home/carnedo/projects/inputs/mutations/pancanatlas/ACC_csv.csv'
 # file_xls = '/home/carnedo/projects/inputs/mutations/pancanatlas/ACC_xls.xlsx'

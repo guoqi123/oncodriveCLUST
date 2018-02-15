@@ -16,13 +16,14 @@ def read_regions(input_regions, elements):
     :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
     :return:
         trees: dictionary of dictionary of intervaltrees (trees) containing intervals of genomic elements by chromosome.
-        regions_d: dictionary containing a list of tuples with the genomic positions of each element.
+        regions_d: dictionary of IntervalTrees with genomic regions for elements
         chromosomes_d: dict, keys are elements, values are chromosomes
     """
 
     trees = defaultdict(IntervalTree)
-    regions_d = defaultdict(list)
+    regions_d = defaultdict(IntervalTree)
     chromosomes_d = defaultdict()
+    strands_d = defaultdict()
 
     comp = prep.check_compression(input_regions)
 
@@ -34,8 +35,9 @@ def read_regions(input_regions, elements):
                 if elements and symbol not in elements:
                     continue
                 trees[chromosome][int(start): int(end) + 1] = symbol + '_' + ensid  # int, +1 end
-                regions_d[symbol + '_' + ensid].append((int(start), int(end) + 1))
+                regions_d[symbol + '_' + ensid].addi(int(start), (int(end) + 1))
                 chromosomes_d[symbol + '_' + ensid] = chromosome
+                strands_d[symbol + '_' + ensid] = strand
 
         if not regions_d.keys():
             logger.critical('No elements found in genomic regions. Please, check input data')
@@ -44,7 +46,7 @@ def read_regions(input_regions, elements):
         logger.critical('Genomic regions are not compressed, please input .gz file')
         quit()
 
-    return regions_d, chromosomes_d, trees
+    return regions_d, chromosomes_d, strands_d, trees
 
 
 def read_mutations(input_mutations, trees):
@@ -60,11 +62,7 @@ def read_mutations(input_mutations, trees):
 
     with read_function(input_mutations, mode) as read_file:
         fd = csv.DictReader(read_file, delimiter='\t')
-        # i = 0
         for line in fd:
-        #     if i == 0:
-        #         print(line)
-        #         i = 1
             chromosome = line['CHROMOSOME']
             position = int(line['POSITION'])
             ref = line['REF']
@@ -88,14 +86,13 @@ def parse(input_regions, elements, input_mutations):
         regions_d: dictionary containing a list of tuples with the genomic positions of each element.
         chromosomes_d: dict, keys are elements, values are chromosomes
         mutations_d: dictionary, key = element, value = list of mutations per element
-        gz: bool, True if '.gz' found in input_file else False
     """
 
     global logger
     logger = daiquiri.getLogger()
-    regions_d, chromosomes_d, trees = read_regions(input_regions, elements)
+    regions_d, chromosomes_d, strands_d, trees = read_regions(input_regions, elements)
     logger.debug('Regions parsed')
     mutations_d = read_mutations(input_mutations, trees)
     logger.debug('Mutations parsed')
 
-    return regions_d, chromosomes_d, mutations_d
+    return regions_d, chromosomes_d, strands_d, mutations_d

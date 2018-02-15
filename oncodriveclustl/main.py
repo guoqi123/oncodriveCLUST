@@ -43,15 +43,15 @@ LOGS = {
 @click.option('-cw', '--cluster-window', type=click.INT, default=50,
               help='Cluster window. Default is 50')
 @click.option('-cs', '--cluster-score', default='nobias', help='Cluster score formula',
-              type=click.Choice(['nobias', 'fmutations']))
+              type=click.Choice(['fmutations']))
 @click.option('-es', '--element-score', default='mean', help='Element score formula',
-              type=click.Choice(['sum', 'mean']))
+              type=click.Choice(['sum']))
 @click.option('-kmer', '--kmer', default='3', help='Number of nucleotides of the signature',
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
 @click.option('-sim', '--simulation-mode', default='element', help='Simulation mode',
-              type=click.Choice(['hotspot', 'element']))
+              type=click.Choice(['hotspot', 'region']))
 @click.option('-simw', '--simulation-window', type=click.INT, default=20,
               help='Simulation window. Default is 20')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
@@ -60,8 +60,9 @@ LOGS = {
               help='seed to use in the simulations')
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
-@click.option('--qvalue', is_flag=True, help='Calculate empirical and analytical q-values',)
-@click.option('--gzip', is_flag=True, help='Gzip compress files',)
+@click.option('--qvalue', is_flag=True, help='Calculate empirical and analytical q-values')
+@click.option('--gzip', is_flag=True, help='Gzip compress files')
+@click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
 def main(input_file,
          output_directory,
          regions_file,
@@ -82,7 +83,8 @@ def main(input_file,
          seed,
          log_level,
          qvalue,
-         gzip):
+         gzip,
+         cds):
     """Oncodriveclustl is a program that looks for mutational hotspots
     :param input_file: input file
     :param output_directory: output directory
@@ -105,6 +107,7 @@ def main(input_file,
     :param log_level: verbosity of the logger
     :param qvalue: bool, True calculates empirical and analytical q-values
     :param gzip: bool, True generates gzip compressed output file
+    :param cds: bool, True calculates clustering on cds
     :return: None
     """
 
@@ -139,7 +142,8 @@ def main(input_file,
                            str(simulation_window),
                            str(cores),
                            str(qvalue),
-                           str(gzip)]))
+                           str(gzip),
+                           str(cds)]))
 
     logger.info('Initializing OncodriveCLUSTL...')
 
@@ -157,17 +161,17 @@ def main(input_file,
         logger.info(', '.join(elements))
 
     # Parse regions and dataset mutations
-    logger.info('Parsing input regions and input mutations...')
-    regions_d, chromosomes_d, mutations_d = pars.parse(regions_file, elements, input_file)
+    logger.info('Parsing genomic regions and mutations...')
+    regions_d, chromosomes_d, strands_d, mutations_d = pars.parse(regions_file, elements, input_file)
 
     mut = 0
     elem = 0
     for k, v in mutations_d.items():
         mut += len(v)
         elem += 1
-    logger.info('Validated input elements: {}'.format(len(regions_d.keys())))
-    logger.info('Validated mutated elements to analyze: {}'.format(elem))
-    logger.info('Substitution mutations to analyze: {}'.format(mut))
+    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
+    logger.info('Validated elements with mutations: {}'.format(elem))
+    logger.info('Total substitution mutations to analyze: {}'.format(mut))
 
     # Compute dataset kmer signatures
     signatures_pickle = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
@@ -189,11 +193,11 @@ def main(input_file,
                                 regions_d, chromosomes_d, mutations_d, genome,
                                 path_pickle,
                                 element_mutations, cluster_mutations,
-                                smooth_window, cluster_window,
+                                cds, smooth_window, cluster_window,
                                 cluster_score, element_score,
                                 int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
-                                cores, seed
+                                cores, seed,
                                 ).run()
 
     # Write results
@@ -208,7 +212,7 @@ def main(input_file,
 
     # Write info
     postp.write_info(input_file,output_directory,regions_file,genome,elements_file,elements,element_mutations,
-         cluster_mutations,smooth_window,cluster_window,cluster_score,element_score,int(kmer),
+         cluster_mutations,cds,smooth_window,cluster_window,cluster_score,element_score,int(kmer),
          n_simulations,simulation_mode,simulation_window,cores,seed,log_level, qvalue, gzip)
 
 if __name__ == '__main__':

@@ -1,26 +1,38 @@
 # Import modules
+from intervaltree import IntervalTree
+
 import numpy as np
 
-from oncodriveclustl.utils import sequence as seq
 
-
-def smooth(regions_d, mutations, window, tukey_filter):
+def smooth(regions, mutations, tukey_filter):
     """Generate a smoothing curve for a list of element's mutations
-    :param regions_d: list of tuples with genomic positions of an element.
+    :param regions: IntervalTree with genomic positions of an element
     :param mutations: list, list of mutations of an element
-    :param window: int, smoothing window
     :param tukey_filter: numpy array. The elements sum to 1
     :return: dict, region_lists with new keys 'binary' and 'mut_by_pos'
-        binary: length == genomic, smoothing score curve
+        smooth: length == genomic, smoothing score curve
     """
 
-    # Get binary, cds with borders added
-    binary = np.zeros(seq.get_length(regions_d) + window - 1)
-    indexes = np.searchsorted(np.array(seq.get_genomic(regions_d)), mutations)
-    for index in indexes:
-        binary[index: index + window] += tukey_filter
+    smooth_tree = IntervalTree()
+    final_smooth_tree = IntervalTree()
 
-    # Remove the extra bases at the beginning and at the end
-    binary = binary[window // 2: - window // 2 + 1]
+    for interval in regions:
+        # Add extra bases for smoothing tukey window
+        begin = interval.begin
+        end = interval.end
+        # Remove 1 to tukey filter to allow symmetric // 2
+        smooth_tree.addi(begin, end, np.zeros((end - begin) + len(tukey_filter) - 1))
 
-    return binary
+    # Find mutations in regions
+    for mutation in mutations:
+        for interval in smooth_tree[mutation]:
+            # Get index of mutation in region
+            index = mutation - interval.begin
+            # Smooth mutations
+            interval.data[index: index + len(tukey_filter)] += tukey_filter
+
+    for interval in smooth_tree:
+        final_smooth_tree.addi(interval.begin, interval.end,
+                               interval.data[(len(tukey_filter) // 2): - (len(tukey_filter) // 2)])
+
+    return final_smooth_tree

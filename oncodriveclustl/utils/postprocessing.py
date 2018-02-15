@@ -141,6 +141,7 @@ def write_info(input_file,
                elements,
                element_mutations,
                cluster_mutations,
+               cds,
                smooth_window,
                cluster_window,
                cluster_score,
@@ -163,6 +164,7 @@ def write_info(input_file,
         :param elements: element symbol or file containing elements
         :param element_mutations: int, cutoff of element mutations
         :param cluster_mutations: int, cutoff of cluster mutations
+        :param cds: bool, True calculates clustering on cds
         :param smooth_window: int, smoothing window
         :param cluster_window: int, clustering window
         :param cluster_score: cluster score method
@@ -184,13 +186,13 @@ def write_info(input_file,
     if not os.path.isfile(info_file):
         with open(info_file, 'w') as fd:
             fd.write('input_file: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\nelements_file: {}\n'
-                     'elements: {}\nelement_mutations: {}\ncluster_mutations: {}\nsmooth_window: {}\n'
+                     'elements: {}\nelement_mutations: {}\ncluster_mutations: {}\ncds: {}\nsmooth_window: {}\n'
                      'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
                      'kmer: {}\nn_simulations: {}\n'
                      'simulation_mode: {}\nsimulation_window: {}\ncores: {}\nseed: {}\n'
                      'log_level: {}\nq-value: {}\ngzip: {}\n'.format(input_file, output_directory, regions_file, genome,
                                               elements_file, elements, element_mutations, cluster_mutations,
-                                              smooth_window, cluster_window,
+                                              cds, smooth_window, cluster_window,
                                               cluster_score, element_score, kmer, n_simulations, simulation_mode,
                                               simulation_window,
                                               cores, seed, log_level, qvalue, gzip))

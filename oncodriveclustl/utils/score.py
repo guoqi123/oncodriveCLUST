@@ -2,26 +2,24 @@
 from collections import defaultdict
 
 
-def element_score(clusters, cutoff, mode, method):
+def element_score(clusters_tree, mode, method):
     """
-    Given the clusters of a region, calculate a global score for it
-    :param clusters: dictionary of dictionaries
-    :param cutoff: int, n cluster mutations cutoff
+    # TODO
+    Given the clusters of an element, calculate a global score for it
+    :param clusters_tree:
     :param mode: str, 'obs' for observed or 'sim' for simulated
     :param method: str, scoring method. Default 'mean'
-    :return: dict of dict and int; number of clusters above cutoff and element score
+    :return: float, element score
     """
     n_clusters = 0
     score = 0
-    cutoff_clusters = defaultdict(dict)
 
-    for cluster, value in clusters.items():
-        if value['n_mutations'] >= cutoff:
-            n_clusters +=1
-            score += value['score']
-            # get clusters information
-            value['mode'] = mode
-            cutoff_clusters[cluster] = value
+    for interval in clusters_tree:
+        clusters = dict(interval.data)
+        for cluster, values in clusters.items():
+            n_clusters += 1
+            score += values['score']  # Add up cluster scores
+            interval.data[cluster]['mode'] = mode
 
     if method == 'mean':
         if n_clusters:
@@ -33,4 +31,4 @@ def element_score(clusters, cutoff, mode, method):
     else:
         element_score = 0
 
-    return cutoff_clusters, element_score
+    return element_score

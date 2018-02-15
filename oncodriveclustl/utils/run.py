@@ -5,10 +5,10 @@ from concurrent.futures import ProcessPoolExecutor as Pool
 import daiquiri
 import pickle
 from collections import defaultdict
+from intervaltree import IntervalTree
 from tqdm import tqdm
 import numpy as np
 
-from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
 from oncodriveclustl.utils import score
 from oncodriveclustl.utils import sequence as seq
@@ -22,21 +22,24 @@ class Experiment:
     """Class to analyze elements of a cancer dataset"""
 
     def __init__(self, regions_d, chromosomes_d, mutations_d, genome, path_pickle,
-                 element_mutations_cutoff, cluster_mutations_cutoff, smooth_window, cluster_window,
+                 element_mutations_cutoff, cluster_mutations_cutoff, cds, smooth_window, cluster_window,
                  cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores, seed):
         """Initialize the Experiment class
-        :param regions_d: dict, dictionary containing genomic regions from all analyzed elements
+        :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
         :param chromosomes_d: dict, dictionary containing chromosomes from all analyzed elements
         :param mutations_d: dict, dictionary containing mutations lists from all analyzed elements
         :param genome: genome to use
         :param element_mutations_cutoff: int, cutoff of element mutations
         :param cluster_mutations_cutoff: int, cutoff of cluster mutations
+        :param cds: bool, True calculates clustering on cds
         :param smooth_window: int, smoothing window
         :param cluster_window: int, clustering window
         :param cluster_score: cluster score method
         :param element_score: element score method
         :param kmer: int, number of nucleotides of the signature
         :param n_simulations: int, number of simulations
+        :param simulation_mode: str, simulation mode
+        :param simulation_window: int, window to simulate mutations in hotspot mode
         :param cores: int, number of CPUs to use
         :param seed: int, seed
         :return: None
@@ -49,6 +52,7 @@ class Experiment:
         self.path_pickle = path_pickle
         self.element_mutations_cutoff = element_mutations_cutoff
         self.cluster_mutations_cutoff = cluster_mutations_cutoff
+        self.cds = cds
         self.smooth_window = smooth_window + (1 - smooth_window % 2)
         # Calculate tukey filter
         self.tukey_filter = self.tukey(self.smooth_window)
@@ -115,77 +119,86 @@ class Experiment:
         try:
             prob_factor = 1 / sum(probs)
             return [prob_factor * p for p in probs]
+
+        # TODO check what happens here
         except ZeroDivisionError as e:
-            logger.error('{}. No mutational probabilities dervied from signatures in element {}'.format(e, element))
+            logger.error('{}. No mutational probabilities derived from signatures in element {}'.format(e, element))
             return False
 
-
-    def mut_probabilities(self, element, kmer):
+    def mut_probabilities(self, element):
         """
         Generate mutational probabilities per position of an element based on the sequence context observed signature
         :param element: element to calculate pre-smoothing
-        :param kmer: int, number of nucleotides of the signature
         :return:
-            probabilities: list of length == genomic, contains not normalized mutational probabilities per position
+            probs_tree: IntervalTree of genomic regions, interval.data are mutational probabilities per position
+            (not normalized). Length == genomic + simulation window
+            skip: bool, if True skip further analysis
         """
-        regions = 0
+        skip = False
+        length = 0
         nu = 0
         sequ = 0
-        delta = 1 if kmer == 3 else 2
+        delta = 1 if self.kmer == 3 else 2
         nucleot = {'A', 'C', 'G', 'T'}
-        probabilities = []
+        probs_tree = IntervalTree()
 
-        # Read signatures pickle
         if os.path.isfile(self.path_pickle):
+            # Read signatures pickle
             signatures = pickle.load(open(self.path_pickle, "rb"))
             signatures = signatures['probabilities']
             logger.debug('Signatures read')
-        else:
-            logger.critical('Signatures pickle {} not found'.format(self.path_pickle))
-            quit()
 
-        # Iterate through tuples of coordinates, get genomic regions' sequence
-        for pos in self.regions_d[element]:
-            regions += 1
-            start = pos[0]-delta
-            end = pos[1] - pos[0] + 1 + delta*2
-            sequence = self.genome_build(self.chromosomes_d[element], start, end)  # genomic start -d, genomic end +d
-            sequ += len(sequence)-2
+            # Iterate through tuples of coordinates, get genomic regions sequence
+            for interval in self.regions_d[element]:
+                probabilities = []
+                start = interval[0] - (self.simulation_window // 2) - delta
+                end = interval[1] - interval[0] + 1 + self.simulation_window + delta*2
+                # genomic start -d -sw//2, genomic end +d +sw//2
+                sequence = self.genome_build(self.chromosomes_d[element], start, end)
+                sequ += len(sequence)-2
 
-            # Search kmer probabilities
-            for n in range(delta, len(sequence)-delta):  # start to end
-                nu += 1
-                ref_kmer = sequence[n - delta: n + delta + 1]
-                N = ref_kmer.count('N')
-                if N == 0:
-                    prob = 0
-                    for alt in nucleot.difference({ref_kmer[kmer//2]}):  # mutation probability to any other kmer
-                        alt_kmer = ref_kmer[: kmer//2] + alt + ref_kmer[kmer//2 + 1:]
-                        prob += signatures[(ref_kmer, alt_kmer)]
-                # elif N == 1:
-                #     prob = 0
-                #     n_index = ref_kmer.index('N')
-                #     for nuc in nucleot:  # All possible reference kmers
-                #         new_ref = ref_kmer[:n_index] + nuc + ref_kmer[n_index + 1:]
-                #         for alt in nucleot.difference({new_ref[kmer//2]}):
-                #             alt_kmer = new_ref[:kmer//2] + alt + new_ref[kmer//2 + 1:]
-                #             prob += signatures[(new_ref, alt_kmer)]
-                else:
-                    prob = 0
-                probabilities.append(prob)
+                # Search kmer probabilities
+                for n in range(delta, len(sequence)-delta):  # start to end
+                    nu += 1
+                    ref_kmer = sequence[n - delta: n + delta + 1]
+                    n_number = ref_kmer.count('N')
+                    if n_number == 0:
+                        prob = 0
+                        for alt in nucleot.difference({ref_kmer[self.kmer//2]}):  # mutational prob to any other kmer
+                            alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
+                            prob += signatures[(ref_kmer, alt_kmer)]
+                    else:
+                        prob = 0
+                    # Append to probabilities
+                    probabilities.append(prob)
+                # Add probabilities to probs_tree
+                probs_tree.addi(interval[0], interval[1], probabilities)
 
-        # Check probabilities
-        # if probabilities:
-        #     # length == genomic?
-        #     # sum() == 0?
-        # else:
-        #     logger.
+            # Check probabilities
+            check = 0
+            for interval in probs_tree:
+                probabilities = interval.data
+                if probabilities:
+                    check = 1
+                    if sum(probabilities) == 0:
+                        logger.critical('All context based mutational probabilities per position in {} equal to 0\n'
+                                        '{} analysis is skipped'.format(element, element))
+                        skip = True
+                    if len(probabilities) != (interval[1] - interval[0] + 1 + self.simulation_window):
+                        logger.warning('{} probabilities list length is different than expected, '
+                                       'please review results'.format(element))
+                        skip = True
+            if check == 0:
+                logger.critical('Context based mutational probabilities were not calculated for {}\n'
+                                '{} analysis is skipped'.format(element, element))
+                skip = True
 
-        return probabilities
+        return probs_tree, skip
 
     def analysis(self, element, mutations, analysis_mode='sim'):
         """
-        Calculate smoothing, clustering and element score for either observed or simulated mutations
+        # TODO
+        Calculate smoothing, clustering and element score for observed or simulated mutations
         :param element: element of analysis.
         :param mutations: list, list of mutations of an element
         :param analysis_mode: str, observed or simulated; default simulated
@@ -194,24 +207,30 @@ class Experiment:
             int, gene score
         """
 
-        binary = smo.smooth(self.regions_d[element], mutations, window=self.smooth_window,
-                            tukey_filter=self.tukey_filter)
-        logger.debug('Smoothing calculated')
-        indexes, maxs = clu.find_locals(binary.tolist(), self.regions_d[element])
-        r_clusters = clu.raw_clusters(indexes=indexes)
-        m_clusters = clu.merge_clusters(maxs=maxs, clusters=r_clusters, window=self.cluster_window)
-        mut_clusters = clu.clusters_mut(m_clusters, self.regions_d[element], mutations)
-        scored_clusters = clu.score_clusters(mut_clusters, mutations, self.regions_d[element], self.cluster_score)
+        index_tree, length_tree, smooth_tree = clu.find_locals(self.regions_d[element], mutations,
+                                        self.tukey_filter, self.cds)
+        raw_clusters_tree = clu.raw_clusters(index_tree)
+        merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
+        clusters_mut_tree = clu.clusters_mut(merge_clusters_tree, length_tree, mutations, self.cds)
+
+        score_clusters_tree = clu.score_clusters(clusters_mut_tree, length_tree, self.regions_d[element], self.cluster_mutations_cutoff,
+                                                 self.cluster_score, self.cds, len(mutations))
         logger.debug('Clusters calculated')
-        cutoff_clusters, element_score = score.element_score(
-            clusters=scored_clusters,cutoff=self.cluster_mutations_cutoff,mode=analysis_mode,method=self.element_score
-        )
+        element_score = score.element_score(score_clusters_tree, analysis_mode, self.element_score)
         logger.debug('Element score calculated')
 
-        return cutoff_clusters, element_score
+        # for i in score_clusters_tree:
+        #     print('Interval', i[0], i[1])
+        #     for k, v in i.data.items():
+        #         print('Cluster number', k)
+        #         for k2, v2 in v.items():
+        #             print(k2, v2)
+
+        return score_clusters_tree, element_score
 
     def simulate_and_analysis(self, item):
         """
+        # TODO
         Simulate mutations and analyze simulations
         :param item: tuple, element of analysis data
         :return:
@@ -219,67 +238,147 @@ class Experiment:
             sim_scores_chunk: list, simulated element's results
             sim_cluster_chunk: list, simulated cluster's results
         """
-        element, probs, n_sim = item
-        mode = self.simulation_mode
+        element, probs_tree, n_sim = item
         sim_scores_chunk = []
         sim_cluster_chunk = []
-        # TODO: remove genomic
-        genomic = seq.get_genomic(self.regions_d[element])
+        simulation_hotspots = {}
+        mutations = dict((m, self.mutations_d[element].count(m)) for m in self.mutations_d[element])
 
-        if mode == 'hotspot':
-            index_n_mutations = defaultdict(int)
-            segment_mutations = {}
-            regions = []
-
-            # Get mutation indexes in genomic
-            for mutation in self.mutations_d[element]:
-                index_n_mutations[genomic.index(mutation)] += 1
-            # Get window
+        if self.simulation_mode == 'hotspot':
+            # Get half window
             half_window = self.simulation_window // 2
-             # Get range of genomic coordinates per mutation
-            for index, n_mut in index_n_mutations.items():
-                a = index - half_window
-                b = index + half_window
-
-                if a < 0:
-                    a = genomic[0]
-                else:
-                    a = genomic[a]
-                if b >= len(genomic):
-                    b = genomic[-1]
-                else:
-                    b = genomic[b]
-
-                segment_mutations[tuple([a, b])] = n_mut
-                regions.append(tuple([a, b]))
-
-            # Simulate mutations inside segments of regions
+            # Get genomic coordinates of simulation hotspot inside a region
+            for mutation, count in mutations.items():
+                # Find region containing observed mutation
+                for interval in self.regions_d[element][mutation]:  # unique
+                    # Get margins of hotspot
+                    simulation_hotspots[tuple([mutation - half_window, mutation + half_window])] = (count,
+                                                                                                    interval.begin)
+            # Simulate mutations
             initializer = 0
-            for segment in regions:
-                # Get segment start and end indexes in genomic
-                a = genomic.index(segment[0])
-                b = genomic.index(segment[1])
-                # Get number of mutations in the segment
-                n_mut_segment = segment_mutations[segment]
-                # Simulate mutations
-                if n_mut_segment != 0:   # remove? now there are no segments, so it's not needed
+            for hotspot, values in simulation_hotspots.items():
+                region_start = values[1] - half_window
+                start_to_0 = hotspot[0] - region_start
+                start_to_1 = hotspot[1] - region_start
+                for interval in probs_tree[values[1]]:  # unique
+                    mut_hotspots = np.random.choice(range(hotspot[0], hotspot[1]), size=(n_sim, values[0]),
+                                                p=self.normalize(element, interval.data[start_to_0:start_to_1]))
+                if initializer != 0:
+                    simulated_mutations = np.hstack([simulated_mutations, mut_hotspots])
+                else:
+                    simulated_mutations = mut_hotspots
+                initializer = 1
 
-                    # TODO: check normalization, by default replace=True
-                    mut_segment = np.random.choice(genomic[a:b], size=(n_sim, n_mut_segment),
-                                                   p=self.normalize(element, probs[a:b]))
+        # Start analysis
+        for i in range(n_sim):
+            cutoff_clusters, element_score = self.analysis(element, simulated_mutations[i])
+            sim_scores_chunk.append(element_score)
+            sim_cluster_chunk.append(cutoff_clusters)
+
+        return element, sim_scores_chunk, sim_cluster_chunk
+
+    def simulate_and_analysis_old(self, item):
+        """
+        # TODO
+        Simulate mutations and analyze simulations
+        :param item: tuple, element of analysis data
+        :return:
+            element: str, element of analysis
+            sim_scores_chunk: list, simulated element's results
+            sim_cluster_chunk: list, simulated cluster's results
+        """
+        element, probs_tree, n_sim = item
+        sim_scores_chunk = []
+        sim_cluster_chunk = []
+
+        if self.simulation_mode == 'hotspot':
+            simulation_hotspots = {}
+            # Mutations
+            mutations = dict((m, self.mutations_d[element].count(m)) for m in self.mutations_d[element])
+            # Get half window
+            half_window = self.simulation_window // 2
+
+            if self.cds is False:
+                # Get genomic coordinates of simulation hotspot inside a region
+                for mutation, count in mutations.items():
+                    # Find region containing observed mutation
+                    for interval in self.regions_d[element][mutation]:  # unique
+                        # Get margins of hotspot
+                        a = mutation - half_window
+                        b = mutation + half_window
+                        if a < interval.begin:
+                            a = interval.begin
+                        if b > interval.end:
+                            b = interval.end
+                        simulation_hotspots[tuple([a, b])] = (count, interval.begin)
+                # Simulate mutations in hotspots
+                initializer = 0
+                n = 0
+                for hotspot, values in simulation_hotspots.items():
+                    region_start = values[1]
+                    a_to_start = hotspot[0] - region_start
+                    b_to_start = hotspot[1] - region_start
+                    for interval in probs_tree[values[1]]:  # unique
+                        n += values[0]
+                        mut_hotspots = np.random.choice(range(hotspot[0], hotspot[1]), size=(n_sim, values[0]),
+                                                        p=self.normalize(element, interval.data[a_to_start:b_to_start]))
                     if initializer != 0:
-                        mutations = np.hstack([mutations, mut_segment])
+                        simulated_mutations = np.hstack([simulated_mutations, mut_hotspots])
                     else:
-                        mutations = mut_segment
+                        simulated_mutations = mut_hotspots
+                    initializer = 1
+            else:
+
+                # TODO create this tree somewhere else
+                # Find regions
+                length_tree = IntervalTree()
+                length_d = defaultdict()
+                start = 0
+                for interval in sorted(self.regions_d[element]):
+                    length = interval.end - interval.begin
+                    length_tree.addi(start, start + length, interval[0])
+                    length_d[interval[0]] = (start, start + length)
+                    start = start + length + 1
+
+                print(length_d)
+                quit()
+
+                for mutation, count in mutations.items():
+                    # Find region containing observed mutation
+                    for interval in self.regions_d[element][mutation]:  # unique
+                        # Get margins of hotspot
+                        a = mutation - half_window
+                        b = mutation + half_window
+
+                        if a < interval.begin:
+                            a = interval.begin
+
+                        if b > interval.end:
+                            b = interval.end
+
+                        simulation_hotspots[tuple([a, b])] = (count, interval.begin)
+                # Simulate mutations in hotspots
+                initializer = 0
+                n = 0
+                for hotspot, values in simulation_hotspots.items():
+                    region_start = values[1]
+                    a_to_start = hotspot[0] - region_start
+                    b_to_start = hotspot[1] - region_start
+                    for interval in probs_tree[values[1]]:  # unique
+                        n += values[0]
+                        mut_hotspots = np.random.choice(range(hotspot[0], hotspot[1]), size=(n_sim, values[0]),
+                                                        p=self.normalize(element, interval.data[a_to_start:b_to_start]))
+                    if initializer != 0:
+                        simulated_mutations = np.hstack([simulated_mutations, mut_hotspots])
+                    else:
+                        simulated_mutations = mut_hotspots
                     initializer = 1
 
-        else:  # mode == 'element'
-            mutations = np.random.choice(genomic, size=(n_sim, len(self.mutations_d[element])), p=self.normalize(probs))
-
+        # Start analysis
         for i in range(n_sim):
-            cutoff_clusters, gene_score = self.analysis(element, mutations[i])
-            sim_scores_chunk.append(gene_score)
-            sim_cluster_chunk.append(len(cutoff_clusters))
+            cutoff_clusters, element_score = self.analysis(element, simulated_mutations[i])
+            sim_scores_chunk.append(element_score)
+            sim_cluster_chunk.append(cutoff_clusters)
 
         return element, sim_scores_chunk, sim_cluster_chunk
 
@@ -303,19 +402,44 @@ class Experiment:
 
         element, obs_clusters, obs_score, sim_clusters_list, sim_scores_list = item
 
+        # If analyzed element and element has clusters
+        if obs_score is not 'nan':
+
+            # Significance
+            empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
+            #sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
+            pvalue_generator = ap.AnalyticalPvalue()
+            analytical_pvalue, bandwidth = pvalue_generator.calculate(obs_score, sim_scores_list)
+            logger.debug('P-values calculated')
+            print(analytical_pvalue)
+
+            # Cluster p-value
+            # obs_clusters_score = []
+            # for interval in obs_clusters:
+            #     for cluster, values in interval.data.items():
+            #         obs_clusters_score.append(values['score'])
+            #
+            # sim_clusters_score = []
+            # for simulation in sim_clusters_list:
+            #     top_cluster = []
+            #     for interval in simulation:
+            #         for cluster, values in interval.data.items():
+            #             #top_cluster.append(values['score'])
+            #     #sim_clusters_score.append(max(top_cluster))
+            #             sim_clusters_score.append(values['score'])
+
+            # cluster_analytical_pvalue, bandwidth = pvalue_generator.calculate(max(obs_clusters_score),
+            #                                                                   sim_clusters_score)
+
+            # print('cluster pval', cluster_analytical_pvalue)
+
+        quit()
+
+
+
         if obs_clusters and type(obs_clusters) != float:
             # Clusters
             total_clusters = len(obs_clusters.keys())
-
-            # Statistics: number of clusters per simulation
-            mean_sim_clusters = np.mean(sim_clusters_list)
-            std_sim_clusters = np.std(sim_clusters_list)
-            median_sim_clusters = np.median(sim_clusters_list)
-
-            # Statistics: element score per simulation
-            mean_sim_score = np.mean(sim_scores_list)
-            std_sim_score = np.std(sim_scores_list)
-            median_sim_score = np.median(sim_scores_list)
 
             # Significance
             empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
@@ -363,7 +487,6 @@ class Experiment:
                 belowcutoff_elements.append(elem)
         logger.info('Calculating results {} element{}...'.format(len(analyzed_elements),
                                                                  's' if len(analyzed_elements) > 1 else ''))
-
         # Performance tunning
         pf_num_elements = 100
         pf_num_simulations = 100000
@@ -374,53 +497,66 @@ class Experiment:
             observed_clusters_d = {}
             observed_scores_d = {}
             simulations = []
-            noclusters_elements = []
+            simulated_elements = []
+            noprobabilities_elements = []
+            nocluster_elements = []
             logger.info("Iteration {} of {}".format(i, len(analyzed_elements)))
 
             for element in elements:
-                # Get element pre-smoothing, common for observed and simulated mutations
-                logger.debug('Calculating pre-smoothing...')
-                probs = self.mut_probabilities(element, kmer=self.kmer)
+                # Calculate observed results
 
-                # Calculate observed mutations results
                 observed_clusters_d[element], observed_scores_d[element] = self.analysis(element,
                                                                                          self.mutations_d[element],
                                                                                          analysis_mode='obs')
                 logger.debug('Observed mutations analyzed')
-
-                # Calculate simulated mutations results for elements with observed clusters
-                logger.debug('Start simulations...')
-                if observed_clusters_d[element]:
-                    element_size = ((len(self.mutations_d[element]) * self.n_simulations) // pf_num_simulations) + 1
-                    chunk_size = (self.n_simulations // element_size) + 1
-                    simulations += [(element, probs, n_sim) for n_sim in partitions_list(self.n_simulations,
-                                                                                         chunk_size)]
+                # Calculate simulated mutations results if element has observed clusters at least in one region
+                check = 0
+                for interval in observed_clusters_d[element]:
+                    if interval.data:
+                        check = 1
+                    if check == 1:
+                        break
+                # If there is at least a region with clusters
+                if check != 0:
+                    # Check if probabilities can be calculated
+                    logger.debug('Calculating context based mutational '
+                                 'probabilities for region {} {}...'.format(interval[0], interval[1]))
+                    probs_tree, skip = self.mut_probabilities(element)
+                    if not skip:
+                        element_size = ((len(self.mutations_d[element]) * self.n_simulations) // pf_num_simulations) + 1
+                        chunk_size = (self.n_simulations // element_size) + 1
+                        simulations += [(element, probs_tree, n_sim) for n_sim in partitions_list(self.n_simulations,
+                                        chunk_size)]
+                        simulated_elements.append(element)
+                    # Skip analysis if problems with mutational probabilities
+                    else:
+                        noprobabilities_elements.append(element)
                 else:
-                    noclusters_elements.append(element)
+                    nocluster_elements.append(element)
 
             with Pool(max_workers=self.cores) as executor:
-
                 # Process simulations
                 sim_scores_list = defaultdict(list)
                 sim_clusters_list = defaultdict(list)
 
+                # Analyze elements with observed clusters
                 for element, sim_scores_chunk, sim_cluster_chunk in tqdm(
                         executor.map(self.simulate_and_analysis, simulations), total=len(simulations),
-                        desc="simulations".rjust(30)
-                ):
+                        desc="simulations".rjust(30)):
+
                     sim_scores_list[element] += sim_scores_chunk
                     sim_clusters_list[element] += sim_cluster_chunk
 
                 # Add information of elements without clusters
-                for element in noclusters_elements:
-                    sim_scores_list[element] = sim_clusters_list[element] = float('nan')
+                for element in nocluster_elements:
+                    sim_scores_list[element] = sim_clusters_list[element] = 'nan'
 
                 # Post process
-                post_item_analyzed = [(e, observed_clusters_d[e], observed_scores_d[e],
-                                       sim_clusters_list[e], sim_scores_list[e]) for e in elements]
-                post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan')) for
-                                 e in belowcutoff_elements]
-                total_items = post_item_analyzed + post_item_nan
+                post_item_simulated = [(e, observed_clusters_d[e], observed_scores_d[e],
+                                       sim_clusters_list[e], sim_scores_list[e]) for e in simulated_elements]
+                post_item_nan = [(e, 'nan', 'nan', 'nan', 'nan') for
+                                 e in noprobabilities_elements + belowcutoff_elements]
+                total_items = post_item_simulated + post_item_nan
 
                 for e, er, cr in tqdm(map(self.post_process, total_items), total=len(total_items),
                                       desc="post processing".rjust(30)):
