@@ -38,13 +38,13 @@ LOGS = {
               help='Cutoff of element mutations. Default is 2')
 @click.option('-cmut', '--cluster-mutations', type=click.INT, default=2,
               help='Cutoff of cluster mutations. Default is 2')
-@click.option('-sw', '--smooth-window', type=click.INT, default=50,
+@click.option('-sw', '--smooth-window', type=click.INT, default=25,
               help='Smoothing window. Default is 50')
 @click.option('-cw', '--cluster-window', type=click.INT, default=50,
               help='Cluster window. Default is 50')
-@click.option('-cs', '--cluster-score', default='nobias', help='Cluster score formula',
+@click.option('-cs', '--cluster-score', default='fmutations', help='Cluster score formula',
               type=click.Choice(['fmutations']))
-@click.option('-es', '--element-score', default='mean', help='Element score formula',
+@click.option('-es', '--element-score', default='sum', help='Element score formula',
               type=click.Choice(['sum']))
 @click.option('-kmer', '--kmer', default='3', help='Number of nucleotides of the signature',
               type=click.Choice(['3', '5']))
@@ -52,7 +52,7 @@ LOGS = {
               help='number of simulations. Default is 10000')
 @click.option('-sim', '--simulation-mode', default='element', help='Simulation mode',
               type=click.Choice(['hotspot', 'region']))
-@click.option('-simw', '--simulation-window', type=click.INT, default=20,
+@click.option('-simw', '--simulation-window', type=click.INT, default=60,
               help='Simulation window. Default is 20')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
               help='Number of cores to use in the computation. By default it uses all the available cores.')
@@ -60,7 +60,6 @@ LOGS = {
               help='seed to use in the simulations')
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
-@click.option('--qvalue', is_flag=True, help='Calculate empirical and analytical q-values')
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
 @click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
 def main(input_file,
@@ -82,7 +81,6 @@ def main(input_file,
          cores,
          seed,
          log_level,
-         qvalue,
          gzip,
          cds):
     """Oncodriveclustl is a program that looks for mutational hotspots
@@ -105,7 +103,6 @@ def main(input_file,
     :param cores: int, number of CPUs to use
     :param seed: int, seed
     :param log_level: verbosity of the logger
-    :param qvalue: bool, True calculates empirical and analytical q-values
     :param gzip: bool, True generates gzip compressed output file
     :param cds: bool, True calculates clustering on cds
     :return: None
@@ -141,7 +138,6 @@ def main(input_file,
                            simulation_mode,
                            str(simulation_window),
                            str(cores),
-                           str(qvalue),
                            str(gzip),
                            str(cds)]))
 
@@ -201,8 +197,7 @@ def main(input_file,
                                 ).run()
     # Write results
     sorted_list_elements = postp.write_element_results(genome=genome, results=elements_results,
-                                                       directory=output_directory, file=output_file,
-                                                       qvalue=qvalue, gzip=gzip)
+                                                       directory=output_directory, file=output_file, gzip=gzip)
     logger.info('Elements results calculated')
     postp.write_cluster_results(genome=genome, results=clusters_results, directory=output_directory, file=output_file,
                                 sorter=sorted_list_elements, gzip=gzip)
@@ -212,7 +207,7 @@ def main(input_file,
     # Write info
     postp.write_info(input_file,output_directory,regions_file,genome,elements_file,elements,element_mutations,
          cluster_mutations,cds,smooth_window,cluster_window,cluster_score,element_score,int(kmer),
-         n_simulations,simulation_mode,simulation_window,cores,seed,log_level, qvalue, gzip)
+         n_simulations,simulation_mode,simulation_window,cores,seed,log_level, gzip)
 
 if __name__ == '__main__':
     main()

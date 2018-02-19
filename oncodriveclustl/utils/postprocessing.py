@@ -27,13 +27,12 @@ def mtc(p_value):
     return mlpt(p_value, alpha=0.05, method='fdr_bh')[1]
 
 
-def write_element_results(genome, results, directory, file, qvalue, gzip):
+def write_element_results(genome, results, directory, file, gzip):
     """Save results to the output file
     :param genome: reference genome
     :param results: dict, dictionary of results, keys are element's symbols
     :param directory: str, output directory
     :param file: str, output file, if elements in elements file
-    :param qvalue: bool, True calculates empirical and analytical q-values
     :param gzip: bool, True generates gzip compressed output file
     :return: None
     """
@@ -101,7 +100,7 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip):
     sorterindex = dict(zip(sorter, range(len(sorter))))
     output_file = directory + '/clusters_' + file + '.tsv'
     header = ['RANK', 'SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'REGION',
-              '5_COORD', 'MAX_COORD', '3_COORD', 'WIDTH', 'N_MUT', 'SCORE','P', 'MUTATIONS']
+              '5_COORD', 'MAX_COORD', '3_COORD', 'WIDTH', 'N_MUT', 'SCORE', 'P']
 
     with open(output_file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
@@ -114,11 +113,11 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip):
                 rank = sorterindex[sym] + 1
                 for interval in clustersinfo:
                     for c, v in interval.data.items():
-                        fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                        fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
                             rank, sym, id, cgc, chr, strand, interval[0], interval[1],
                             v['left_m'][0]+interval[0], v['max'][0]+interval[0], v['right_m'][0]+interval[0],
                             abs(v['right_m'][0] - v['left_m'][0]),
-                            sum(v['mutations'].values()), v['score'], v['p'], v['mutations']))
+                            sum(v['mutations'].values()), v['score'], v['p']))
     # Sort
     df = pd.read_csv(output_file, sep='\t', header=0)
     df.sort_values(by=['RANK', 'P', 'SCORE'], ascending=[True, True, False], inplace=True)
@@ -150,7 +149,6 @@ def write_info(input_file,
                cores,
                seed,
                log_level,
-               qvalue,
                gzip):
     """Write info to output
         :param input_file: input file
@@ -173,7 +171,6 @@ def write_info(input_file,
         :param cores: int, number of CPUs to use
         :param seed: int, seed
         :param log_level: verbosity of the logger
-        :param qvalue: bool, True calculates empirical and analytical q-values
         :param gzip: bool, True generates gzip compressed output file
         :return: None
     """
@@ -187,11 +184,11 @@ def write_info(input_file,
                      'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
                      'kmer: {}\nn_simulations: {}\n'
                      'simulation_mode: {}\nsimulation_window: {}\ncores: {}\nseed: {}\n'
-                     'log_level: {}\nq-value: {}\ngzip: {}\n'.format(input_file, output_directory, regions_file, genome,
+                     'log_level: {}\ngzip: {}\n'.format(input_file, output_directory, regions_file, genome,
                                               elements_file, elements, element_mutations, cluster_mutations,
                                               cds, smooth_window, cluster_window,
                                               cluster_score, element_score, kmer, n_simulations, simulation_mode,
                                               simulation_window,
-                                              cores, seed, log_level, qvalue, gzip))
+                                              cores, seed, log_level, gzip))
     else:
         pass
