@@ -9,19 +9,20 @@ from intervaltree import IntervalTree
 from oncodriveclustl.utils import smoothing as smo
 
 
-def find_locals(regions, mutations, tukey_filter, cds):
+def find_locals(regions, mutations, tukey_filter, cds, simulation_window):
     """
-    Find local maxima and minima
+    Find local maximum and minimum of a smoothing curve
     :param regions: IntervalTree with genomic positions of an element
     :param mutations: list, list of mutations of an element
     :param tukey_filter: numpy array. The elements sum to 1
     :param cds: bool, True calculates clustering on cds
+    :param simulation_window: int, simulation window
     :return:
-        # TODO add return info
+    # TODO return
     """
     index_tree = IntervalTree()
     length_tree = IntervalTree()
-    smooth_tree = smo.smooth(regions, mutations, tukey_filter)
+    smooth_tree = smo.smooth(regions, mutations, tukey_filter, simulation_window)
 
     if cds:
         # Re-write smooth_tree (one interval == cds)
@@ -73,7 +74,7 @@ def raw_clusters(index_tree):
         indexes = interval.data     # TODO add key to indexes
 
         # Iterate through all maximum and generate a cluster per maximum
-        generator_maxs = (i for i in indexes if i[0] == 1)   # Save memory
+        generator_maxs = (i for i in indexes if i[0] == 1)
         for maximum in generator_maxs:
             i = indexes.index(maximum)
             # Add maximum
@@ -109,8 +110,6 @@ def merge_clusters(clusters_tree, window):
         clusters: dict of dict
     """
     merged_clusters_tree = IntervalTree()
-    info = ''
-    check = []
 
     # Iterate through all regions
     for interval in clusters_tree:
@@ -119,7 +118,6 @@ def merge_clusters(clusters_tree, window):
 
         # for k, v in clusters.items():
         #    print(k, v)
-
 
         # Get the maximums to iterate
         maxs = []
@@ -140,38 +138,28 @@ def merge_clusters(clusters_tree, window):
                     maximum = clusters[x]['max']
                     left_margin = clusters[x]['left_m']
                     right_margin = clusters[x]['right_m']
-
                     if right_margin != maximum:
-
                         # Define the interval of search
                         search_r = set(range(right_margin[0], right_margin[0] + window + 1))
-
                         # If there is a maximum in the search region
                         if search_r.intersection(maxs_set):
-                            #print('cluster {} collides with {}'.format(x, search_r.intersection(maxs_set)))
-
                             # Analyze only the closest cluster
                             intersect_cluster = maxs.index(sorted(list(search_r.intersection(maxs_set)))[0])
-                            #print('\t\tcluster {}'.format(intersect_cluster))
                             stop = 1
-
                             # When the testing max is greater than the intersected max,
                             # expand the right border and delete intersected cluster from clusters
                             if maximum[1] > clusters[intersect_cluster]['max'][1]:
                                 clusters[x]['right_m'] = clusters[intersect_cluster]['right_m']
                                 del clusters[intersect_cluster]
                                 maxs_set.remove(maxs[intersect_cluster])
-
                             # When the testing max is smaller than the intersected max,
                             # expand the left border of intersected max and remove the testing cluster (i)
                             elif maximum[1] < clusters[intersect_cluster]['max'][1]:
                                 clusters[intersect_cluster]['left_m'] = left_margin
                                 del clusters[x]
                                 maxs_set.remove(maxs[x])
-
                             # When the testing max is equal than the intersected max
                             else:
-                                #info += '{}_{}_{}/'.format(maximum[0],clusters[intersect_cluster]['max'][0], (clusters[intersect_cluster]['max'][0] - maximum[0]))
                                 # If contiguous maximum's positions, choose the first maximum
                                 if maximum[0] == (clusters[intersect_cluster]['max'][0] - 1):
                                     # Expand the right border and delete intersected cluster from clusters
@@ -180,18 +168,10 @@ def merge_clusters(clusters_tree, window):
                                     maxs_set.remove(maxs[intersect_cluster])
                                 # If not contiguous positions
                                 else:
-                                    # Create new max in the middle
-                                    # Change max and right border and delete intersected cluster from clusters
-                                    new_max = (maximum[0] + clusters[intersect_cluster]['max'][0]) // 2
-                                    #check.append((maximum[0], new_max))
-                                    clusters[x]['max'] = (new_max, maximum[1])
-                                    clusters[x]['right_m'] = clusters[intersect_cluster]['right_m']
-                                    del clusters[intersect_cluster]
+                                    # Do not merge
+                                    # Delete testing cluster (i)
+                                    del clusters[x]
                                     maxs_set.remove(maxs[x])
-                                    maxs_set.remove(maxs[intersect_cluster])
-                                    maxs_set.add(new_max)
-                                    maxs[x] = new_max
-
                     else:  # do not need to merge
                         pass
 
@@ -201,12 +181,11 @@ def merge_clusters(clusters_tree, window):
         # for k, v in clusters.items():
         #     print(k, v)
         # print('--------------')
-
-
+        #
 
         merged_clusters_tree.addi(interval[0], interval[1], clusters)
 
-    return merged_clusters_tree #check #info
+    return merged_clusters_tree
 
 
 def get_genomic_position(index_in_cds, length_tree):
@@ -247,41 +226,27 @@ def clusters_mut(clusters_tree, length_tree, mutations, cds):
         clusters: dict of dict
     """
 
-    if not cds:
-        # Iterate through all regions
-        for interval in clusters_tree:
-            clusters = dict(interval.data)
-            for cluster, values in clusters.items():
-                # Define cluster borders in genomic positions
-                left = interval[0] + values['left_m'][0]
-                right = interval[0] + values['right_m'][0]
-                # Search mutations
-                cluster_muts = [i for i in mutations if left <= i <= right]
-                cluster_muts = dict((m, cluster_muts.count(m)) for m in cluster_muts)
-                interval.data[cluster]['mutations'] = cluster_muts
-                # Update clusters information
-                interval.data[cluster]['left_m'] = (values['left_m'][0], left)
-                interval.data[cluster]['max'] = (values['max'][0], (values['max'][0] + interval[0]))
-                interval.data[cluster]['right_m'] = (values['right_m'][0], right)
-
-
-    else:
-        # Analyze cds region
-        for interval in clusters_tree:
-            clusters = dict(interval.data)
-            for cluster, values in clusters.items():
-                # Define the cluster in genomic positions
+    # Iterate through all regions
+    for interval in clusters_tree:
+        clusters = dict(interval.data)
+        for cluster, values in clusters.items():
+            # Define cluster borders in genomic positions
+            if cds:
                 left = get_genomic_position(values['left_m'][0], length_tree)
                 right = get_genomic_position(values['right_m'][0], length_tree)
                 maximum = get_genomic_position(values['max'][0], length_tree)
-                # Search mutations
-                cluster_muts = [i for i in mutations if left <= i <= right]
-                cluster_muts = dict((m, cluster_muts.count(m)) for m in cluster_muts)
-                interval.data[cluster]['mutations'] = cluster_muts
-                # Update clusters information
-                interval.data[cluster]['left_m'] = (values['left_m'][0], left)
-                interval.data[cluster]['max'] = (values['max'][0], maximum)
-                interval.data[cluster]['right_m'] = (values['right_m'][0], right)
+            else:
+                left = interval[0] + values['left_m'][0]
+                right = interval[0] + values['right_m'][0]
+                maximum = values['max'][0] + interval[0]
+            # Search mutations
+            cluster_muts = [i for i in mutations if left <= i <= right]
+            cluster_muts = dict((m, cluster_muts.count(m)) for m in cluster_muts)
+            interval.data[cluster]['mutations'] = cluster_muts
+            # Update clusters information
+            interval.data[cluster]['left_m'] = (values['left_m'][0], left)
+            interval.data[cluster]['max'] = (values['max'][0], maximum)
+            interval.data[cluster]['right_m'] = (values['right_m'][0], right)
 
     return clusters_tree
 
@@ -342,12 +307,12 @@ def score_clusters(clusters_tree, length_tree, regions_tree, cutoff, method, cds
                         for region in regions_tree[mutation]:  # 1 region
                             # Get index of mutation in cds (index of region start + index in region)
                             index = reverse_length_tree[region.begin][0] + (mutation - region.begin)
-                        # Calculate distance of position to smoothing maximum
-                        distance_to_max = abs(index - values['max'][0])
-                        # Calculate fraction of mutations if score is fmutations
-                        mutations = (count / total_mutations) * 100
-                        # Calculate cluster score
-                        score += (mutations / m.pow(root, distance_to_max))
+                            # Calculate distance of position to smoothing maximum
+                            distance_to_max = abs(index - values['max'][0])
+                            # Calculate fraction of mutations if score is fmutations
+                            mutations = (count / total_mutations) * 100
+                            # Calculate cluster score
+                            score += (mutations / m.pow(root, distance_to_max))
                     # Update
                     interval.data[cluster]['score'] = score
                 else:

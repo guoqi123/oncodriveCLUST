@@ -190,7 +190,7 @@ def main(input_file,
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
-                                regions_d, chromosomes_d, mutations_d, genome,
+                                regions_d, chromosomes_d, strands_d, mutations_d, genome,
                                 path_pickle,
                                 element_mutations, cluster_mutations,
                                 cds, smooth_window, cluster_window,
@@ -199,7 +199,6 @@ def main(input_file,
                                 n_simulations, simulation_mode, simulation_window,
                                 cores, seed,
                                 ).run()
-
     # Write results
     sorted_list_elements = postp.write_element_results(genome=genome, results=elements_results,
                                                        directory=output_directory, file=output_file,

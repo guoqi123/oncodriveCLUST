@@ -35,7 +35,7 @@ def read_regions(input_regions, elements):
                 if elements and symbol not in elements:
                     continue
                 trees[chromosome][int(start): int(end) + 1] = symbol + '_' + ensid  # int, +1 end
-                regions_d[symbol + '_' + ensid].addi(int(start), (int(end) + 1))
+                regions_d[symbol + '_' + ensid].addi(int(start), (int(end) + 1))  # TODO ask about the 1 ???
                 chromosomes_d[symbol + '_' + ensid] = chromosome
                 strands_d[symbol + '_' + ensid] = strand
 

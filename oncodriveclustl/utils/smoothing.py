@@ -4,35 +4,44 @@ from intervaltree import IntervalTree
 import numpy as np
 
 
-def smooth(regions, mutations, tukey_filter):
+def smooth(regions, mutations, tukey_filter, simulation_window):
     """Generate a smoothing curve for a list of element's mutations
     :param regions: IntervalTree with genomic positions of an element
     :param mutations: list, list of mutations of an element
     :param tukey_filter: numpy array. The elements sum to 1
-    :return: dict, region_lists with new keys 'binary' and 'mut_by_pos'
-        smooth: length == genomic, smoothing score curve
+    :param simulation_window: int, simulation window
+    :return:
+        final_smooth_tree, IntervalTree. Interval are genomic regions, data np.array of smoothing score
+        per position
     """
 
     smooth_tree = IntervalTree()
     final_smooth_tree = IntervalTree()
+    half_window = simulation_window // 2
 
     for interval in regions:
         # Add extra bases for smoothing tukey window
-        begin = interval.begin
-        end = interval.end
+        begin = interval.begin - half_window
+        end = interval.end + half_window
         # Remove 1 to tukey filter to allow symmetric // 2
         smooth_tree.addi(begin, end, np.zeros((end - begin) + len(tukey_filter) - 1))
 
     # Find mutations in regions
     for mutation in mutations:
-        for interval in smooth_tree[mutation]:
+        if smooth_tree[mutation]:  # set() for mutation == interval.end
+            i = 0
+        else:
+            i = 1
+        for interval in smooth_tree[mutation + i]:
             # Get index of mutation in region
             index = mutation - interval.begin
             # Smooth mutations
             interval.data[index: index + len(tukey_filter)] += tukey_filter
 
-    for interval in smooth_tree:
-        final_smooth_tree.addi(interval.begin, interval.end,
-                               interval.data[(len(tukey_filter) // 2): - (len(tukey_filter) // 2)])
+    for interval in sorted(smooth_tree):
+        begin = interval.begin + half_window
+        end = interval.end - half_window
+        slice = len(tukey_filter) // 2 + half_window
+        final_smooth_tree.addi(begin, end, interval.data[slice: - slice])
 
     return final_smooth_tree

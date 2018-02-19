@@ -21,12 +21,13 @@ logger = daiquiri.getLogger()
 class Experiment:
     """Class to analyze elements of a cancer dataset"""
 
-    def __init__(self, regions_d, chromosomes_d, mutations_d, genome, path_pickle,
+    def __init__(self, regions_d, chromosomes_d, strands_d, mutations_d, genome, path_pickle,
                  element_mutations_cutoff, cluster_mutations_cutoff, cds, smooth_window, cluster_window,
                  cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores, seed):
         """Initialize the Experiment class
         :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
         :param chromosomes_d: dict, dictionary containing chromosomes from all analyzed elements
+        :param strands_d: dic, dictionary containing strands from all analyzed elements
         :param mutations_d: dict, dictionary containing mutations lists from all analyzed elements
         :param genome: genome to use
         :param element_mutations_cutoff: int, cutoff of element mutations
@@ -47,6 +48,7 @@ class Experiment:
 
         self.regions_d = regions_d
         self.chromosomes_d = chromosomes_d
+        self.strands_d = strands_d
         self.mutations_d = mutations_d
         self.genome_build = self.load_genome(genome)
         self.path_pickle = path_pickle
@@ -208,7 +210,7 @@ class Experiment:
         """
 
         index_tree, length_tree, smooth_tree = clu.find_locals(self.regions_d[element], mutations,
-                                        self.tukey_filter, self.cds)
+                                        self.tukey_filter, self.cds, self.simulation_window)
         raw_clusters_tree = clu.raw_clusters(index_tree)
         merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
         clusters_mut_tree = clu.clusters_mut(merge_clusters_tree, length_tree, mutations, self.cds)
@@ -403,68 +405,48 @@ class Experiment:
         element, obs_clusters, obs_score, sim_clusters_list, sim_scores_list = item
 
         # If analyzed element and element has clusters
-        if obs_score is not 'nan':
-
-            # Significance
-            empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
-            #sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
-            pvalue_generator = ap.AnalyticalPvalue()
-            analytical_pvalue, bandwidth = pvalue_generator.calculate(obs_score, sim_scores_list)
-            logger.debug('P-values calculated')
-            print(analytical_pvalue)
-
-            # Cluster p-value
-            # obs_clusters_score = []
-            # for interval in obs_clusters:
-            #     for cluster, values in interval.data.items():
-            #         obs_clusters_score.append(values['score'])
-            #
-            # sim_clusters_score = []
-            # for simulation in sim_clusters_list:
-            #     top_cluster = []
-            #     for interval in simulation:
-            #         for cluster, values in interval.data.items():
-            #             #top_cluster.append(values['score'])
-            #     #sim_clusters_score.append(max(top_cluster))
-            #             sim_clusters_score.append(values['score'])
-
-            # cluster_analytical_pvalue, bandwidth = pvalue_generator.calculate(max(obs_clusters_score),
-            #                                                                   sim_clusters_score)
-
-            # print('cluster pval', cluster_analytical_pvalue)
-
-        quit()
-
-
-
-        if obs_clusters and type(obs_clusters) != float:
-            # Clusters
-            total_clusters = len(obs_clusters.keys())
-
-            # Significance
-            empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
-            sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
-            pvalue_generator = ap.AnalyticalPvalue()
-            analytical_pvalue, bandwidth = pvalue_generator.calculate(obs_score, sim_scores_list_1000)
-            logger.debug('P-values calculated')
-
-        else:
-            if type(obs_clusters) == float:
-                total_clusters = obs_score = float('nan')
+        if type(obs_clusters) != float:
+            if type(sim_scores_list) != float:
+                # Element score empirical p-value
+                empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
+                # Element score analytical p-value
+                sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
+                analytical_pvalue, band = ap.AnalyticalPvalue().calculate(obs_score, sim_scores_list_1000)
+                # Cluster analytical p-values
+                sim_clusters_score = []
+                obs_clusters_score = []
+                for simulation in sim_clusters_list:
+                    for interval in simulation:
+                        for cluster, values in interval.data.items():
+                            sim_clusters_score.append(values['score'])
+                for interval in obs_clusters:
+                    for cluster, values in interval.data.items():
+                        obs_clusters_score.append(values['score'])
+                        cluster_p_value, band = ap.AnalyticalPvalue().calculate(values['score'], sim_clusters_score)
+                        interval.data[cluster]['p'] = cluster_p_value
+                n_clusters = len(obs_clusters_score)
+                # Element top cluster analytical p-value
+                top_cluster_pvalue, band = ap.AnalyticalPvalue().calculate(max(obs_clusters_score), sim_clusters_score)
+                logger.debug('P-values calculated')
             else:
-                total_clusters = obs_score = 0
-
-            mean_sim_clusters = median_sim_clusters = std_sim_clusters = mean_sim_score = median_sim_score = \
-                std_sim_score = empirical_pvalue = analytical_pvalue = float('nan')
+                n_clusters = obs_score = 0
+                empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
+        else:
+            n_clusters = obs_score = float('nan')
+            empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
         # Get GCG boolean
         cgc = element.split('_')[0] in self.cgc_genes
 
+        # Calculate length
+        element_length = 0
+        for interval in self.regions_d[element]:
+            element_length += (interval[1] - interval[0] + 1)
+
         return element, \
-            (seq.get_length(self.regions_d[element]), len(self.mutations_d[element]), total_clusters,
-                mean_sim_clusters, median_sim_clusters, std_sim_clusters, obs_score, mean_sim_score,
-                median_sim_score, std_sim_score, empirical_pvalue, analytical_pvalue, cgc), \
-            (obs_clusters, cgc)
+            (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),
+             n_clusters, obs_score, empirical_pvalue, analytical_pvalue, top_cluster_pvalue, cgc), \
+            (obs_clusters, self.chromosomes_d[element], self.strands_d[element], cgc)
 
     def run(self):
         """
@@ -549,12 +531,12 @@ class Experiment:
 
                 # Add information of elements without clusters
                 for element in nocluster_elements:
-                    sim_scores_list[element] = sim_clusters_list[element] = 'nan'
+                    sim_scores_list[element] = sim_clusters_list[element] = float('nan')
 
                 # Post process
-                post_item_simulated = [(e, observed_clusters_d[e], observed_scores_d[e],
-                                       sim_clusters_list[e], sim_scores_list[e]) for e in simulated_elements]
-                post_item_nan = [(e, 'nan', 'nan', 'nan', 'nan') for
+                post_item_simulated = [(e, observed_clusters_d[e], observed_scores_d[e], sim_clusters_list[e],
+                                        sim_scores_list[e]) for e in simulated_elements + nocluster_elements]
+                post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan')) for
                                  e in noprobabilities_elements + belowcutoff_elements]
                 total_items = post_item_simulated + post_item_nan
 

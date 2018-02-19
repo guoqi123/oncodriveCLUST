@@ -23,6 +23,7 @@ def mtc(p_value):
     :param p_value: array
     :return: q_value
     """
+
     return mlpt(p_value, alpha=0.05, method='fdr_bh')[1]
 
 
@@ -39,53 +40,43 @@ def write_element_results(genome, results, directory, file, qvalue, gzip):
 
     global logger
     logger = daiquiri.getLogger()
-
-    header = ['SYM', 'LEN', 'N_MUT',
-              'CLU', 'MEAN_SIM_CLU', 'MEDIAN_SIM_CLU', 'SD_SIM_CLU',
-              'SCORE_OBS', 'MEAN_SIM_SCORE', 'MEDIAN_SIM_SCORE', 'SD_SIM_SCORE',
-              'E_PVAL', 'A_PVAL', 'CGC']
-
     output_file = directory + '/elements_' + file + '.txt'
-    with open(output_file, 'w') as fd:
-        fd.write('{}\n'.format('\t'.join(header)))
-        for gene_name, values in results.items():
-            length, muts, obs_clusters, mean_sim_clusters, median_sim_clusters, std_sim_clusters, obs_score, \
-            mean_sim_score, median_sim_score, std_sim_score, epval, apval, cgc = values
-            if genome != 'hg19':
-                cgc = 'Non Available'
-            if obs_clusters and type(obs_clusters) != float:
-                fd.write('{}\t{}\t{}\t{}\t{:.4f}\t{}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\t{}\t{}\t{}\n'.format(
-                    gene_name, length, muts, obs_clusters, mean_sim_clusters, median_sim_clusters, std_sim_clusters,
-                    obs_score, mean_sim_score, median_sim_score, std_sim_score, epval, apval, cgc))
-            else:
-                fd.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                    gene_name, length, muts, obs_clusters, mean_sim_clusters, median_sim_clusters, std_sim_clusters,
-                    obs_score, mean_sim_score, median_sim_score, std_sim_score, epval, apval, cgc))
+
+    # TODO: length if not cds?
+    header = ['SYMBOL', 'ENSID', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLU',
+              'SCORE',
+              'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER',
+              'CGC']
+    df = pd.DataFrame(columns=header, index=[i for i in range(len(results))])
+    i = 0
+    for element, values in results.items():
+        sym, id = element.split('_')
+        chr, strand, length, muts, obs_clusters, obs_score, epval, apval, topcpval, cgc = values
+        if genome != 'hg19':
+            cgc = 'Non Available'
+        df.loc[i] = pd.Series({
+            'SYMBOL':sym, 'ENSID':id, 'CHROMOSOME':chr, 'STRAND':strand, 'LENGTH':length,
+            'N_MUT':muts, 'N_CLU':obs_clusters, 'SCORE':obs_score,
+            'P_EMPIRICAL':epval, 'P_ANALYTICAL':apval, 'P_TOPCLUSTER':topcpval,'CGC':cgc})
+        i += 1
+    try:
+        # Calculate q-values
+        df_nonempty = df.loc[df['P_ANALYTICAL'] > 0]
+        df['Q_EMPIRICAL'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'P_EMPIRICAL']))
+        df['Q_ANALYTICAL'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'P_ANALYTICAL']))
+        df['Q_TOPCLUSTER'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'P_TOPCLUSTER']))
+        # Reorder columns
+        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLU', 'SCORE',
+                 'P_EMPIRICAL', 'Q_EMPIRICAL','P_ANALYTICAL', 'Q_ANALYTICAL','P_TOPCLUSTER', 'Q_TOPCLUSTER']]
+
+    except Exception as e:
+        logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
 
     # Sort by empirical p-value
-    df = pd.read_csv(output_file, sep='\t', header=0)
-    df.sort_values(by=['E_PVAL', 'SCORE_OBS', 'CGC'], ascending=[True, False, False], inplace=True)
-
+    df.sort_values(by=['Q_ANALYTICAL', 'P_ANALYTICAL', 'SCORE', 'CGC'],
+                   ascending=[True, True, False, False], inplace=True)
     # Create a sorted list of elements to order the clusters file
-    sorted_list_elements = df['SYM'].tolist()
-
-    if qvalue is True:
-
-        try:
-            # Calculate empirical q-value
-            df_nonempty = df[np.isfinite(df['E_PVAL'])]
-            df['E_QVAL'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'E_PVAL']))
-
-            # Sort by analytical p-value and calculate analytical q-value
-            df.sort_values(by=['A_PVAL', 'SCORE_OBS', 'CGC'], ascending=[True, False, False], inplace=True)
-            df['A_QVAL'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'A_PVAL']))
-
-            # Reorder columns
-            df = df[['SYM', 'LEN', 'N_MUT', 'CLU', 'MEAN_SIM_CLU', 'MEDIAN_SIM_CLU', 'SD_SIM_CLU',
-                     'SCORE_OBS', 'MEAN_SIM_SCORE', 'MEDIAN_SIM_SCORE', 'SD_SIM_SCORE',
-                     'E_PVAL', 'E_QVAL', 'A_PVAL', 'A_QVAL', 'CGC']]
-        except Exception as e:
-            logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
+    sorted_list_elements = df['SYMBOL'].tolist()
 
     if gzip is True:
         output_file = output_file + '.gz'
@@ -109,22 +100,28 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip):
 
     sorterindex = dict(zip(sorter, range(len(sorter))))
     output_file = directory + '/clusters_' + file + '.tsv'
-    header = ['RANK', 'SYMBOL', 'CGC', 'CLUSTER', 'N', 'LEFT_M', 'MAX', 'RIGHT_M', 'WIDTH', 'MUT', 'SCORE']
+    header = ['RANK', 'SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'REGION',
+              '5_COORD', 'MAX_COORD', '3_COORD', 'WIDTH', 'N_MUT', 'SCORE','P', 'MUTATIONS']
+
     with open(output_file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
         for element, values in results.items():
-            clustersinfo, cgc = values
+            sym, id = element.split('_')
+            clustersinfo, chr, strand, cgc= values
             if genome != 'hg19':
                 cgc = 'Non Available'
-            if clustersinfo and type(clustersinfo) != float:
-                rank = sorterindex[element] + 1
-                for c, v in clustersinfo.items():
-                    fd.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                        rank, element, cgc, v['mode'], c, v['left_m'][0], v['max'][0], v['right_m'][0],
-                        abs(v['right_m'][0] - v['left_m'][0]), v['n_mutations'], v['score']))
+            if type(clustersinfo) != float:
+                rank = sorterindex[sym] + 1
+                for interval in clustersinfo:
+                    for c, v in interval.data.items():
+                        fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                            rank, sym, id, cgc, chr, strand, interval[0], interval[1],
+                            v['left_m'][0]+interval[0], v['max'][0]+interval[0], v['right_m'][0]+interval[0],
+                            abs(v['right_m'][0] - v['left_m'][0]),
+                            sum(v['mutations'].values()), v['score'], v['p'], v['mutations']))
     # Sort
     df = pd.read_csv(output_file, sep='\t', header=0)
-    df.sort_values(by=['RANK', 'SCORE'], ascending=[True, False], inplace=True)
+    df.sort_values(by=['RANK', 'P', 'SCORE'], ascending=[True, True, False], inplace=True)
 
     if gzip is True:
         output_file = output_file + '.gz'
