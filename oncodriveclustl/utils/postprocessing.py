@@ -47,6 +47,7 @@ def write_element_results(genome, results, directory, file, gzip):
               'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER',
               'CGC']
     df = pd.DataFrame(columns=header, index=[i for i in range(len(results))])
+
     i = 0
     for element, values in results.items():
         sym, id = element.split('_')
@@ -58,12 +59,26 @@ def write_element_results(genome, results, directory, file, gzip):
             'N_MUT':muts, 'N_CLU':obs_clusters, 'SCORE':obs_score,
             'P_EMPIRICAL':epval, 'P_ANALYTICAL':apval, 'P_TOPCLUSTER':topcpval,'CGC':cgc})
         i += 1
+
     try:
+        # Makes sure the data are float
+        df['P_ANALYTICAL'] = df['P_ANALYTICAL'].astype(float)
+        df['P_EMPIRICAL'] = df['P_EMPIRICAL'].astype(float)
+        df['P_TOPCLUSTER'] = df['P_TOPCLUSTER'].astype(float)
+
         # Calculate q-values
-        df_nonempty = df.loc[df['P_ANALYTICAL'] > 0]
-        df['Q_EMPIRICAL'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'P_EMPIRICAL']))
-        df['Q_ANALYTICAL'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'P_ANALYTICAL']))
-        df['Q_TOPCLUSTER'] = pd.DataFrame(mtc(df_nonempty.loc[:, 'P_TOPCLUSTER']))
+        df_nonempty = df[np.isfinite(df['P_ANALYTICAL'])].copy()
+        df_empty = df[~np.isfinite(df['P_ANALYTICAL'])].copy()
+
+        df_nonempty['Q_EMPIRICAL'] = mtc(df_nonempty['P_EMPIRICAL'])
+        df_nonempty['Q_ANALYTICAL'] = mtc(df_nonempty['P_ANALYTICAL'])
+        df_nonempty['Q_TOPCLUSTER'] = mtc(df_nonempty['P_TOPCLUSTER'])
+        df_empty['Q_EMPIRICAL'] = np.nan
+        df_empty['Q_ANALYTICAL'] = np.nan
+        df_empty['Q_TOPCLUSTER'] = np.nan
+
+        df = pd.concat([df_nonempty, df_empty])
+
         # Reorder columns
         df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLU', 'SCORE',
                  'P_EMPIRICAL', 'Q_EMPIRICAL','P_ANALYTICAL', 'Q_ANALYTICAL','P_TOPCLUSTER', 'Q_TOPCLUSTER']]

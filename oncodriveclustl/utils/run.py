@@ -137,7 +137,6 @@ class Experiment:
             skip: bool, if True skip further analysis
         """
         skip = False
-        length = 0
         nu = 0
         sequ = 0
         delta = 1 if self.kmer == 3 else 2
@@ -407,11 +406,14 @@ class Experiment:
         # If analyzed element and element has clusters
         if type(obs_clusters) != float:
             if type(sim_scores_list) != float:
+
                 # Element score empirical p-value
                 empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
+
                 # Element score analytical p-value
                 sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
                 analytical_pvalue, band = ap.AnalyticalPvalue().calculate(obs_score, sim_scores_list_1000)
+
                 # Cluster analytical p-values
                 sim_clusters_score = []
                 obs_clusters_score = []
@@ -425,9 +427,11 @@ class Experiment:
                         cluster_p_value, band = ap.AnalyticalPvalue().calculate(values['score'], sim_clusters_score)
                         interval.data[cluster]['p'] = cluster_p_value
                 n_clusters = len(obs_clusters_score)
+
                 # Element top cluster analytical p-value
                 top_cluster_pvalue, band = ap.AnalyticalPvalue().calculate(max(obs_clusters_score), sim_clusters_score)
                 logger.debug('P-values calculated')
+
             else:
                 n_clusters = obs_score = 0
                 empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
