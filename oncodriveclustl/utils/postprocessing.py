@@ -69,26 +69,25 @@ def write_element_results(genome, results, directory, file, gzip):
         # Calculate q-values
         df_nonempty = df[np.isfinite(df['P_ANALYTICAL'])].copy()
         df_empty = df[~np.isfinite(df['P_ANALYTICAL'])].copy()
-
         df_nonempty['Q_EMPIRICAL'] = mtc(df_nonempty['P_EMPIRICAL'])
         df_nonempty['Q_ANALYTICAL'] = mtc(df_nonempty['P_ANALYTICAL'])
         df_nonempty['Q_TOPCLUSTER'] = mtc(df_nonempty['P_TOPCLUSTER'])
         df_empty['Q_EMPIRICAL'] = np.nan
         df_empty['Q_ANALYTICAL'] = np.nan
         df_empty['Q_TOPCLUSTER'] = np.nan
-
         df = pd.concat([df_nonempty, df_empty])
 
         # Reorder columns
         df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLU', 'SCORE',
                  'P_EMPIRICAL', 'Q_EMPIRICAL','P_ANALYTICAL', 'Q_ANALYTICAL','P_TOPCLUSTER', 'Q_TOPCLUSTER']]
 
+        # Sort by analytical p-value
+        df.sort_values(by=['Q_ANALYTICAL', 'P_ANALYTICAL', 'SCORE', 'CGC'],
+                       ascending=[True, True, False, False], inplace=True)
+
     except Exception as e:
         logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
 
-    # Sort by empirical p-value
-    df.sort_values(by=['Q_ANALYTICAL', 'P_ANALYTICAL', 'SCORE', 'CGC'],
-                   ascending=[True, True, False, False], inplace=True)
     # Create a sorted list of elements to order the clusters file
     sorted_list_elements = df['SYMBOL'].tolist()
 
