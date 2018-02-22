@@ -412,7 +412,9 @@ class Experiment:
 
                 # Element score analytical p-value
                 sim_scores_list_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
-                analytical_pvalue, band = ap.AnalyticalPvalue().calculate(obs_score, sim_scores_list_1000)
+                obj = ap.AnalyticalPvalue()
+                obj._calculate_bandwidth(sim_scores_list_1000)
+                analytical_pvalue = obj.calculate(obs_score)
 
                 # Cluster analytical p-values
                 sim_clusters_score = []
@@ -421,15 +423,19 @@ class Experiment:
                     for interval in simulation:
                         for cluster, values in interval.data.items():
                             sim_clusters_score.append(values['score'])
+
+                obj = ap.AnalyticalPvalue()
+                obj._calculate_bandwidth(sim_clusters_score)
+
                 for interval in obs_clusters:
                     for cluster, values in interval.data.items():
                         obs_clusters_score.append(values['score'])
-                        cluster_p_value, band = ap.AnalyticalPvalue().calculate(values['score'], sim_clusters_score)
+                        cluster_p_value = obj.calculate(values['score'])
                         interval.data[cluster]['p'] = cluster_p_value
                 n_clusters = len(obs_clusters_score)
 
                 # Element top cluster analytical p-value
-                top_cluster_pvalue, band = ap.AnalyticalPvalue().calculate(max(obs_clusters_score), sim_clusters_score)
+                top_cluster_pvalue = obj.calculate(max(obs_clusters_score))
                 logger.debug('P-values calculated')
 
             else:

@@ -133,6 +133,7 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip):
                             abs(v['right_m'][0] - v['left_m'][0]),
                             sum(v['mutations'].values()), v['score'], v['p']))
     # Sort
+    # TODO change to avoid writing not compressed file
     df = pd.read_csv(output_file, sep='\t', header=0)
     df.sort_values(by=['RANK', 'P', 'SCORE'], ascending=[True, True, False], inplace=True)
 

@@ -15,6 +15,8 @@ class AnalyticalPvalue:
         :param jobs: int, cores to use in the computation
         """
         self.jobs = jobs
+        self.gkde = None
+        self.bandwidth = None
 
     def _get_best_estimator(self, expected):
         """Calculate the best bandwidth estimator.
@@ -31,9 +33,8 @@ class AnalyticalPvalue:
         grid.fit(data_newaxis)
         return grid.best_estimator_.bandwidth
 
-    def _get_min_analytical_pvalue(self, gkde, up, down, calls=0, pvals=None):
+    def _get_min_analytical_pvalue(self, up, down, calls=0, pvals=None):
         """Get the best pvalue with a resolution > 0.
-        :param gkde: gaussian_kde object
         :param up: numeric, higher score
         :param down: numeric, lower score
         :param calls: int, number of times the function has been called
@@ -44,34 +45,39 @@ class AnalyticalPvalue:
             pvals = []
         calls += 1
         mid = down + ((up - down) / 2)
-        analytical_pvalue = gkde.integrate_box_1d(mid, float('inf'))
+        analytical_pvalue = self.gkde.integrate_box_1d(mid, float('inf'))
         if analytical_pvalue > 0:
             pvals.append(analytical_pvalue)
         if calls == 100:
             return pvals[-1]
         if analytical_pvalue > 0:
-            return self._get_min_analytical_pvalue(gkde, up=up, down=mid, calls=calls, pvals=pvals)
+            return self._get_min_analytical_pvalue(up=up, down=mid, calls=calls, pvals=pvals)
         else:
-            return self._get_min_analytical_pvalue(gkde, up=mid, down=down, calls=calls, pvals=pvals)
+            return self._get_min_analytical_pvalue(up=mid, down=down, calls=calls, pvals=pvals)
 
-    def _calculate_analytical_pvalue(self, observed, expected):
+    def _calculate_bandwidth(self, expected):
+        """Calculate the best estimator
+        :param expected: array of simulated mutations
+        :return: None
+        """
+        expected = np.array(expected)
+        self.gkde = gaussian_kde(expected)
+        self.bandwidth = self._get_best_estimator(expected)
+        self.gkde.set_bandwidth(bw_method=self.bandwidth)
+
+    def _calculate_analytical_pvalue(self, observed):
         """Calculate the analytical pvalue of an element
         :return: float, analytical pvalue
         """
-        gkde = gaussian_kde(expected)
-        bandwidth = self._get_best_estimator(expected)
-        gkde.set_bandwidth(bw_method=bandwidth)
-        analytical_pvalue = gkde.integrate_box_1d(observed, float('inf'))
+        analytical_pvalue = self.gkde.integrate_box_1d(observed, float('inf'))
         if analytical_pvalue == 0:
-            analytical_pvalue = self._get_min_analytical_pvalue(gkde, up=observed, down=0)
-        return analytical_pvalue, bandwidth
+            analytical_pvalue = self._get_min_analytical_pvalue(up=observed, down=0)
+        return analytical_pvalue
 
-    def calculate(self, observed, expected):
+    def calculate(self, observed):
         """Calculate the analytical pvalue
         :param observed: float, observed value
-        :param expected: list of floats, list of expected values
         :return: float, analytical pvalue
         """
-        expected = np.array(expected)
-        analytical_pvalue, bandwidth = self._calculate_analytical_pvalue(observed, expected)
-        return analytical_pvalue, bandwidth
+        analytical_pvalue = self._calculate_analytical_pvalue(observed)
+        return analytical_pvalue
