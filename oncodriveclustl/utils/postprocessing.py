@@ -1,11 +1,18 @@
 # Import modules
 import os
 import logging
+import csv
+import gzip
+import shutil
+from intervaltree import IntervalTree
+from collections import namedtuple
 
 import numpy as np
 import pandas as pd
 import daiquiri
 from statsmodels.sandbox.stats.multicomp import multipletests as mlpt
+
+from oncodriveclustl.utils import preprocessing as prep
 
 # Global variables
 logs = {
@@ -142,6 +149,65 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip):
         df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False, compression='gzip')
     else:
         df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
+
+
+def write_oncohortdrive_results(mutations, directory, file):
+    """
+    Generate compressed file with input BED + mutations mapped to cluters (score, p-value, significance)
+    :param mutations: input mutations file
+    :param directory: str, output directory
+    :param file: str, output file, if elements in elements file
+    :return: None
+    """
+    mutations_file = mutations
+    clusters_file = directory + '/clusters_' + file + '.tsv'
+    output_file = directory + '/oncohortdrive_' + file + '.out'
+    clusters_tree = IntervalTree()
+    Cluster = namedtuple('Cluster', 'sym, ensid, score, p, sig')
+
+    # Read clusters file
+    with open(clusters_file, 'r') as cf:
+        next(cf)
+        for line in cf:
+            _, sym, ensid, _, _, _, _, clust_l, _, clust_r, _, _, score, p = line.strip().split('\t')
+            left = int(clust_l)
+            right = int(clust_r) + 1
+            sig = 1 if float(p) < 0.05 else 0
+            clusters_tree.addi(left, right, Cluster(sym, ensid, score, p, sig))
+
+    # Generate output file
+    read_function, mode, delimiter = prep.check_tabular_csv(mutations)
+
+    with open(output_file, 'w') as of:
+        header = ['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE',
+                  'SYM', 'SYM_ENSID', 'SCORE', 'PVALUE', 'SIG_0.05']
+        of.write('{}\n'.format('\t'.join(header)))
+
+        with read_function(mutations_file, mode) as read_file:
+            fd = csv.DictReader(read_file, delimiter=delimiter)
+            for line in fd:
+                chro = line['CHROMOSOME']
+                pos = int(line['POSITION'])
+                ref = line['REF']
+                alt = line['ALT']
+                sam = line['SAMPLE']
+
+                # Check substitutions only
+                if len(ref) == 1 and len(alt) == 1:
+                    if ref != '-' and alt != '-':
+                        if clusters_tree[pos]:
+                            for c in clusters_tree[pos]:
+                                of.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                                    chro, pos, ref, alt, sam,
+                                    c.data.sym, c.data.ensid, c.data.score, c.data.p, c.data.sig))
+                        else:
+                            of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
+                                chro, pos, ref, alt, sam, float('nan')))
+
+    output_file_gz = output_file + '.gz'
+    with open(output_file, 'rb') as of:
+        with gzip.open(output_file_gz, 'wb') as ofgz:
+            shutil.copyfileobj(of, ofgz)
 
 
 def write_info(input_file,
