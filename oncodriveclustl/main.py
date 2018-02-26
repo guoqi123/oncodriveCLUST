@@ -167,7 +167,10 @@ def main(input_file,
         elem += 1
     logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
     logger.info('Validated elements with mutations: {}'.format(elem))
-    logger.info('Total substitution mutations to analyze: {}'.format(mut))
+    logger.info('Total substitution mutations: {}'.format(mut))
+    if mut < element_mutations:
+        logger.critical('Not enough mutations to perform analysis')
+        quit()
 
     # Compute dataset kmer signatures
     signatures_pickle = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
@@ -193,7 +196,7 @@ def main(input_file,
                                 cluster_score, element_score,
                                 int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
-                                cores, seed,
+                                cores, seed
                                 ).run()
     # Write results
     sorted_list_elements = postp.write_element_results(genome=genome, results=elements_results,
@@ -202,6 +205,8 @@ def main(input_file,
     postp.write_cluster_results(genome=genome, results=clusters_results, directory=output_directory, file=output_file,
                                 sorter=sorted_list_elements, gzip=gzip)
     logger.info('Clusters results calculated')
+    postp.write_oncohortdrive_results(mutations=input_file, directory=output_directory, file=output_file)
+    logger.info('Oncohortdrive file generated')
     logger.info('Finished')
 
     # Write info
