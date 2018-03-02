@@ -14,7 +14,7 @@ def element_score(clusters_tree, mode, method):
     score = 0
 
     for interval in clusters_tree:
-        clusters = dict(interval.data)
+        clusters = interval.data
         for cluster, values in clusters.items():
             n_clusters += 1
             score += values['score']  # Add up cluster scores

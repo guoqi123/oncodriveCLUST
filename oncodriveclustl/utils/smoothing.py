@@ -20,13 +20,6 @@ def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
     final_smooth_tree = IntervalTree()
     half_window = simulation_window // 2
 
-    # TODO remove
-    # Mutation = namedtuple('Mutation', 'position, region, sample')
-    # m1 = Mutation(115251149, (115251159, 115251276), 'TCGA-NC-A5HI-01A-11D-A26M-08')
-    # mutations.append(m1)
-    # m2 = Mutation(115251286, (115251159, 115251276), 'TCGA-NC-A5HI-01A-11D-A26M-08')
-    # mutations.append(m2)
-
     # Generate smoothing arrays for regions
     for interval in regions:
         # Add extra bases for smoothing of simulated mutations that fall outside regions and tukey_filter
@@ -60,8 +53,8 @@ def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
 
         # Remove extra bp
         for interval in first_smooth_tree:
-            begin = interval.begin + half_window
-            end = interval.end - half_window
+            begin = interval.begin
+            end = interval.end
             slicer = (len(tukey_filter) // 2) + half_window
             final_smooth_tree.addi(begin, end, interval.data[slicer: - (slicer + 1)])
 

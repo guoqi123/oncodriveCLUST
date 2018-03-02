@@ -80,6 +80,7 @@ def read_mutations(input_mutations, trees):
         samples_d: dictionary, key = sample, value = number of mutations
     """
     mutations_d = defaultdict(list)
+    Mutation = namedtuple('Mutation', 'position, region, sample')
     samples_d = defaultdict(int)
     read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
 
