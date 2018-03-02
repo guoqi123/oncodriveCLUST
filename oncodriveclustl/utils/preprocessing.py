@@ -6,7 +6,6 @@ import csv
 import daiquiri
 
 
-
 def check_compression(file):
     """
     Check input file compression
@@ -69,9 +68,12 @@ def check_tabular_csv(file):
             pos = 'POSITION' in line
             ref = 'REF' in line
             alt = 'ALT' in line
+            sample = 'SAMPLE' in line
             break
+        else:
+            chr = pos = ref = alt = sample = False
 
-    if chr == pos == ref == alt == True:
+    if chr == pos == ref == alt == sample == True:
         header = True
     else:
         logger.critical('{} does not contain header and/or header not in correct format'.format(file))

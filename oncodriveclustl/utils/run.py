@@ -9,9 +9,9 @@ from intervaltree import IntervalTree
 from tqdm import tqdm
 import numpy as np
 
+from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
 from oncodriveclustl.utils import score
-from oncodriveclustl.utils import sequence as seq
 from oncodriveclustl.utils import analyticalpval as ap
 
 # Logger
@@ -21,14 +21,17 @@ logger = daiquiri.getLogger()
 class Experiment:
     """Class to analyze elements of a cancer dataset"""
 
-    def __init__(self, regions_d, chromosomes_d, strands_d, mutations_d, genome, path_pickle,
+    def __init__(self, regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome, path_pickle,
                  element_mutations_cutoff, cluster_mutations_cutoff, cds, smooth_window, cluster_window,
-                 cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores, seed):
+                 cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores, seed,
+                 plot):
         """Initialize the Experiment class
         :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
+        :param cds_d: dictionary of dictionaries with relative cds position of genomic regions
         :param chromosomes_d: dict, dictionary containing chromosomes from all analyzed elements
         :param strands_d: dic, dictionary containing strands from all analyzed elements
-        :param mutations_d: dict, dictionary containing mutations lists from all analyzed elements
+        :param mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple(position, sample)
+        :param samples_d: dictionary, key = sample, value = number of mutations
         :param genome: genome to use
         :param element_mutations_cutoff: int, cutoff of element mutations
         :param cluster_mutations_cutoff: int, cutoff of cluster mutations
@@ -43,13 +46,16 @@ class Experiment:
         :param simulation_window: int, window to simulate mutations in hotspot mode
         :param cores: int, number of CPUs to use
         :param seed: int, seed
+        :param plot: bool, True generates a clustering plot for an element
         :return: None
         """
 
         self.regions_d = regions_d
+        self.cds_d = cds_d
         self.chromosomes_d = chromosomes_d
         self.strands_d = strands_d
         self.mutations_d = mutations_d
+        self.samples_d = samples_d
         self.genome_build = self.load_genome(genome)
         self.path_pickle = path_pickle
         self.element_mutations_cutoff = element_mutations_cutoff
@@ -65,9 +71,9 @@ class Experiment:
         self.n_simulations = n_simulations
         self.simulation_mode = simulation_mode
         self.simulation_window = simulation_window
-
         self.cores = cores
         self.seed = seed
+        self.plot = plot
 
         # Read CGC
         if self.genome_build.__name__ == 'hg19':
@@ -149,7 +155,7 @@ class Experiment:
             signatures = signatures['probabilities']
             logger.debug('Signatures read')
 
-            # Iterate through tuples of coordinates, get genomic regions sequence
+            # Iterate through genomic regions to get their sequences
             for interval in self.regions_d[element]:
                 probabilities = []
                 start = interval[0] - (self.simulation_window // 2) - delta
@@ -208,24 +214,21 @@ class Experiment:
             int, gene score
         """
 
-        index_tree, length_tree, smooth_tree = clu.find_locals(self.regions_d[element], mutations,
-                                        self.tukey_filter, self.cds, self.simulation_window)
+        if self.cds_d:
+            cds_d = self.cds_d[element]
+        else:
+            cds_d = {}
+
+        smooth_tree = smo.smooth(self.regions_d[element], cds_d, mutations, self.tukey_filter,
+                                 self.simulation_window)
+        index_tree = clu.find_locals(smooth_tree, cds_d)
         raw_clusters_tree = clu.raw_clusters(index_tree)
         merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
-        clusters_mut_tree = clu.clusters_mut(merge_clusters_tree, length_tree, mutations, self.cds)
-
-        score_clusters_tree = clu.score_clusters(clusters_mut_tree, length_tree, self.regions_d[element], self.cluster_mutations_cutoff,
-                                                 self.cluster_score, self.cds, len(mutations))
+        filter_clusters_tree = clu.clusters_mut(merge_clusters_tree, mutations, self.cluster_mutations_cutoff)
+        score_clusters_tree = clu.fmutations_score(filter_clusters_tree, self.regions_d[element], len(mutations))
         logger.debug('Clusters calculated')
         element_score = score.element_score(score_clusters_tree, analysis_mode, self.element_score)
         logger.debug('Element score calculated')
-
-        # for i in score_clusters_tree:
-        #     print('Interval', i[0], i[1])
-        #     for k, v in i.data.items():
-        #         print('Cluster number', k)
-        #         for k2, v2 in v.items():
-        #             print(k2, v2)
 
         return score_clusters_tree, element_score
 
@@ -243,6 +246,9 @@ class Experiment:
         sim_scores_chunk = []
         sim_cluster_chunk = []
         simulation_hotspots = {}
+
+        print('start')
+        quit()
         mutations = dict((m, self.mutations_d[element].count(m)) for m in self.mutations_d[element])
 
         if self.simulation_mode == 'hotspot':
@@ -280,7 +286,6 @@ class Experiment:
 
     def simulate_and_analysis_old(self, item):
         """
-        # TODO
         Simulate mutations and analyze simulations
         :param item: tuple, element of analysis data
         :return:
@@ -471,14 +476,18 @@ class Experiment:
         # Filter elements >= cutoff mutations
         analyzed_elements = []
         belowcutoff_elements = []
-
         for elem in self.regions_d.keys():
             if len(self.mutations_d[elem]) >= self.element_mutations_cutoff:
                 analyzed_elements.append(elem)
             else:
                 belowcutoff_elements.append(elem)
-        logger.info('Calculating results {} element{}...'.format(len(analyzed_elements),
-                                                                 's' if len(analyzed_elements) > 1 else ''))
+        if len(analyzed_elements) == 0:
+            logger.critical('There are no element above cutoff element mutations to analyze')
+            quit()
+        else:
+            logger.info('Calculating results {} element{}...'.format(len(analyzed_elements),
+                        's' if len(analyzed_elements) > 1 else ''))
+
         # Performance tunning
         pf_num_elements = 100
         pf_num_simulations = 100000
@@ -496,7 +505,6 @@ class Experiment:
 
             for element in elements:
                 # Calculate observed results
-
                 observed_clusters_d[element], observed_scores_d[element] = self.analysis(element,
                                                                                          self.mutations_d[element],
                                                                                          analysis_mode='obs')
@@ -535,7 +543,6 @@ class Experiment:
                 for element, sim_scores_chunk, sim_cluster_chunk in tqdm(
                         executor.map(self.simulate_and_analysis, simulations), total=len(simulations),
                         desc="simulations".rjust(30)):
-
                     sim_scores_list[element] += sim_scores_chunk
                     sim_clusters_list[element] += sim_cluster_chunk
 
@@ -549,7 +556,6 @@ class Experiment:
                 post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan')) for
                                  e in noprobabilities_elements + belowcutoff_elements]
                 total_items = post_item_simulated + post_item_nan
-
                 for e, er, cr in tqdm(map(self.post_process, total_items), total=len(total_items),
                                       desc="post processing".rjust(30)):
                     elements_results[e] = er

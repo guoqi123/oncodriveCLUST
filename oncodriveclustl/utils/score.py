@@ -4,9 +4,8 @@ from collections import defaultdict
 
 def element_score(clusters_tree, mode, method):
     """
-    # TODO
     Given the clusters of an element, calculate a global score for it
-    :param clusters_tree:
+    :param clusters_tree: IntervalTree, data are dict of dict
     :param mode: str, 'obs' for observed or 'sim' for simulated
     :param method: str, scoring method. Default 'mean'
     :return: float, element score
@@ -21,6 +20,7 @@ def element_score(clusters_tree, mode, method):
             score += values['score']  # Add up cluster scores
             interval.data[cluster]['mode'] = mode
 
+    # TODO remove mean
     if method == 'mean':
         if n_clusters:
             element_score = score / n_clusters

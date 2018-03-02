@@ -62,6 +62,7 @@ LOGS = {
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
 @click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
+@click.option('--plot', is_flag=True, help='Generate a clustering plot for an element',)
 def main(input_file,
          output_directory,
          regions_file,
@@ -82,7 +83,8 @@ def main(input_file,
          seed,
          log_level,
          gzip,
-         cds):
+         cds,
+         plot):
     """Oncodriveclustl is a program that looks for mutational hotspots
     :param input_file: input file
     :param output_directory: output directory
@@ -105,6 +107,7 @@ def main(input_file,
     :param log_level: verbosity of the logger
     :param gzip: bool, True generates gzip compressed output file
     :param cds: bool, True calculates clustering on cds
+    :param plot: bool, True generates a clustering plot for an element
     :return: None
     """
 
@@ -156,10 +159,14 @@ def main(input_file,
         )
         logger.info(', '.join(elements))
 
+    # If --plot, only one element is analyzed
+    if plot and len(elements) != 1:
+        logger.critical('Plot can only be calculated for one element')
+        quit()
+
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
-    regions_d, chromosomes_d, strands_d, mutations_d = pars.parse(regions_file, elements, input_file)
-
+    regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d = pars.parse(regions_file, elements, input_file, cds)
     mut = 0
     elem = 0
     for k, v in mutations_d.items():
@@ -177,7 +184,6 @@ def main(input_file,
     path_cache = output_directory + '/cache'
     os.makedirs(path_cache, exist_ok=True)
     path_pickle = path_cache + '/' + signatures_pickle
-
     if not os.path.isfile(path_pickle):
         logger.info('Computing signatures...')
         obj = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), log_level=log_level)
@@ -189,14 +195,14 @@ def main(input_file,
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
-                                regions_d, chromosomes_d, strands_d, mutations_d, genome,
+                                regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome,
                                 path_pickle,
                                 element_mutations, cluster_mutations,
                                 cds, smooth_window, cluster_window,
                                 cluster_score, element_score,
                                 int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
-                                cores, seed
+                                cores, seed, plot
                                 ).run()
     # Write results
     sorted_list_elements = postp.write_element_results(genome=genome, results=elements_results,

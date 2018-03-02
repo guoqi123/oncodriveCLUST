@@ -1,43 +1,93 @@
 # Import modules
 from intervaltree import IntervalTree
+from collections import namedtuple
 
 import numpy as np
 
 
-def smooth(regions, mutations, tukey_filter, simulation_window):
+def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
     """Generate a smoothing curve for a list of element's mutations
     :param regions: IntervalTree with genomic positions of an element
-    :param mutations: list, list of mutations of an element
+    :param cds_d: dict, keys are start genomic regions, values are cds positions
+    :param mutations: dictionary, key = element, value = list of mutations formatted as namedtuple
     :param tukey_filter: numpy array. Length equals smoothing window. The elements sum to 1
     :param simulation_window: int, simulation window
     :return:
-        final_smooth_tree, IntervalTree. Interval are genomic regions, data np.array of smoothing score
-        per position.
+        final_smooth_tree, IntervalTree. Interval are genomic regions or cds, data np.array of smoothing score
+        by position.
     """
-
-    smooth_tree = IntervalTree()
+    first_smooth_tree = IntervalTree()
     final_smooth_tree = IntervalTree()
     half_window = simulation_window // 2
 
+    # TODO remove
+    # Mutation = namedtuple('Mutation', 'position, region, sample')
+    # m1 = Mutation(115251149, (115251159, 115251276), 'TCGA-NC-A5HI-01A-11D-A26M-08')
+    # mutations.append(m1)
+    # m2 = Mutation(115251286, (115251159, 115251276), 'TCGA-NC-A5HI-01A-11D-A26M-08')
+    # mutations.append(m2)
+
+    # Generate smoothing arrays for regions
     for interval in regions:
-        # Add extra bases for smoothing tukey window
-        begin = interval.begin - half_window
-        end = interval.end + half_window
-        # Remove 1 to tukey filter to allow symmetric // 2
-        smooth_tree.addi(begin, end, np.zeros((end - begin) + len(tukey_filter) - 1))
+        # Add extra bases for smoothing of simulated mutations that fall outside regions and tukey_filter
+        first_smooth_tree.addi(interval.begin, interval.end,
+                         np.zeros((interval.end - interval.begin + len(tukey_filter) + simulation_window)))
+    if not cds_d:
+        # Smooth
+        for mutation in mutations:
+            for interval in first_smooth_tree[mutation.region[0]]:
+                # Get index of mutation in region
+                index = abs(mutation.position - (interval.begin - half_window))
+                # Smooth mutations
+                interval.data[index: index + len(tukey_filter)] += tukey_filter
 
-    # Find mutations in regions
-    for mutation in mutations:
-        for interval in smooth_tree[mutation]:
-            # Get index of mutation in region
-            index = mutation - interval.begin
-            # Smooth mutations
-            interval.data[index: index + len(tukey_filter)] += tukey_filter
+        # Remove extra bp
+        for interval in first_smooth_tree:
+            begin = interval.begin
+            end = interval.end
+            slicer = (len(tukey_filter) // 2) + half_window
+            final_smooth_tree.addi(begin, end, interval.data[slicer: - (slicer + 1)])
 
-    for interval in smooth_tree:
-        begin = interval.begin + half_window
-        end = interval.end - half_window
-        slicer = (len(tukey_filter) // 2) + half_window
-        final_smooth_tree.addi(begin, end, interval.data[slicer: - slicer])
+    else:
+        # Smooth simulated mutations outside regions
+        for mutation in mutations:
+            if not first_smooth_tree[mutation.position]:
+                for interval in first_smooth_tree[mutation.region[0]]:
+                    # Get index of mutation in region
+                    index = abs(mutation.position - (interval.begin - half_window))
+                    # Smooth mutations
+                    interval.data[index: index + len(tukey_filter)] += tukey_filter
+
+        # Remove extra bp
+        for interval in first_smooth_tree:
+            begin = interval.begin + half_window
+            end = interval.end - half_window
+            slicer = (len(tukey_filter) // 2) + half_window
+            final_smooth_tree.addi(begin, end, interval.data[slicer: - (slicer + 1)])
+
+        # Merge sorted regions (one interval == cds) and add tukey//2 to both ends
+        cds_tree = IntervalTree()
+        cds_array = np.zeros(len(tukey_filter) // 2)
+        for interval in sorted(final_smooth_tree):
+            cds_array = np.append(cds_array, interval.data)
+        cds_array = np.append(cds_array, np.zeros(len(tukey_filter) // 2))
+        cds_tree.addi(final_smooth_tree.begin(), final_smooth_tree.end(), cds_array)
+        final_smooth_tree = IntervalTree()
+
+        # Smooth mutations inside regions
+        for mutation in mutations:
+            if first_smooth_tree[mutation.position]:
+                for interval in cds_tree[mutation.position]:
+                    # Get index of mutation in cds
+                    index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
+                    # Smooth mutations
+                    interval.data[index: index + len(tukey_filter)] += tukey_filter
+
+        # Remove extra bp
+        for interval in cds_tree:
+            begin = interval.begin
+            end = interval.end
+            slicer = len(tukey_filter) // 2
+            final_smooth_tree.addi(begin, end, interval.data[slicer: - slicer])
 
     return final_smooth_tree

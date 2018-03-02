@@ -1,15 +1,13 @@
 # Import modules
-import logging
 import os
-import gzip
+import logging
+from intervaltree import IntervalTree
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import click
 import daiquiri
-
-from oncodriveclustl.utils import preprocessing as prep
 
 # Global variables
 logs = {
@@ -21,136 +19,66 @@ logs = {
 }
 
 
-def histogram(df, col_values, output=None):
-    """
-    """
-    fig = plt.figure(figsize=(8, 8))
-    ax = plt.subplot2grid((1, 1), (0, 0))
-
-    # Drop nan and sort by p-value and score
-    df = df[np.isfinite(df[col_values])].copy()
-    df.sort_values(by=[col_values, 'SCORE_OBS'], ascending=[True, False], inplace=True)
-
-    # Histogram
-    plt.hist(df[col_values], edgecolor='black', linewidth=0.5)
-    ax.set_xlabel(r"p-values", fontsize=16)
-    ax.set_ylabel(r"Frequency", fontsize=16)
-    plt.suptitle("Empirical raw p-values", fontsize=18, fontweight='bold') if col_values == 'E_PVAL' else \
-        plt.suptitle("Analytical raw p-values", fontsize=18, fontweight='bold')
-
-    if output:
-        # Add file name to figure
-        ax.set_title(output.split('/')[-1], fontsize=16)
-
-        # Define name
-        if col_values == 'E_PVAL':
-            output += 'histogram_empirical'
-        else:
-            output += 'histogram_analytical'
-        # Save figure
-        plt.savefig(output, bbox_inches='tight')
-
-
-def qqplot(df, col_values, top=10, output=None):
-    """
-    QQ plot
-    """
-    fig = plt.figure(figsize=(8, 8))
-    ax = plt.subplot2grid((1, 1), (0, 0))
-
-    df = df[np.isfinite(df[col_values])].copy()
-    df.sort_values(by=[col_values, 'SCORE_OBS'], ascending=[True, False], inplace=True)
-
-    min_pvalue = min([x for x in df[col_values].tolist() if x > 0])
-    obs = list(df[col_values].map(lambda x: -np.log10(x) if x > 0 else -np.log10(min_pvalue)))
-
-    data = pd.DataFrame({
-        'SYM': df['SYM'],
-        'SCORE_OBS': df['SCORE_OBS'],
-        'CGC': df['CGC'],
-        'obs': obs,
-    })
-
-    data.sort_values(by=['obs', 'SCORE_OBS', 'CGC'], ascending=[True, True, False], inplace=True)
-    exp = -np.log10(np.arange(1, len(data) + 1) / len(data))
-    exp.sort()
-    data['exp'] = exp
-
-    # Scatter of the elements
-    ax.scatter(data['exp'], data['obs'], color='blue', alpha=0.5)
-
-    # Null hypothesis
-    ax.plot(data['exp'], data['exp'], color='red', linestyle='--')
-
-    # Significant elements
-    sign = data[-top:].copy()
-
-    x_text = ax.get_xlim()[1] * 1.05
-    y_text = max(data['obs'])
-    delta = y_text / 18
-
-    sign.sort_values(by='exp', ascending=False, inplace=True)
-    for count, line in sign.iterrows():
-        ax.annotate(line['SYM'], xy=(line['exp'], line['obs']),
-                    xytext=(x_text, y_text), color='black', fontsize=16,
-                    arrowprops=dict(color='grey', shrink=0.05, width=0.5, headwidth=5, alpha=0.20), )
-        y_text -= delta
-
-    ax.set_xlabel(r"Expected pvalues $(-\log_{10})$", fontsize=16)
-    ax.set_ylabel(r"Observed pvalues $(-\log_{10})$", fontsize=16)
-    plt.suptitle("Empirical raw p-values", fontsize=18, fontweight='bold') if col_values == 'E_PVAL' else \
-        plt.suptitle("Analytical raw p-values", fontsize=18, fontweight='bold')
-
-    if output:
-        # Add file name to figure
-        ax.set_title(output.split('/')[-1], fontsize=16)
-
-        # Define name
-        if col_values == 'E_PVAL':
-            output += 'qqplot_empirical'
-        else:
-            output += 'qqplot_analytical'
-        plt.savefig(output, bbox_inches='tight')
-
-
-@click.command()
-@click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
-              help='Input path to file containing result')
-@click.option('-o', '--output-directory', default=None, required=True,
-              help='Output directory')
-@click.option('--log-level', default='info', help='verbosity of the logger',
-              type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
-def main(input_file, output_directory, log_level):
-    """Generate plots from oncodriveclustl results
-    :param input_file: input file
-    :param output_directory: output directory
-    :param log_level: verbosity of the logger
+def array_mutations(regions, mutations, tukey_filter, simulation_window):
+    """Generate an array for a list of element's mutations
+    :param regions: IntervalTree with genomic positions of an element
+    :param mutations: list, list of mutations of an element
+    :param tukey_filter: numpy array. Length equals smoothing window. The elements sum to 1
+    :param simulation_window: int, simulation window
+    :return:
+        final_mutation_tree, IntervalTree. Interval are genomic regions, data np.array of number of mutations by
+        position.
     """
 
-    # Configure logger
-    global logger
-    daiquiri.setup(level=logs[log_level])
-    logger = daiquiri.getLogger()
 
-    # Get output directory
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory, exist_ok=True)
+def plot_element(regions, mutations, tukey_filter, simulation_window):
+    """
+    Plot element clustering
+    :param regions: IntervalTree with genomic positions of an element
+    :param mutations: list, list of mutations of an element
+    :param tukey_filter: numpy array. Length equals smoothing window. The elements sum to 1
+    :param simulation_window: int, simulation window
+    :return: None
+    """
 
-    # Get output file name prefix
-    output_prefix = input_file.split('.')[0]
-    logger.info('Plots will be generated for:')
-    logger.info(output_prefix.split('/')[-1])
+    # Get smoothing
 
-    # Read df
-    df = pd.read_csv(input_file, sep='\t', header=0)
+    title = 'OR6K2 COAD'
+    mutations = COAD
+    elements = set(['OR6K2'])
+    simw = 50
+    regions_d, chromosomes_d, strands_d, mutations_d = pars.parse(regions, elements, mutations)
+    print(mutations_d)
+    smooth_tree, mutation_tree = smooth(regions_d['OR6K2_ENSG00000196171'], mutations_d['OR6K2_ENSG00000196171'],
+                                        tukey_filter, simw)
 
-    # Plots for analytical and empirical p-values
-    logger.info('Starting plots...')
-    for pval in ['A_PVAL', 'E_PVAL']:
-        qqplot(df, col_values=pval, output=output_prefix)
-        histogram(df, col_values=pval, output=output_prefix)
+    smoothing_array = np.array([])
+    mutation_array = np.array([])
 
-    logger.info('Plots finished')
+    for interval in sorted(smooth_tree):
+        smoothing_array = np.append(smoothing_array, interval.data)
+    for interval in sorted(mutation_tree):
+        mutation_array = np.append(mutation_array, interval.data)
 
-if __name__ == '__main__':
-    main()
+    plt.figure(figsize=(24, 6))
+    ax1 = plt.subplot2grid((1, 5), (0, 0), colspan=4)
+
+    if strands_d['OR6K2_ENSG00000196171'] == '+':
+        pass
+    elif strands_d['OR6K2_ENSG00000196171'] == '-':
+        smoothing_array = smoothing_array[::-1]
+        mutation_array = mutation_array[::-1]
+
+    ax1.plot(smoothing_array, c='darkblue')
+    ax1.set_ylabel('smoothing score', color='darkblue', fontsize=22)
+
+    ax2 = ax1.twinx()
+    ax2.plot(mutation_array, c='red', alpha=.5)
+    ax2.set_ylabel('n mutations', color='red', fontsize=22)
+
+    ax1.tick_params('y', colors='darkblue', labelsize=18)
+    ax2.tick_params('y', colors='red', labelsize=18)
+
+    plt.title(title, fontsize=26)
+
+    plt.show()
