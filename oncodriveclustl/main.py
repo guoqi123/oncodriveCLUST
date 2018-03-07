@@ -10,7 +10,6 @@ from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import run as exp
 from oncodriveclustl.utils import postprocessing as postp
 
-
 # Global variables
 LOGS = {
     'debug': logging.DEBUG,
@@ -19,7 +18,6 @@ LOGS = {
     'error': logging.ERROR,
     'critical': logging.CRITICAL
 }
-
 
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
@@ -50,8 +48,8 @@ LOGS = {
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
-@click.option('-sim', '--simulation-mode', default='element', help='Simulation mode',
-              type=click.Choice(['hotspot', 'region']))
+@click.option('-sim', '--simulation-mode', default='hotspot', help='Simulation mode',
+              type=click.Choice(['hotspot']))
 @click.option('-simw', '--simulation-window', type=click.INT, default=60,
               help='Simulation window. Default is 20')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
@@ -127,22 +125,24 @@ def main(input_file,
     ))
     global logger
     logger = daiquiri.getLogger()
-    logger.debug(' '.join([input_file,
-                           output_directory,
-                           regions_file,
-                           str(element_mutations),
-                           str(cluster_mutations),
-                           str(smooth_window),
-                           str(cluster_window),
-                           cluster_score,
-                           element_score,
-                           kmer,
-                           str(n_simulations),
-                           simulation_mode,
-                           str(simulation_window),
-                           str(cores),
-                           str(gzip),
-                           str(cds)]))
+
+    'input_file: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\nelements_file: {}\n'
+    'elements: {}\nelement_mutations: {}\ncluster_mutations: {}\ncds: {}\nsmooth_window: {}\n'
+    'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
+    'kmer: {}\nn_simulations: {}\n'
+    'simulation_mode: {}\nsimulation_window: {}\ncores: {}\nseed: {}\n'
+    'log_level: {}\ngzip: {}\n'
+
+    logger.info('\ninput_file: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\n'
+                'element_mutations: {}\ncluster_mutations: {}\ncds: {}\nsmooth_window: {}\n'
+                'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
+                'kmer: {}\nn_simulations: {}\n'
+                'simulation_mode: {}\nsimulation_window: {}\ncores: {}\n'
+                'gzip: {}'.format(
+                input_file,output_directory,regions_file,genome,
+                str(element_mutations),str(cluster_mutations), str(cds),
+                str(smooth_window), str(cluster_window), cluster_score, element_score,
+                kmer, str(n_simulations), simulation_mode, str(simulation_window), str(cores),str(gzip)))
 
     logger.info('Initializing OncodriveCLUSTL...')
 
@@ -160,9 +160,13 @@ def main(input_file,
         logger.info(', '.join(elements))
 
     # If --plot, only one element is analyzed
-    if plot and len(elements) != 1:
-        logger.critical('Plot can only be calculated for one element')
-        quit()
+    if plot:
+        if len(elements) != 1:
+            logger.critical('Plot can only be calculated for one element')
+            quit()
+        if not cds:
+            logger.critical('Plots are only available for cds')
+            quit()
 
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
@@ -198,7 +202,7 @@ def main(input_file,
                                 regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome,
                                 path_pickle,
                                 element_mutations, cluster_mutations,
-                                cds, smooth_window, cluster_window,
+                                smooth_window, cluster_window,
                                 cluster_score, element_score,
                                 int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
@@ -209,16 +213,12 @@ def main(input_file,
                                                        directory=output_directory, file=output_file, gzip=gzip)
     logger.info('Elements results calculated')
     postp.write_cluster_results(genome=genome, results=clusters_results, directory=output_directory, file=output_file,
-                                sorter=sorted_list_elements, gzip=gzip)
+                                sorter=sorted_list_elements, gzip=gzip, cds_d=cds_d)
     logger.info('Clusters results calculated')
-    postp.write_oncohortdrive_results(mutations=input_file, directory=output_directory, file=output_file)
+    postp.write_oncohortdrive_results(mutations=input_file, directory=output_directory, file=output_file,
+                                      regions_d=regions_d)
     logger.info('Oncohortdrive file generated')
     logger.info('Finished')
-
-    # Write info
-    postp.write_info(input_file,output_directory,regions_file,genome,elements_file,elements,element_mutations,
-         cluster_mutations,cds,smooth_window,cluster_window,cluster_score,element_score,int(kmer),
-         n_simulations,simulation_mode,simulation_window,cores,seed,log_level, gzip)
 
 if __name__ == '__main__':
     main()

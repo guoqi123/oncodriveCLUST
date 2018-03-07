@@ -107,7 +107,7 @@ def write_element_results(genome, results, directory, file, gzip):
     return sorted_list_elements
 
 
-def write_cluster_results(genome, results, directory, file, sorter, gzip):
+def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d):
     """Save results to the output file
     :param genome: reference genome
     :param results: dict, dictionary of results, keys are element's symbols
@@ -115,30 +115,54 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip):
     :param file: str, output file, if elements in elements file
     :param sorter: list, element symbols ranked by elements p-value
     :param gzip: bool, True generates gzip compressed output file
+    :param cds_d: dictionary of dictionaries with relative cds position of genomic regions if cds is True
     :return: None
     """
+    reverse_cds_d = IntervalTree()
 
     sorterindex = dict(zip(sorter, range(len(sorter))))
     output_file = directory + '/clusters_' + file + '.tsv'
     header = ['RANK', 'SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'REGION',
-              '5_COORD', 'MAX_COORD', '3_COORD', 'WIDTH', 'N_MUT', 'SCORE', 'P']
+              '5_COORD', 'MAX_COORD', '3_COORD',
+              'WIDTH', 'N_MUT', 'SCORE', 'P']
 
     with open(output_file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
         for element, values in results.items():
+            if cds_d:
+                for genomic, cds in cds_d[element].items():
+                    reverse_cds_d.addi(cds[0], cds[1], genomic)
             sym, id = element.split('_')
-            clustersinfo, chr, strand, cgc= values
+            clustersinfo, chr, strand, cgc = values
             if genome != 'hg19':
                 cgc = 'Non Available'
             if type(clustersinfo) != float:
                 rank = sorterindex[sym] + 1
                 for interval in clustersinfo:
                     for c, v in interval.data.items():
+                        if cds_d:
+                            for interval in reverse_cds_d[v['left_m'][0]]:
+                                start_l = interval.data
+                                end_l = interval.data + interval[1]
+                            for interval in reverse_cds_d[v['right_m'][0]]:
+                                start_r = interval.data
+                                end_r = interval.data + interval[1]
+
+                            if start_l != start_r:
+                                region_start = (start_l, end_l)
+                                region_end = (start_r, end_r)
+                            else:
+                                region_start = start_l
+                                region_end = end_l
+                        else:
+                            region_start = interval[0]
+                            region_end = interval[1]
+
                         fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                            rank, sym, id, cgc, chr, strand, interval[0], interval[1],
-                            v['left_m'][0]+interval[0], v['max'][0]+interval[0], v['right_m'][0]+interval[0],
-                            abs(v['right_m'][0] - v['left_m'][0]),
-                            sum(v['mutations'].values()), v['score'], v['p']))
+                            rank, sym, id, cgc, chr, strand, region_start, region_end,
+                            v['left_m'][1], v['max'][1], v['right_m'][1], abs(v['right_m'][0] - v['left_m'][0] + 1),
+                            len(v['mutations']), v['score'], v['p']))
+
     # Sort
     # TODO change to avoid writing not compressed file
     df = pd.read_csv(output_file, sep='\t', header=0)
@@ -151,12 +175,13 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip):
         df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
 
 
-def write_oncohortdrive_results(mutations, directory, file):
+def write_oncohortdrive_results(mutations, directory, file, regions_d):
     """
     Generate compressed file with input BED + mutations mapped to cluters (score, p-value, significance)
     :param mutations: input mutations file
     :param directory: str, output directory
     :param file: str, output file, if elements in elements file
+    :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
     :return: None
     """
     mutations_file = mutations
@@ -170,17 +195,23 @@ def write_oncohortdrive_results(mutations, directory, file):
         next(cf)
         for line in cf:
             _, sym, ensid, _, _, _, _, clust_l, _, clust_r, _, _, score, p = line.strip().split('\t')
-            left = int(clust_l)
-            right = int(clust_r) + 1
+            element = sym + '_' + ensid
+            left_coord = int(clust_l)
+            right_coord = int(clust_r)
             sig = 1 if float(p) < 0.05 else 0
-            clusters_tree.addi(left, right, Cluster(sym, ensid, score, p, sig))
+            if set(regions_d[element][left_coord]) != set(regions_d[element][right_coord]):
+                for interval in regions_d[element][left_coord]:
+                    clusters_tree.addi(left_coord, interval[1], Cluster(sym, ensid, score, p, sig))
+                for interval in regions_d[element][right_coord]:
+                    clusters_tree.addi(interval[0], right_coord, Cluster(sym, ensid, score, p, sig))
+            else:
+                clusters_tree.addi(left_coord, right_coord, Cluster(sym, ensid, score, p, sig))
 
     # Generate output file
     read_function, mode, delimiter = prep.check_tabular_csv(mutations)
 
     with open(output_file, 'w') as of:
-        header = ['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE',
-                  'SYM', 'SYM_ENSID', 'SCORE', 'PVALUE', 'SIG_0.05']
+        header = ['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE', 'SYM', 'SYM_ENSID', 'SCORE', 'PVALUE', 'SIG_0.05']
         of.write('{}\n'.format('\t'.join(header)))
 
         with read_function(mutations_file, mode) as read_file:
@@ -208,68 +239,3 @@ def write_oncohortdrive_results(mutations, directory, file):
     with open(output_file, 'rb') as of:
         with gzip.open(output_file_gz, 'wb') as ofgz:
             shutil.copyfileobj(of, ofgz)
-
-
-def write_info(input_file,
-               output_directory,
-               regions_file,
-               genome,
-               elements_file,
-               elements,
-               element_mutations,
-               cluster_mutations,
-               cds,
-               smooth_window,
-               cluster_window,
-               cluster_score,
-               element_score,
-               kmer,
-               n_simulations,
-               simulation_mode,
-               simulation_window,
-               cores,
-               seed,
-               log_level,
-               gzip):
-    """Write info to output
-        :param input_file: input file
-        :param output_directory: output directory path
-        :param regions_file: path input genomic regions, tab file
-        :param genome: genome to use
-        :param elements_file: file containing one element per row
-        :param elements: element symbol or file containing elements
-        :param element_mutations: int, cutoff of element mutations
-        :param cluster_mutations: int, cutoff of cluster mutations
-        :param cds: bool, True calculates clustering on cds
-        :param smooth_window: int, smoothing window
-        :param cluster_window: int, clustering window
-        :param cluster_score: cluster score method
-        :param element_score: element score method
-        :param kmer: int, number of nucleotides of the signature
-        :param n_simulations: int, number of simulations
-        :param simulation_mode: str, simulation mode
-        :param simulation_window: int, window to simulate mutations in hotspot mode
-        :param cores: int, number of CPUs to use
-        :param seed: int, seed
-        :param log_level: verbosity of the logger
-        :param gzip: bool, True generates gzip compressed output file
-        :return: None
-    """
-
-    info_file = output_directory + '/' + output_directory.split('/')[-1] + '.info'
-
-    if not os.path.isfile(info_file):
-        with open(info_file, 'w') as fd:
-            fd.write('input_file: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\nelements_file: {}\n'
-                     'elements: {}\nelement_mutations: {}\ncluster_mutations: {}\ncds: {}\nsmooth_window: {}\n'
-                     'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
-                     'kmer: {}\nn_simulations: {}\n'
-                     'simulation_mode: {}\nsimulation_window: {}\ncores: {}\nseed: {}\n'
-                     'log_level: {}\ngzip: {}\n'.format(input_file, output_directory, regions_file, genome,
-                                              elements_file, elements, element_mutations, cluster_mutations,
-                                              cds, smooth_window, cluster_window,
-                                              cluster_score, element_score, kmer, n_simulations, simulation_mode,
-                                              simulation_window,
-                                              cores, seed, log_level, gzip))
-    else:
-        pass

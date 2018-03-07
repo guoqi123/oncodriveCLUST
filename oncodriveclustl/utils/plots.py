@@ -20,7 +20,7 @@ logs = {
 }
 
 
-def prepare_clusters_data(strand, length, clusters_tree, false_margin = 5):
+def prepare_clusters_data(strand, length, clusters_tree, false_margin=5):
     """
     Prepare clusters data to plot
     :param strand: element strand

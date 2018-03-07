@@ -228,6 +228,7 @@ def fmutations_score(clusters_tree, regions, total_mutations):
 
             # Map mutated position and smoothing maximum to region
             for position, count in mutated_positions_d.items():
+
                 for interval in regions[position]:
                     map_mut_pos = interval
                 for interval in regions[values['max'][1]]:
@@ -235,20 +236,33 @@ def fmutations_score(clusters_tree, regions, total_mutations):
 
                 # Calculate distance of position to smoothing maximum
                 if map_mut_pos[0] == map_smo_max[0]:
-                    distance_to_max = abs((position - map_mut_pos[0]) - (values['max'][1] - map_smo_max[0]))
+                    distance_to_max = abs(position - values['max'][1])
+                    case = 1
                 elif map_mut_pos[0] < map_smo_max[0]:
-                    distance_to_max = map_mut_pos[1] - position + values['max'][1] - map_smo_max[0]
+                    distance_to_max = (map_mut_pos[1] - position) + (values['max'][1] - map_smo_max[0])
+                    case = 2
                 else:
-                    distance_to_max = map_smo_max[1] - values['max'][1] + position - map_mut_pos[0]
+                    distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
+                    case = 3
+
+                if distance_to_max < 0:
+                    print('\nCase:', case)
+                    print('Mutation:', position)
+                    print('Region w/ mutation:', map_mut_pos)
+                    print('Peak:', values['max'])
+                    print('Region w/ max:', map_smo_max)
 
                 # Calculate fraction of mutations
                 mutations = (count / total_mutations) * 100
 
                 # Calculate cluster score
-                score += (mutations / m.pow(root, distance_to_max))
+                denom = m.pow(root, distance_to_max)
+                if denom == 0:
+                    print(root, distance_to_max)
+                score += (mutations / denom)
 
-                # Update
-                clusters[cluster]['score'] = score
+            # Update
+            clusters[cluster]['score'] = score
 
         score_clusters_tree.addi(interval[0], interval[1], clusters)
 

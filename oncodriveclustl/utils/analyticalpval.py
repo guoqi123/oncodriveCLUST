@@ -55,12 +55,17 @@ class AnalyticalPvalue:
         else:
             return self._get_min_analytical_pvalue(up=mid, down=down, calls=calls, pvals=pvals)
 
-    def _calculate_bandwidth(self, expected):
+    def calculate_bandwidth(self, expected, pseudocount=1):
         """Calculate the best estimator
         :param expected: array of simulated mutations
+        :param pseudocount: value to add when expected are zeroes
         :return: None
         """
-        expected = np.array(expected)
+        # Add a pseudocount to get rid of LinAlgError("singular matrix")
+        if sum(expected) == 0:
+            expected = np.array([0] * 999 + [pseudocount])
+        else:
+            expected = np.array(expected)
         self.gkde = gaussian_kde(expected)
         self.bandwidth = self._get_best_estimator(expected)
         self.gkde.set_bandwidth(bw_method=self.bandwidth)

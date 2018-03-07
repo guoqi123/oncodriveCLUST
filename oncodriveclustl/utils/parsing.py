@@ -10,6 +10,10 @@ from intervaltree import IntervalTree
 from oncodriveclustl.utils import preprocessing as prep
 
 
+Mutation = namedtuple('Mutation', 'position, region, sample')
+Cds = namedtuple('Cds', 'start, end')
+
+
 def read_regions(input_regions, elements):
     """
     Parse input genomic regions
@@ -57,15 +61,15 @@ def map_regions_cds(regions_d):
     :return:
             cds_d: dictionary of dictionaries with relative cds position of genomic regions
     """
+    global Cds
     cds_d = defaultdict(dict)
-    cds = namedtuple('cds', 'start, end')
 
     for element, regions in regions_d.items():
         start = 1
         for region in sorted(regions):
             length = region.end - region.begin - 1
             end = start + length
-            cds_d[element][region.begin] = cds(start, end)
+            cds_d[element][region.begin] = Cds(start, end)
             start = end + 1
 
     return cds_d
@@ -79,8 +83,8 @@ def read_mutations(input_mutations, trees):
         mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple
         samples_d: dictionary, key = sample, value = number of mutations
     """
+    global Mutation
     mutations_d = defaultdict(list)
-    Mutation = namedtuple('Mutation', 'position, region, sample')
     samples_d = defaultdict(int)
     read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
 
