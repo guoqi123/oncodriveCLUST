@@ -319,6 +319,8 @@ class Experiment:
                     logger.warning(
                         'No simulated clusters in {}. P-values are calculated with pseudocount'.format(element))
 
+                print(element)
+
                 # Element score empirical p-value
                 empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
 
