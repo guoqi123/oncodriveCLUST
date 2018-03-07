@@ -318,7 +318,8 @@ class Experiment:
                     logger.warning('No simulated clusters in {}. P-values are not calculated'.format(element))
                     n_clusters = 0
                     for interval in obs_clusters:
-                        for cluster in interval.data:
+                        for cluster, values in interval.data.items():
+                            interval.data[cluster]['p'] = 0.0
                             n_clusters += 1
                     empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
                 else:

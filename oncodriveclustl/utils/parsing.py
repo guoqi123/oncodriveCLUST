@@ -38,10 +38,11 @@ def read_regions(input_regions, elements):
                 chromosome, start, end, strand, ensid, _, symbol = line.strip().split('\t')
                 if elements and symbol not in elements:
                     continue
-                trees[chromosome][int(start): int(end) + 1] = symbol + '_' + ensid
-                regions_d[symbol + '_' + ensid].addi(int(start), (int(end) + 1))
-                chromosomes_d[symbol + '_' + ensid] = chromosome
-                strands_d[symbol + '_' + ensid] = strand
+                if int(start) != int(end):
+                    trees[chromosome][int(start): int(end) + 1] = symbol + '_' + ensid
+                    regions_d[symbol + '_' + ensid].addi(int(start), (int(end) + 1))
+                    chromosomes_d[symbol + '_' + ensid] = chromosome
+                    strands_d[symbol + '_' + ensid] = strand
         if not regions_d.keys():
             logger.critical('No elements found in genomic regions. Please, check input data')
             quit()
