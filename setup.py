@@ -13,7 +13,9 @@ install_requires = [
     'colorlog',
     'scipy',
     'scikit-learn',
-    'statsmodels'
+    'statsmodels',
+    'matplotlib',
+    'seaborn'
 ]
 
 
