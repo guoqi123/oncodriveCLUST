@@ -18,7 +18,6 @@ def find_locals(smooth_tree, cds_d):
     """
     index_tree = IntervalTree()
     reverse_cds_d = IntervalTree()
-    Genomic = namedtuple('Genomic', 'region, position')
 
     # Reverse dictionary
     if cds_d:
@@ -39,10 +38,10 @@ def find_locals(smooth_tree, cds_d):
             score = smooth[index]
             local = 0 if index in min_eq else 1  # 0 if minimum, 1 if maximum
             if not cds_d:
-                genomic = Genomic(interval.begin, interval.begin + index)
+                genomic = interval.begin + index
             else:
                 for info in reverse_cds_d[index + 1]:
-                    genomic = Genomic(info.data, info.data + (index - cds_d[info.data].start))
+                    genomic = info.data + (index + 1 - cds_d[info.data].start)
             indexes_info.append((local, index, genomic, score))
         # Add to new interval tree
         index_tree.addi(interval[0], interval[1], indexes_info)
@@ -70,20 +69,20 @@ def raw_clusters(index_tree):
         for maximum in generator_maxs:
             i = indexes.index(maximum)
             # Add maximum
-            clusters[j]['max'] = (maximum[1], maximum[2].position, maximum[3])
+            clusters[j]['max'] = (maximum[1], maximum[2], maximum[3])
             # Add margins
             # if maximum not in first nor last position
             if i != 0 and i != len(indexes) - 1:
-                clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2].position, indexes[i - 1][3])
-                clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2].position, indexes[i + 1][3])
+                clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2], indexes[i - 1][3])
+                clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2], indexes[i + 1][3])
             # if first position
             elif i == 0:
-                clusters[j]['left_m'] = (maximum[1], maximum[2].position, maximum[3])
-                clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2].position, indexes[i + 1][3])
+                clusters[j]['left_m'] = (maximum[1], maximum[2], maximum[3])
+                clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2], indexes[i + 1][3])
             # if last position
             else:
-                clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2].position, indexes[i - 1][3])
-                clusters[j]['right_m'] = (maximum[1], maximum[2].position, maximum[3])
+                clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2], indexes[i - 1][3])
+                clusters[j]['right_m'] = (maximum[1], maximum[2], maximum[3])
             j += 1
         clusters_tree.addi(interval[0], interval[1], clusters)
 
@@ -228,38 +227,42 @@ def fmutations_score(clusters_tree, regions, total_mutations):
 
             # Map mutated position and smoothing maximum to region
             for position, count in mutated_positions_d.items():
+                map_mut_pos = set()
+                map_smo_max = set()
 
-                for interval in regions[position]:
-                    map_mut_pos = interval
-                for interval in regions[values['max'][1]]:
-                    map_smo_max = interval
+                if regions[position]:
+                    for i in regions[position]:
+                        map_mut_pos = i
+                    for i in regions[values['max'][1]]:
+                        map_smo_max = i
 
-                # Calculate distance of position to smoothing maximum
-                if map_mut_pos[0] == map_smo_max[0]:
-                    distance_to_max = abs(position - values['max'][1])
-                    case = 1
-                elif map_mut_pos[0] < map_smo_max[0]:
-                    distance_to_max = (map_mut_pos[1] - position) + (values['max'][1] - map_smo_max[0])
-                    case = 2
-                else:
-                    distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
-                    case = 3
+                    # Calculate distance of position to smoothing maximum
+                    if map_mut_pos[0] == map_smo_max[0]:
+                        distance_to_max = abs(position - values['max'][1])
+                        case = 1
+                    elif map_mut_pos[0] < map_smo_max[0]:
+                        distance_to_max = (map_mut_pos[1] - position) + (values['max'][1] - map_smo_max[0])
+                        case = 2
+                    else:
+                        distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
+                        case = 3
+                    """
+                    if distance_to_max < 0:
+                        print('\nCase:', case)
+                        print('Mutation:', position)
+                        print('Region w/ mutation:', map_mut_pos)
+                        print('Peak:', values['max'])
+                        print('Region w/ max:', map_smo_max)
+                    """
 
-                if distance_to_max < 0:
-                    print('\nCase:', case)
-                    print('Mutation:', position)
-                    print('Region w/ mutation:', map_mut_pos)
-                    print('Peak:', values['max'])
-                    print('Region w/ max:', map_smo_max)
+                    # Calculate fraction of mutations
+                    mutations = (count / total_mutations) * 100
 
-                # Calculate fraction of mutations
-                mutations = (count / total_mutations) * 100
-
-                # Calculate cluster score
-                denom = m.pow(root, distance_to_max)
-                if denom == 0:
-                    print(root, distance_to_max)
-                score += (mutations / denom)
+                    # Calculate cluster score
+                    denom = m.pow(root, distance_to_max)
+                    if denom == 0:
+                        print(root, distance_to_max)
+                    score += (mutations / denom)
 
             # Update
             clusters[cluster]['score'] = score

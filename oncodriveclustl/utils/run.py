@@ -314,42 +314,45 @@ class Experiment:
         # If analyzed element and element has clusters
         if type(obs_clusters) != float:
             if type(sim_scores_list) != float:
-
                 if sum(sim_scores_list) == 0:
-                    logger.warning(
-                        'No simulated clusters in {}. P-values are calculated with pseudocount'.format(element))
+                    logger.warning('No simulated clusters in {}. P-values are not calculated'.format(element))
+                    n_clusters = 0
+                    for interval in obs_clusters:
+                        for cluster in interval.data:
+                            n_clusters += 1
+                    empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
+                else:
+                    # Element score empirical p-value
+                    empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
 
-                # Element score empirical p-value
-                empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
+                    # Element score analytical p-value
+                    sim_scores_array_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
+                    obj = ap.AnalyticalPvalue()
 
-                # Element score analytical p-value
-                sim_scores_array_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
-                obj = ap.AnalyticalPvalue()
+                    obj.calculate_bandwidth(sim_scores_array_1000)
+                    analytical_pvalue = obj.calculate(obs_score)
 
-                obj.calculate_bandwidth(sim_scores_array_1000)
-                analytical_pvalue = obj.calculate(obs_score)
+                    # Cluster analytical p-values
+                    sim_clusters_score = []
+                    obs_clusters_score = []
+                    for simulation in sim_clusters_list:
+                        for interval in simulation:
+                            for cluster, values in interval.data.items():
+                                sim_clusters_score.append(values['score'])
 
-                # Cluster analytical p-values
-                sim_clusters_score = []
-                obs_clusters_score = []
-                for simulation in sim_clusters_list:
-                    for interval in simulation:
+                    obj = ap.AnalyticalPvalue()
+                    obj.calculate_bandwidth(sim_clusters_score)
+
+                    for interval in obs_clusters:
                         for cluster, values in interval.data.items():
-                            sim_clusters_score.append(values['score'])
+                            obs_clusters_score.append(values['score'])
+                            cluster_p_value = obj.calculate(values['score'])
+                            interval.data[cluster]['p'] = cluster_p_value
+                    n_clusters = len(obs_clusters_score)
 
-                obj = ap.AnalyticalPvalue()
-                obj.calculate_bandwidth(sim_clusters_score)
-
-                for interval in obs_clusters:
-                    for cluster, values in interval.data.items():
-                        obs_clusters_score.append(values['score'])
-                        cluster_p_value = obj.calculate(values['score'])
-                        interval.data[cluster]['p'] = cluster_p_value
-                n_clusters = len(obs_clusters_score)
-
-                # Element top cluster analytical p-value
-                top_cluster_pvalue = obj.calculate(max(obs_clusters_score))
-                logger.debug('P-values calculated')
+                    # Element top cluster analytical p-value
+                    top_cluster_pvalue = obj.calculate(max(obs_clusters_score))
+                    logger.debug('P-values calculated')
 
             else:
                 n_clusters = obs_score = 0
