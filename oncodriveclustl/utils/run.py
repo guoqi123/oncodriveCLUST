@@ -76,7 +76,7 @@ class Experiment:
         self.kmer = kmer
         self.n_simulations = n_simulations
         self.simulation_mode = simulation_mode
-        self.simulation_window = simulation_window
+        self.simulation_window = simulation_window + (1 - simulation_window % 2)
         self.cores = cores
         self.seed = seed
         self.plot = plot
@@ -165,9 +165,9 @@ class Experiment:
             for interval in self.regions_d[element]:
                 probabilities = []
                 start = interval[0] - (self.simulation_window // 2) - delta
-                end = interval[1] - interval[0] + self.simulation_window + delta*2
+                size = interval[1] - interval[0] + (self.simulation_window - 1) + delta*2
                 # genomic start -d -sw//2, genomic end +d +sw//2
-                sequence = self.genome_build(self.chromosomes_d[element], start, end)
+                sequence = self.genome_build(self.chromosomes_d[element], start, size)
                 sequ += len(sequence)-2
 
                 # Search kmer probabilities
@@ -199,7 +199,7 @@ class Experiment:
                         logger.critical('All context based mutational probabilities per position in {} equal to 0\n'
                                         '{} analysis is skipped'.format(element, element))
                         skip = True
-                    if len(probabilities) != (interval[1] - interval[0] + self.simulation_window):
+                    if len(probabilities) != (interval[1] - interval[0] + self.simulation_window - 1):
                         logger.warning('{} probabilities list length is different than expected, '
                                        'please review results'.format(element))
                         skip = True
@@ -258,32 +258,27 @@ class Experiment:
         sim_cluster_chunk = []
 
         if self.simulation_mode == 'hotspot':
-            df = pd.DataFrame()
+            # df = pd.DataFrame()
+            df = []
             # Get half window
-            half_window = self.simulation_window // 2
+            half_window = (self.simulation_window - 1) // 2
             # Simulate mutations
             for mutation in self.mutations_d[element]:
                 # Get hotspot for simulations
                 hotspot = tuple([mutation.position - half_window, mutation.position + half_window])
                 start_index = hotspot[0] - (mutation.region[0] - half_window)
-                end_index = hotspot[1] - (mutation.region[0] - half_window) + 1
-                for interval in probs_tree[mutation.region[0]]:  # unique
+                end_index = hotspot[1] - (mutation.region[0] - half_window) + 1  # +1 because it is a slice
+                for interval in probs_tree[mutation.region[0]]:  # unique iteration
                     simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=(n_sim),
                                                 p=self.normalize(element, interval.data[start_index:end_index]))
                     # Add simulations
-                    df[(mutation.region, mutation.sample)] = simulations
+                    l = []
+                    for s in simulations:
+                        l.append(Mutation(s, mutation.region, mutation.sample))
+                    df.append(l)
 
-            # Add region and sample information to simulated mutations
-            info = list(df)
-            for i in range(len(df)):
-                positions = df.iloc[i].tolist()
-                zip_list = list(zip(positions, info))
-                simulated_mutations = []
-                for e in zip_list:
-                    m = Mutation(e[0], e[1][0], e[1][1])
-                    simulated_mutations.append(m)
-
-                # Start analysis
+            # Start analysis
+            for simulated_mutations in zip(*df):
                 cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
                 sim_scores_chunk.append(element_score)
                 sim_cluster_chunk.append(cutoff_clusters)
@@ -314,14 +309,24 @@ class Experiment:
         # If analyzed element and element has clusters
         if type(obs_clusters) != float:
             if type(sim_scores_list) != float:
+
+                print(element)
+
                 if sum(sim_scores_list) == 0:
-                    logger.warning('No simulated clusters in {}. P-values are not calculated'.format(element))
+                    logger.warning('No simulated clusters in {}. '
+                                   'Observed cluster p-values calculated with pseudocount'.format(element))
                     n_clusters = 0
+                    # Get false p-value
+                    obj = ap.AnalyticalPvalue()
+                    obj.calculate_bandwidth(sim_scores_list)
+                    pseudo_pvalue = obj.calculate(obs_score)
                     for interval in obs_clusters:
                         for cluster, values in interval.data.items():
-                            interval.data[cluster]['p'] = 0.0
+                            interval.data[cluster]['p'] = pseudo_pvalue
                             n_clusters += 1
-                    empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
+                    empirical_pvalue = analytical_pvalue = top_cluster_pvalue = pseudo_pvalue
+                    n_clusters_sim = False
+
                 else:
                     # Element score empirical p-value
                     empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
@@ -350,6 +355,7 @@ class Experiment:
                             cluster_p_value = obj.calculate(values['score'])
                             interval.data[cluster]['p'] = cluster_p_value
                     n_clusters = len(obs_clusters_score)
+                    n_clusters_sim = True
 
                     # Element top cluster analytical p-value
                     top_cluster_pvalue = obj.calculate(max(obs_clusters_score))
@@ -357,9 +363,10 @@ class Experiment:
 
             else:
                 n_clusters = obs_score = 0
+                n_clusters_sim = float('nan')
                 empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
         else:
-            n_clusters = obs_score = float('nan')
+            n_clusters = n_clusters_sim = obs_score = float('nan')
             empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
         # Get GCG boolean
@@ -372,7 +379,7 @@ class Experiment:
 
         return element, \
             (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),
-             n_clusters, obs_score, empirical_pvalue, analytical_pvalue, top_cluster_pvalue, cgc), \
+             n_clusters, n_clusters_sim, obs_score, empirical_pvalue, analytical_pvalue, top_cluster_pvalue, cgc), \
             (obs_clusters, self.chromosomes_d[element], self.strands_d[element], cgc)
 
     def run(self):
@@ -405,7 +412,7 @@ class Experiment:
                 smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score = \
                     self.analysis(element, self.mutations_d[element], analysis_mode='obs')
                 plot.run_plot(element, self.mutations_d[element], self.cds_d[element],
-                              self.strands_d[element], self.chromosomes_d[element],
+                              self.strands_d[element], self.chromosomes_d[element], self.smooth_window,
                               smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score)
                 logger.info('Plots calculated: {}'.format(element))
             logger.info('Finished')
@@ -468,6 +475,8 @@ class Experiment:
                         desc="simulations".rjust(30)):
                     sim_scores_list[element] += sim_scores_chunk
                     sim_clusters_list[element] += sim_cluster_chunk
+
+
 
                 # Add information of elements without clusters
                 for element in nocluster_elements:

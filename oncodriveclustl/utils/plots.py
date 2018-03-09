@@ -107,7 +107,8 @@ def plot(element, strand, smoothing, mutations, length, raw_clusters_tree, merge
 
     # plt.savefig(output_dir +'/'+ info + 'clusters.png')
 
-def run_plot(element, mutations, cds_d, strand, chromosome,
+
+def run_plot(element, mutations, cds_d, strand, chromosome, smooth_window,
              smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score):
     """
     Prepare data and generate a plot for an element
@@ -116,6 +117,7 @@ def run_plot(element, mutations, cds_d, strand, chromosome,
     :param cds_d:
     :param strand:
     :param chromosome:
+    :param smooth_window
     :param smooth_tree:
     :param raw_clusters_tree:
     :param merge_clusters_tree:
@@ -132,7 +134,7 @@ def run_plot(element, mutations, cds_d, strand, chromosome,
 
     mutation_array = np.zeros(length)
     for mutation in mutations:
-        index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
+        index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start - ((smooth_window - 1) // 2)
         mutation_array[index] += 1
 
     plot(element, strand, smoothing_array, mutation_array, length, raw_clusters_tree, merge_clusters_tree,

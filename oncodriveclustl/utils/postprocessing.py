@@ -48,8 +48,7 @@ def write_element_results(genome, results, directory, file, gzip):
     logger = daiquiri.getLogger()
     output_file = directory + '/elements_' + file + '.txt'
 
-    # TODO: length if not cds?
-    header = ['SYMBOL', 'ENSID', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLU',
+    header = ['SYMBOL', 'ENSID', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS',
               'SCORE',
               'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER',
               'CGC']
@@ -58,12 +57,12 @@ def write_element_results(genome, results, directory, file, gzip):
     i = 0
     for element, values in results.items():
         sym, id = element.split('_')
-        chr, strand, length, muts, obs_clusters, obs_score, epval, apval, topcpval, cgc = values
+        chr, strand, length, muts, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
         if genome != 'hg19':
             cgc = 'Non Available'
         df.loc[i] = pd.Series({
             'SYMBOL':sym, 'ENSID':id, 'CHROMOSOME':chr, 'STRAND':strand, 'LENGTH':length,
-            'N_MUT':muts, 'N_CLU':obs_clusters, 'SCORE':obs_score,
+            'N_MUT':muts, 'N_CLUST':obs_clu, 'SIM_CLUSTS': sim_clu, 'SCORE':obs_score,
             'P_EMPIRICAL':epval, 'P_ANALYTICAL':apval, 'P_TOPCLUSTER':topcpval,'CGC':cgc})
         i += 1
 
@@ -85,7 +84,7 @@ def write_element_results(genome, results, directory, file, gzip):
         df = pd.concat([df_nonempty, df_empty])
 
         # Reorder columns
-        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLU', 'SCORE',
+        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
                  'P_EMPIRICAL', 'Q_EMPIRICAL','P_ANALYTICAL', 'Q_ANALYTICAL','P_TOPCLUSTER', 'Q_TOPCLUSTER']]
 
         # Sort by analytical p-value
@@ -94,6 +93,9 @@ def write_element_results(genome, results, directory, file, gzip):
 
     except Exception as e:
         logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
+        # Reorder columns
+        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SCORE',
+                 'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER']]
 
     # Create a sorted list of elements to order the clusters file
     sorted_list_elements = df['SYMBOL'].tolist()
