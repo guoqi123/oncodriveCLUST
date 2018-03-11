@@ -133,7 +133,7 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
         for element, values in results.items():
             if cds_d:
                 for genomic, cds in cds_d[element].items():
-                    reverse_cds_d.addi(cds[0], cds[1], genomic)
+                    reverse_cds_d.addi(cds[0], cds[1] + 1, genomic)   # end + 1
             sym, id = element.split('_')
             clustersinfo, chr, strand, cgc = values
             if genome != 'hg19':
@@ -145,10 +145,10 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                         if cds_d:
                             for interval in reverse_cds_d[v['left_m'][0]]:
                                 start_l = interval.data
-                                end_l = interval.data + interval[1]
+                                end_l = interval.data + (interval[1]-interval[0])
                             for interval in reverse_cds_d[v['right_m'][0]]:
                                 start_r = interval.data
-                                end_r = interval.data + interval[1]
+                                end_r = interval.data + (interval[1]-interval[0])
 
                             if start_l != start_r:
                                 region_start = (start_l, end_l)

@@ -227,12 +227,12 @@ class Experiment:
         else:
             cds_d = {}
 
-        smooth_tree = smo.smooth(self.regions_d[element], cds_d, mutations, self.tukey_filter, self.simulation_window)
+        smooth_tree = smo.smooth(element, self.regions_d[element], cds_d, mutations, self.tukey_filter, self.simulation_window)
         index_tree = clu.find_locals(smooth_tree, cds_d)
         raw_clusters_tree = clu.raw_clusters(index_tree)
         merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
         filter_clusters_tree = clu.clusters_mut(merge_clusters_tree, mutations, self.cluster_mutations_cutoff)
-        score_clusters_tree = clu.fmutations_score(filter_clusters_tree, self.regions_d[element], len(mutations))
+        score_clusters_tree = clu.fmutations_score(filter_clusters_tree, self.regions_d[element], mutations)
         logger.debug('Clusters scores calculated')
         element_score = score.element_score(score_clusters_tree, analysis_mode, self.element_score)
         logger.debug('Element score calculated')
@@ -309,9 +309,6 @@ class Experiment:
         # If analyzed element and element has clusters
         if type(obs_clusters) != float:
             if type(sim_scores_list) != float:
-
-                print(element)
-
                 if sum(sim_scores_list) == 0:
                     logger.warning('No simulated clusters in {}. '
                                    'Observed cluster p-values calculated with pseudocount'.format(element))

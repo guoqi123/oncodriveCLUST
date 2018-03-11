@@ -19,10 +19,10 @@ def find_locals(smooth_tree, cds_d):
     index_tree = IntervalTree()
     reverse_cds_d = IntervalTree()
 
-    # Reverse dictionary
+    # Reverse dictionary into IntervalTree
     if cds_d:
         for genomic, cds in cds_d.items():
-            reverse_cds_d.addi(cds[0], cds[1], genomic)
+            reverse_cds_d.addi(cds[0], cds[1] + 1, genomic)  # + 1 because end not included
 
     for interval in smooth_tree:
         indexes_info = []
@@ -40,9 +40,10 @@ def find_locals(smooth_tree, cds_d):
             if not cds_d:
                 genomic = interval.begin + index
             else:
-                for info in reverse_cds_d[index + 1]:
+                for info in reverse_cds_d[index + 1]:   # cds_d start 1
                     genomic = info.data + (index + 1 - cds_d[info.data].start)
             indexes_info.append((local, index, genomic, score))
+
         # Add to new interval tree
         index_tree.addi(interval[0], interval[1], indexes_info)
 
@@ -194,8 +195,14 @@ def clusters_mut(clusters_tree, mutations, cluster_mutations_cutoff):
             right = values['right_m'][1]
             # Search mutations
             cluster_muts = [i for i in mutations if left <= i.position <= right]
+            cluster_samples = set()
+            for mut in cluster_muts:
+                sample = mut.sample
+                cluster_samples.add(sample)
+                # TODO calculate hypermutated
             if len(cluster_muts) >= cluster_mutations_cutoff:
                 clusters[cluster]['mutations'] = cluster_muts
+                clusters[cluster]['fra_uniq_samples'] = len(cluster_samples)/len(cluster_muts)
             else:
                 del clusters[cluster]
         filter_clusters_tree.addi(interval[0], interval[1], clusters)
@@ -208,7 +215,7 @@ def fmutations_score(clusters_tree, regions, total_mutations):
     Score clusters with fraction of mutations formula
     :param clusters_tree: IntervalTree, data are dict of dict
     :param regions: IntervalTree with genomic positions of an element
-    :param total_mutations: int
+    :param total_mutations: list of mutations
     :return:
             score_clusters_tree: IntervalTree, data are dict of dict
     """
@@ -229,32 +236,18 @@ def fmutations_score(clusters_tree, regions, total_mutations):
             for position, count in mutated_positions_d.items():
                 map_mut_pos = set()
                 map_smo_max = set()
-
                 if regions[position]:
                     for i in regions[position]:
                         map_mut_pos = i
                     for i in regions[values['max'][1]]:
                         map_smo_max = i
-
                     # Calculate distance of position to smoothing maximum
                     if map_mut_pos[0] == map_smo_max[0]:
                         distance_to_max = abs(position - values['max'][1])
-                        case = 1
                     elif map_mut_pos[0] < map_smo_max[0]:
                         distance_to_max = (map_mut_pos[1] - position) + (values['max'][1] - map_smo_max[0])
-                        case = 2
                     else:
                         distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
-                        case = 3
-                    """
-                    if distance_to_max < 0:
-                        print('\nCase:', case)
-                        print('Mutation:', position)
-                        print('Region w/ mutation:', map_mut_pos)
-                        print('Peak:', values['max'])
-                        print('Region w/ max:', map_smo_max)
-                    """
-
                     # Calculate fraction of mutations
                     mutations = (count / total_mutations) * 100
 

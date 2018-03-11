@@ -134,7 +134,7 @@ def run_plot(element, mutations, cds_d, strand, chromosome, smooth_window,
 
     mutation_array = np.zeros(length)
     for mutation in mutations:
-        index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start - ((smooth_window - 1) // 2)
+        index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
         mutation_array[index] += 1
 
     plot(element, strand, smoothing_array, mutation_array, length, raw_clusters_tree, merge_clusters_tree,

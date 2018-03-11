@@ -68,8 +68,8 @@ def map_regions_cds(regions_d):
     for element, regions in regions_d.items():
         start = 1
         for region in sorted(regions):
-            length = region.end - region.begin - 1
-            end = start + length
+            length = region.end - region.begin
+            end = start + length - 1
             cds_d[element][region.begin] = Cds(start, end)
             start = end + 1
 
@@ -106,6 +106,8 @@ def read_mutations(input_mutations, trees):
                         for res in results:
                             m = Mutation(position, (res.begin, res.end), sample)
                             mutations_d[res.data].append(m)
+
+    # TODO calculate hypermutated
 
     return mutations_d, samples_d
 
