@@ -133,9 +133,6 @@ def read_mutations(input_mutations, trees, vep_file):
                                     m = Mutation(position, (res.begin, res.end), sample)
                                     mutations_d[res.data].append(m)
 
-    for element, mutations in mutations_d.items():
-        print(len(mutations))
-
     return mutations_d, samples_d
 
 
