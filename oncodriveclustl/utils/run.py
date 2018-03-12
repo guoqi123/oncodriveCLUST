@@ -38,6 +38,7 @@ class Experiment:
         :param mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple(position, sample)
         :param samples_d: dictionary, key = sample, value = number of mutations
         :param genome: genome to use
+        :param path_pickle: path to signatures pickle
         :param element_mutations_cutoff: int, cutoff of element mutations
         :param cluster_mutations_cutoff: int, cutoff of cluster mutations
         :param smooth_window: int, smoothing window

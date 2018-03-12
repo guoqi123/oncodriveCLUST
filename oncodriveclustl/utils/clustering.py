@@ -199,7 +199,6 @@ def clusters_mut(clusters_tree, mutations_in, cluster_mutations_cutoff):
             for mut in cluster_muts:
                 sample = mut.sample
                 cluster_samples.add(sample)
-                # TODO calculate hypermutated
             if len(cluster_muts) >= cluster_mutations_cutoff:
                 clusters[cluster]['mutations'] = cluster_muts
                 clusters[cluster]['fra_uniq_samples'] = len(cluster_samples)/len(cluster_muts)

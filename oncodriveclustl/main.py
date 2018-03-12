@@ -22,6 +22,8 @@ LOGS = {
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
+@click.option('-vep', '--vep-file', default=None, required=False, type=click.Path(exists=True),
+              help='File containing somatic mutations in vep format')
 @click.option('-o', '--output-directory', default=None, required=True,
               help='Output directory')
 @click.option('-r', '--regions-file', default=None, required=True, type=click.Path(exists=True),
@@ -62,6 +64,7 @@ LOGS = {
 @click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element',)
 def main(input_file,
+         vep_file,
          output_directory,
          regions_file,
          elements_file,
@@ -85,6 +88,7 @@ def main(input_file,
          plot):
     """Oncodriveclustl is a program that looks for mutational hotspots
     :param input_file: input file
+    :param vep_file: input vep file, optional
     :param output_directory: output directory
     :param regions_file: path input genomic regions, tab file
     :param elements_file: file containing one element per row
@@ -126,21 +130,14 @@ def main(input_file,
     global logger
     logger = daiquiri.getLogger()
 
-    'input_file: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\nelements_file: {}\n'
-    'elements: {}\nelement_mutations: {}\ncluster_mutations: {}\ncds: {}\nsmooth_window: {}\n'
-    'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
-    'kmer: {}\nn_simulations: {}\n'
-    'simulation_mode: {}\nsimulation_window: {}\ncores: {}\nseed: {}\n'
-    'log_level: {}\ngzip: {}\n'
-
-    logger.info('\ninput_file: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\n'
+    logger.info('\ninput_file: {}\nvep: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\n'
                 'element_mutations: {}\ncluster_mutations: {}\ncds: {}\nsmooth_window: {}\n'
                 'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
                 'kmer: {}\nn_simulations: {}\n'
                 'simulation_mode: {}\nsimulation_window: {}\ncores: {}\n'
                 'gzip: {}'.format(
-                input_file,output_directory,regions_file,genome,
-                str(element_mutations),str(cluster_mutations), str(cds),
+                input_file, vep_file, output_directory,regions_file, genome,
+                str(element_mutations), str(cluster_mutations), str(cds),
                 str(smooth_window), str(cluster_window), cluster_score, element_score,
                 kmer, str(n_simulations), simulation_mode, str(simulation_window), str(cores),str(gzip)))
 
@@ -168,21 +165,6 @@ def main(input_file,
             logger.critical('Plots are only available for cds')
             quit()
 
-    # Parse regions and dataset mutations
-    logger.info('Parsing genomic regions and mutations...')
-    regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d = pars.parse(regions_file, elements, input_file, cds)
-    mut = 0
-    elem = 0
-    for k, v in mutations_d.items():
-        mut += len(v)
-        elem += 1
-    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
-    logger.info('Validated elements with mutations: {}'.format(elem))
-    logger.info('Total substitution mutations: {}'.format(mut))
-    if mut < element_mutations:
-        logger.critical('Not enough mutations to perform analysis')
-        quit()
-
     # Compute dataset kmer signatures
     signatures_pickle = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
     path_cache = output_directory + '/cache'
@@ -196,6 +178,22 @@ def main(input_file,
         logger.info('Signatures computed')
     else:
         logger.info('Signatures computed')
+
+    # Parse regions and dataset mutations
+    logger.info('Parsing genomic regions and mutations...')
+    regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d = pars.parse(regions_file, elements,
+                                                                                    input_file, cds, vep_file)
+    mut = 0
+    elem = 0
+    for k, v in mutations_d.items():
+        mut += len(v)
+        elem += 1
+    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
+    logger.info('Validated elements with mutations: {}'.format(elem))
+    logger.info('Total substitution mutations: {}'.format(mut))
+    if mut < element_mutations:
+        logger.critical('Not enough mutations to perform analysis')
+        quit()
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
