@@ -176,11 +176,11 @@ def merge_clusters(clusters_tree, window):
     return merged_clusters_tree
 
 
-def clusters_mut(clusters_tree, mutations, cluster_mutations_cutoff):
+def clusters_mut(clusters_tree, mutations_in, cluster_mutations_cutoff):
     """
     Get the number of mutations within a cluster, remove those below cutoff mutations
     :param clusters_tree, IntervalTree, data are dict of dict
-    :param mutations: dictionary, key = element, value = list of mutations formatted as namedtuple
+    :param mutations_in: int, len of list of mutations inside regions
     :param cluster_mutations_cutoff: int, n cluster mutations cutoff
     :return:
         filter_clusters_tree: IntervalTree, data are dict of dict
@@ -194,7 +194,7 @@ def clusters_mut(clusters_tree, mutations, cluster_mutations_cutoff):
             left = values['left_m'][1]
             right = values['right_m'][1]
             # Search mutations
-            cluster_muts = [i for i in mutations if left <= i.position <= right]
+            cluster_muts = [i for i in mutations_in if left <= i.position <= right]
             cluster_samples = set()
             for mut in cluster_muts:
                 sample = mut.sample
@@ -210,12 +210,12 @@ def clusters_mut(clusters_tree, mutations, cluster_mutations_cutoff):
     return filter_clusters_tree
 
 
-def fmutations_score(clusters_tree, regions, total_mutations):
+def fmutations_score(clusters_tree, regions, mutations_in):
     """
     Score clusters with fraction of mutations formula
     :param clusters_tree: IntervalTree, data are dict of dict
     :param regions: IntervalTree with genomic positions of an element
-    :param total_mutations: list of mutations
+    :param mutations_in: int, len of list of mutations inside regions
     :return:
             score_clusters_tree: IntervalTree, data are dict of dict
     """
@@ -249,12 +249,10 @@ def fmutations_score(clusters_tree, regions, total_mutations):
                     else:
                         distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
                     # Calculate fraction of mutations
-                    mutations = (count / total_mutations) * 100
+                    mutations = (count / mutations_in) * 100
 
                     # Calculate cluster score
                     denom = m.pow(root, distance_to_max)
-                    if denom == 0:
-                        print(root, distance_to_max)
                     score += (mutations / denom)
 
             # Update

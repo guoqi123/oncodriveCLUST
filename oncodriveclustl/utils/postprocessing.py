@@ -94,7 +94,7 @@ def write_element_results(genome, results, directory, file, gzip):
     except Exception as e:
         logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
         # Reorder columns
-        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SCORE',
+        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
                  'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER']]
 
     # Create a sorted list of elements to order the clusters file
@@ -149,7 +149,6 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                             for interval in reverse_cds_d[v['right_m'][0]]:
                                 start_r = interval.data
                                 end_r = interval.data + (interval[1]-interval[0])
-
                             if start_l != start_r:
                                 region_start = (start_l, end_l)
                                 region_end = (start_r, end_r)
@@ -203,11 +202,11 @@ def write_oncohortdrive_results(mutations, directory, file, regions_d):
             sig = 1 if float(p) < 0.05 else 0
             if set(regions_d[element][left_coord]) != set(regions_d[element][right_coord]):
                 for interval in regions_d[element][left_coord]:
-                    clusters_tree.addi(left_coord, interval[1], Cluster(sym, ensid, score, p, sig))
+                    clusters_tree.addi(left_coord, interval[1] + 1, Cluster(sym, ensid, score, p, sig))
                 for interval in regions_d[element][right_coord]:
-                    clusters_tree.addi(interval[0], right_coord, Cluster(sym, ensid, score, p, sig))
+                    clusters_tree.addi(interval[0], right_coord + 1, Cluster(sym, ensid, score, p, sig))
             else:
-                clusters_tree.addi(left_coord, right_coord, Cluster(sym, ensid, score, p, sig))
+                clusters_tree.addi(left_coord, right_coord + 1, Cluster(sym, ensid, score, p, sig))
 
     # Generate output file
     read_function, mode, delimiter = prep.check_tabular_csv(mutations)

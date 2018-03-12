@@ -15,9 +15,11 @@ def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
     :return:
         final_smooth_tree, IntervalTree. Interval are genomic regions or cds, data np.array of smoothing score
         by position.
+        mutations_in: list of mutations in regions
     """
     first_smooth_tree = IntervalTree()
     final_smooth_tree = IntervalTree()
+    mutations_in = []
 
     """
     print('---------------------------------------------------')
@@ -47,6 +49,9 @@ def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
                 tukey_begin = index - (len(tukey_filter) - 1)//2
                 # Smooth mutations
                 interval.data[tukey_begin: tukey_begin + len(tukey_filter)] += tukey_filter
+            # Get mutations inside regions
+            if mutation in regions[mutation.position]:
+                mutations_in.append(mutation)
 
         # Remove extra bp
         for interval in first_smooth_tree:
@@ -90,6 +95,7 @@ def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
                     index = (mutation.position - mutation.region[0]) + (cds_d[mutation.region[0]].start-1)
                     # Smooth mutations
                     interval.data[index: (index + len(tukey_filter))] += tukey_filter
+                mutations_in.append(mutation)
 
         # Remove extra bp
         for interval in cds_tree:
@@ -98,5 +104,4 @@ def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
             slicer = (len(tukey_filter) -1) // 2
             final_smooth_tree.addi(begin, end, interval.data[slicer: -slicer])
 
-
-    return final_smooth_tree
+    return final_smooth_tree, mutations_in
