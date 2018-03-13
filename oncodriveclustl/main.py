@@ -50,8 +50,8 @@ LOGS = {
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
-@click.option('-sim', '--simulation-mode', default='region', help='Simulation mode',
-              type=click.Choice(['region', 'cds', 'region_restricted']))
+@click.option('-sim', '--simulation-mode', default='exon', help='Simulation mode',  # TODO change exon for region
+              type=click.Choice(['exon', 'cds', 'exon_restricted']))
 @click.option('-simw', '--simulation-window', type=click.INT, default=60,
               help='Simulation window. Default is 20')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),

@@ -268,7 +268,6 @@ class Experiment:
         df = []
         half_window = (self.simulation_window - 1) // 2
 
-
         # Simulate mutations
         if self.simulation_mode == 'cds':
             probabilities = np.array([])
@@ -276,21 +275,13 @@ class Experiment:
             reverse_cds_t = IntervalTree()
 
             # Reverse cds taking into account simulation window
-            # print(self.regions_d[element].begin())
             reverse_cds_t.addi(0, half_window, self.regions_d[element].begin() - half_window)
             for genomic, cds in self.cds_d[element].items():
                 reverse_cds_t.addi(cds[0] + half_window, cds[1] + half_window + 1, genomic)  # + 1, end not included
-            # print(self.cds_d[element])
-            # print(reverse_cds_t)
 
             # Append probabilities
             for interval in sorted(probs_tree):
                 region_probabilities = interval.data.copy()
-                #print('interval', interval[0], interval[1], self.cds_d[element][interval[0]], 'expected len', interval[1] - interval[0] + half_window*2)
-                # print(len(interval.data))
-                # print(len(interval.data) - half_window * 2, interval[1] - interval[0])
-                # print(len(interval.data[half_window:-half_window]))
-                # print(len(region_probabilities))
                 if self.cds_d[element][interval[0]].start == 1:
                     left_slicer = 0
                 else:
@@ -299,10 +290,7 @@ class Experiment:
                     right_slicer = None
                 else:
                     right_slicer = -half_window
-                # print(left_slicer, right_slicer)
-                # print(len(region_probabilities[left_slicer:right_slicer]))
                 probabilities = np.append(probabilities, region_probabilities[left_slicer:right_slicer])
-            # print(element_length, element_length + half_window*2, len(probabilities))
 
             # Iterate through mutations
             for mutation in self.mutations_d[element]:
@@ -326,8 +314,30 @@ class Experiment:
 
         else:
             for mutation in self.mutations_d[element]:
+                print(mutation)
                 # Get hotspot for simulations
-                hotspot = tuple([mutation.position - half_window, mutation.position + half_window])
+                expected_hotspot_begin = mutation.position - half_window
+                expected_hotspot_end = mutation.position + half_window
+                print(expected_hotspot_begin, expected_hotspot_end)
+
+                # TODO CHECK
+                if self.simulation_mode == 'exon_restricted':
+                    if expected_hotspot_begin < mutation.region[0]:
+                        hotspot_begin = mutation.region[0]
+                        hotspot_end = hotspot_begin + self.simulation_window
+                    else:
+                        if expected_hotspot_end > (mutation.region[1] -1):
+                            hotspot_end = mutation.region[1] - 1
+                            hotspot_begin = hotspot_end - self.simulation_window
+                        else:
+                            hotspot_begin = expected_hotspot_begin
+                            hotspot_end = expected_hotspot_end
+                else:
+                    hotspot_begin = expected_hotspot_begin
+                    hotspot_end = expected_hotspot_end
+
+                # TODO CHECK slicing
+                hotspot = tuple([hotspot_begin, hotspot_end])
                 start_index = hotspot[0] - (mutation.region[0] - half_window)
                 end_index = hotspot[1] - (mutation.region[0] - half_window) + 1  # +1 because it is a slice
                 for interval in probs_tree[mutation.region[0]]:  # unique iteration
