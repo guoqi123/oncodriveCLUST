@@ -40,8 +40,8 @@ def find_locals(smooth_tree, cds_d):
             if not cds_d:
                 genomic = interval.begin + index
             else:
-                for info in reverse_cds_d[index + 1]:   # cds_d start 1
-                    genomic = info.data + (index + 1 - cds_d[info.data].start)
+                for info in reverse_cds_d[index]:
+                    genomic = info.data + index - info[0]
             indexes_info.append((local, index, genomic, score))
 
         # Add to new interval tree
@@ -74,8 +74,16 @@ def raw_clusters(index_tree):
             # Add margins
             # if maximum not in first nor last position
             if i != 0 and i != len(indexes) - 1:
-                clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2], indexes[i - 1][3])
-                clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2], indexes[i + 1][3])
+                # if no contiguous left max
+                if indexes[i - 1][0] != 1:
+                    clusters[j]['left_m'] = (indexes[i - 1][1], indexes[i - 1][2], indexes[i - 1][3])
+                else:
+                    clusters[j]['left_m'] = (maximum[1], maximum[2], maximum[3])
+                # if no contiguous right max
+                if indexes[i + 1][0] != 1:
+                    clusters[j]['right_m'] = (indexes[i + 1][1], indexes[i + 1][2], indexes[i + 1][3])
+                else:
+                    clusters[j]['right_m'] = (maximum[1], maximum[2], maximum[3])
             # if first position
             elif i == 0:
                 clusters[j]['left_m'] = (maximum[1], maximum[2], maximum[3])
@@ -126,51 +134,54 @@ def merge_clusters(clusters_tree, window):
                     maximum = clusters[x]['max']
                     left_margin = clusters[x]['left_m']
                     right_margin = clusters[x]['right_m']
-                    if right_margin != maximum:
-                        # Define the interval of search
-                        search_r = set(range(right_margin[0], right_margin[0] + window + 1))
-                        # If there is a maximum in the search region
-                        if search_r.intersection(maxs_set):
-                            # Analyze only the closest cluster
-                            intersect_cluster = maxs.index(sorted(list(search_r.intersection(maxs_set)))[0])
-                            stop = 1
-                            # When the testing max is greater than the intersected max,
-                            # expand the right border and delete intersected cluster from clusters
-                            if maximum[2] > clusters[intersect_cluster]['max'][2]:
+
+                    # Define the interval of search
+                    search_r = set(range(right_margin[0], right_margin[0] + window + 1))
+                    # If there is a maximum in the search region
+                    if search_r.intersection(maxs_set):
+                        # Analyze only the closest cluster
+                        intersect_clusters = sorted(list(search_r.intersection(maxs_set)))
+                        if maxs.index(intersect_clusters[0]) == x:
+                            intersect_cluster = maxs.index(intersect_clusters[1])
+                        else:
+                            intersect_cluster = maxs.index(intersect_clusters[0])
+                        stop = 1
+                        # When the testing max is greater than the intersected max,
+                        # expand the right border and delete intersected cluster from clusters
+                        if maximum[2] > clusters[intersect_cluster]['max'][2]:
+                            clusters[x]['right_m'] = clusters[intersect_cluster]['right_m']
+                            del clusters[intersect_cluster]
+                            maxs_set.remove(maxs[intersect_cluster])
+                        # When the testing max is smaller than the intersected max,
+                        # expand the left border of intersected max and remove the testing cluster (i)
+                        elif maximum[2] < clusters[intersect_cluster]['max'][2]:
+                            clusters[intersect_cluster]['left_m'] = left_margin
+                            del clusters[x]
+                            maxs_set.remove(maxs[x])
+                        # When the testing max is equal than the intersected max
+                        else:
+                            # If contiguous maximum's positions, choose the first maximum
+                            if maximum[0] == (clusters[intersect_cluster]['max'][0] - 1):
+                                # Expand the right border and delete intersected cluster from clusters
                                 clusters[x]['right_m'] = clusters[intersect_cluster]['right_m']
                                 del clusters[intersect_cluster]
                                 maxs_set.remove(maxs[intersect_cluster])
-                            # When the testing max is smaller than the intersected max,
-                            # expand the left border of intersected max and remove the testing cluster (i)
-                            elif maximum[2] < clusters[intersect_cluster]['max'][2]:
-                                clusters[intersect_cluster]['left_m'] = left_margin
+                            # If not contiguous positions
+                            else:
+                                # Do not merge
+                                missed_clusters[x] = clusters[x]
                                 del clusters[x]
                                 maxs_set.remove(maxs[x])
-                            # When the testing max is equal than the intersected max
-                            else:
-                                # If contiguous maximum's positions, choose the first maximum
-                                if maximum[0] == (clusters[intersect_cluster]['max'][0] - 1):
-                                    # Expand the right border and delete intersected cluster from clusters
-                                    clusters[x]['right_m'] = clusters[intersect_cluster]['right_m']
-                                    del clusters[intersect_cluster]
-                                    maxs_set.remove(maxs[intersect_cluster])
-                                # If not contiguous positions
-                                else:
-                                    # Do not merge
-                                    missed_clusters[x] = clusters[x]
-                                    del clusters[x]
-                                    maxs_set.remove(maxs[x])
-                    else:  # do not need to merge
-                        pass
             if stop == 0:
                 iterate = 0
+
         # print('--------------')
         # for k, v in clusters.items():
         #     print(k, v)
         # print('--------------')
+
         for k, v in missed_clusters.items():
             clusters[k] = v
-
         merged_clusters_tree.addi(interval[0], interval[1], clusters)
 
     return merged_clusters_tree

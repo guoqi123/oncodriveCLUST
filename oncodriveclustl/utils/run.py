@@ -151,10 +151,18 @@ class Experiment:
         """
         skip = False
         nu = 0
-        sequ = 0
         delta = 1 if self.kmer == 3 else 2
         nucleot = {'A', 'C', 'G', 'T'}
         probs_tree = IntervalTree()
+        # if self.cds_d:
+        #     simulation_window = 0
+        #     correction = 0
+        # else:
+        #     simulation_window = self.simulation_window
+        #     correction = 1
+
+        simulation_window = self.simulation_window
+        correction = 1
 
         if os.path.isfile(self.path_pickle):
             # Read signatures pickle
@@ -165,11 +173,10 @@ class Experiment:
             # Iterate through genomic regions to get their sequences
             for interval in self.regions_d[element]:
                 probabilities = []
-                start = interval[0] - (self.simulation_window // 2) - delta
-                size = interval[1] - interval[0] + (self.simulation_window - 1) + delta*2
+                start = interval[0] - (simulation_window // 2) - delta
+                size = interval[1] - interval[0] + (simulation_window - correction) + delta*2
                 # genomic start -d -sw//2, genomic end +d +sw//2
                 sequence = self.genome_build(self.chromosomes_d[element], start, size)
-                sequ += len(sequence)-2
 
                 # Search kmer probabilities
                 for n in range(delta, len(sequence)-delta):  # start to end
@@ -185,6 +192,7 @@ class Experiment:
                         prob = 0
                     # Append to probabilities
                     probabilities.append(prob)
+
                 # Normalize and add probabilities to probs_tree
                 if sum(probabilities) != 0:
                     probabilities = self.normalize(element, probabilities)
@@ -200,7 +208,7 @@ class Experiment:
                         logger.critical('All context based mutational probabilities per position in {} equal to 0\n'
                                         '{} analysis is skipped'.format(element, element))
                         skip = True
-                    if len(probabilities) != (interval[1] - interval[0] + self.simulation_window - 1):
+                    if len(probabilities) != (interval[1] - interval[0] + simulation_window - correction):
                         logger.warning('{} probabilities list length is different than expected, '
                                        'please review results'.format(element))
                         skip = True
@@ -257,13 +265,66 @@ class Experiment:
         element, probs_tree, n_sim = item
         sim_scores_chunk = []
         sim_cluster_chunk = []
+        df = []
+        half_window = (self.simulation_window - 1) // 2
 
-        if self.simulation_mode == 'hotspot':
-            # df = pd.DataFrame()
-            df = []
-            # Get half window
-            half_window = (self.simulation_window - 1) // 2
-            # Simulate mutations
+
+        # Simulate mutations
+        if self.simulation_mode == 'cds':
+            probabilities = np.array([])
+            element_length = self.length(element)
+            reverse_cds_t = IntervalTree()
+
+            # Reverse cds taking into account simulation window
+            # print(self.regions_d[element].begin())
+            reverse_cds_t.addi(0, half_window, self.regions_d[element].begin() - half_window)
+            for genomic, cds in self.cds_d[element].items():
+                reverse_cds_t.addi(cds[0] + half_window, cds[1] + half_window + 1, genomic)  # + 1, end not included
+            # print(self.cds_d[element])
+            # print(reverse_cds_t)
+
+            # Append probabilities
+            for interval in sorted(probs_tree):
+                region_probabilities = interval.data.copy()
+                #print('interval', interval[0], interval[1], self.cds_d[element][interval[0]], 'expected len', interval[1] - interval[0] + half_window*2)
+                # print(len(interval.data))
+                # print(len(interval.data) - half_window * 2, interval[1] - interval[0])
+                # print(len(interval.data[half_window:-half_window]))
+                # print(len(region_probabilities))
+                if self.cds_d[element][interval[0]].start == 1:
+                    left_slicer = 0
+                else:
+                    left_slicer = half_window
+                if self.cds_d[element][interval[0]].end == element_length:
+                    right_slicer = None
+                else:
+                    right_slicer = -half_window
+                # print(left_slicer, right_slicer)
+                # print(len(region_probabilities[left_slicer:right_slicer]))
+                probabilities = np.append(probabilities, region_probabilities[left_slicer:right_slicer])
+            # print(element_length, element_length + half_window*2, len(probabilities))
+
+            # Iterate through mutations
+            for mutation in self.mutations_d[element]:
+                # Get hotspot of indexes for simulations (index of genomic start region + (mutation - start))
+                index_hotspot_begin = self.cds_d[element][mutation.region[0]].start + mutation.position - mutation.region[0]
+                hotspot = tuple([index_hotspot_begin, index_hotspot_begin + self.simulation_window])
+                simulations_index = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=(n_sim),
+                                               p=self.normalize(element, probabilities[hotspot[0]:hotspot[1] + 1]))
+                # Add simulations
+                l = []
+                for s in simulations_index:
+                    position = (s - list(reverse_cds_t[s])[0][0]) + list(reverse_cds_t[s])[0][2]
+                    l.append(Mutation(position, mutation.region, mutation.sample))
+                df.append(l)
+
+            # Start analysis
+            for simulated_mutations in zip(*df):
+                cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
+                sim_scores_chunk.append(element_score)
+                sim_cluster_chunk.append(cutoff_clusters)
+
+        else:
             for mutation in self.mutations_d[element]:
                 # Get hotspot for simulations
                 hotspot = tuple([mutation.position - half_window, mutation.position + half_window])
@@ -271,7 +332,7 @@ class Experiment:
                 end_index = hotspot[1] - (mutation.region[0] - half_window) + 1  # +1 because it is a slice
                 for interval in probs_tree[mutation.region[0]]:  # unique iteration
                     simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=(n_sim),
-                                                p=self.normalize(element, interval.data[start_index:end_index]))
+                                                   p=self.normalize(element, interval.data[start_index:end_index]))
                     # Add simulations
                     l = []
                     for s in simulations:
@@ -297,6 +358,16 @@ class Experiment:
         """
         # TODO: pseudocount
         return (len([x for x in simulations if x >= observed]) + 1) / len(simulations)
+
+    def length(self, element):
+        """Calculate length of an element (sum of input regions)
+        :param element: element to analyze
+        :return length: int, length of an element
+        """
+        length_ele = 0
+        for interval in self.regions_d[element]:
+            length_ele += (interval[1] - interval[0])
+        return length_ele
 
     def post_process(self, item):
         """
@@ -371,9 +442,8 @@ class Experiment:
         cgc = element.split('_')[0] in self.cgc_genes
 
         # Calculate length
-        element_length = 0
-        for interval in self.regions_d[element]:
-            element_length += (interval[1] - interval[0])
+        element_length = self.length(element)
+
 
         return element, \
             (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),
@@ -474,7 +544,7 @@ class Experiment:
                     sim_scores_list[element] += sim_scores_chunk
                     sim_clusters_list[element] += sim_cluster_chunk
 
-
+                    # TODO increase simulations for elements without simulated clusters
 
                 # Add information of elements without clusters
                 for element in nocluster_elements:

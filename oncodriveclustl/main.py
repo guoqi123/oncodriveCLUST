@@ -50,8 +50,8 @@ LOGS = {
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
-@click.option('-sim', '--simulation-mode', default='hotspot', help='Simulation mode',
-              type=click.Choice(['hotspot']))
+@click.option('-sim', '--simulation-mode', default='region', help='Simulation mode',
+              type=click.Choice(['region', 'cds', 'region_restricted']))
 @click.option('-simw', '--simulation-window', type=click.INT, default=60,
               help='Simulation window. Default is 20')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
@@ -142,6 +142,11 @@ def main(input_file,
                 kmer, str(n_simulations), simulation_mode, str(simulation_window), str(cores),str(gzip)))
 
     logger.info('Initializing OncodriveCLUSTL...')
+
+    # Check simulation parameters
+    if simulation_mode == 'cds' and cds is False:
+        logger.error('Simulation mode "-sim {}" requires analysis mode "--cds"'.format(simulation_mode))
+        quit()
 
     # Create a list of elements to analyze
     if elements is not None:

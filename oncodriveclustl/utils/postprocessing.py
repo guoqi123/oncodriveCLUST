@@ -66,6 +66,8 @@ def write_element_results(genome, results, directory, file, gzip):
             'P_EMPIRICAL':epval, 'P_ANALYTICAL':apval, 'P_TOPCLUSTER':topcpval,'CGC':cgc})
         i += 1
 
+    #print(df)
+
     try:
         # Makes sure the data are float
         df['P_ANALYTICAL'] = df['P_ANALYTICAL'].astype(float)
@@ -87,7 +89,7 @@ def write_element_results(genome, results, directory, file, gzip):
         df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
                  'P_EMPIRICAL', 'Q_EMPIRICAL','P_ANALYTICAL', 'Q_ANALYTICAL','P_TOPCLUSTER', 'Q_TOPCLUSTER']]
 
-        # Sort by analytical p-value
+        # Sort by analytical q-value
         df.sort_values(by=['Q_ANALYTICAL', 'P_ANALYTICAL', 'SCORE', 'CGC'],
                        ascending=[True, True, False, False], inplace=True)
 
@@ -145,10 +147,10 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                         if cds_d:
                             for interval in reverse_cds_d[v['left_m'][0]]:
                                 start_l = interval.data
-                                end_l = interval.data + (interval[1]-interval[0])
+                                end_l = interval.data + (interval[1] - interval[0])
                             for interval in reverse_cds_d[v['right_m'][0]]:
                                 start_r = interval.data
-                                end_r = interval.data + (interval[1]-interval[0])
+                                end_r = interval.data + (interval[1] - interval[0])
                             if start_l != start_r:
                                 region_start = (start_l, end_l)
                                 region_end = (start_r, end_r)

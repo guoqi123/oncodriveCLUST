@@ -60,13 +60,13 @@ def map_regions_cds(regions_d):
     Calculate cds position of every region relative to genomic element start
     :param regions_d: dictionary of IntervalTrees with genomic regions for elements
     :return:
-            cds_d: dictionary of dictionaries with relative cds position of genomic regions
+            cds_d: dictionary of dictionaries with relative cds index of genomic regions
     """
     global Cds
     cds_d = defaultdict(dict)
 
     for element, regions in regions_d.items():
-        start = 1
+        start = 0
         for region in sorted(regions):
             length = region.end - region.begin
             end = start + length - 1
