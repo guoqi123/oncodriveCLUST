@@ -194,8 +194,8 @@ class Experiment:
                     probabilities.append(prob)
 
                 # Normalize and add probabilities to probs_tree
-                if sum(probabilities) != 0:
-                    probabilities = self.normalize(element, probabilities)
+                # if sum(probabilities) != 0:
+                #    probabilities = self.normalize(element, probabilities)
                 probs_tree.addi(interval[0], interval[1], probabilities)
 
             # Check probabilities
@@ -314,11 +314,9 @@ class Experiment:
 
         else:
             for mutation in self.mutations_d[element]:
-                print(mutation)
                 # Get hotspot for simulations
                 expected_hotspot_begin = mutation.position - half_window
                 expected_hotspot_end = mutation.position + half_window
-                print(expected_hotspot_begin, expected_hotspot_end)
 
                 # TODO CHECK
                 if self.simulation_mode == 'exon_restricted':

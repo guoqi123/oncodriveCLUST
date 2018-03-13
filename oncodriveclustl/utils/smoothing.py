@@ -92,7 +92,7 @@ def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
             if first_smooth_tree[mutation.position]:
                 for interval in cds_tree[mutation.position]:
                     # Get index of mutation in cds
-                    index = (mutation.position - mutation.region[0]) + (cds_d[mutation.region[0]].start)
+                    index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
                     # Smooth mutations
                     interval.data[index: (index + len(tukey_filter))] += tukey_filter
                 mutations_in.append(mutation)

@@ -130,7 +130,7 @@ def merge_clusters(clusters_tree, window):
 
                 # When x is a key in clusters
                 if x in clusters.keys():
-                    # print('iterate with cluster', x)
+                    #print('iterate with cluster', x)
                     maximum = clusters[x]['max']
                     left_margin = clusters[x]['left_m']
                     right_margin = clusters[x]['right_m']
@@ -142,7 +142,10 @@ def merge_clusters(clusters_tree, window):
                         # Analyze only the closest cluster
                         intersect_clusters = sorted(list(search_r.intersection(maxs_set)))
                         if maxs.index(intersect_clusters[0]) == x:
-                            intersect_cluster = maxs.index(intersect_clusters[1])
+                            if len(intersect_clusters) > 1:
+                                intersect_cluster = maxs.index(intersect_clusters[1])
+                            else:
+                                intersect_cluster = maxs.index(intersect_clusters[0])
                         else:
                             intersect_cluster = maxs.index(intersect_clusters[0])
                         stop = 1
