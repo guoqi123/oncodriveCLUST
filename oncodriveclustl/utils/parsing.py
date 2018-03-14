@@ -52,6 +52,25 @@ def read_regions(input_regions, elements):
     if len(elements) == 1 and len(regions_d) != 1:
         logger.warning('{} has more than one Ensembl id'.format(elements))
 
+
+    # Check regions
+    # set_30 = set()
+    # set_10 = set()
+    # for k, v in regions_d.items():
+    #     for interval in v:
+    #         if (list(interval)[1] - list(interval)[0]) <= 30:
+    #             set_30.add(k)
+    #         if (list(interval)[1] - list(interval)[0]) <= 10:
+    #             set_10.add(k)
+    #
+    # for element in set_30:
+    #     print(element)
+    # print(len(set_30))
+    # for element in set_10:
+    #     print(element)
+    # print('<= 30: ', len(set_30))
+    # print('<= 10: ', len(set_10))
+
     return regions_d, chromosomes_d, strands_d, trees
 
 

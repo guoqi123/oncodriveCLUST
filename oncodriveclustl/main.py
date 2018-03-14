@@ -63,6 +63,7 @@ LOGS = {
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
 @click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element',)
+@click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive',)
 def main(input_file,
          vep_file,
          output_directory,
@@ -85,7 +86,8 @@ def main(input_file,
          log_level,
          gzip,
          cds,
-         plot):
+         plot,
+         oncohort):
     """Oncodriveclustl is a program that looks for mutational hotspots
     :param input_file: input file
     :param vep_file: input vep file, optional
@@ -110,6 +112,7 @@ def main(input_file,
     :param gzip: bool, True generates gzip compressed output file
     :param cds: bool, True calculates clustering on cds
     :param plot: bool, True generates a clustering plot for an element
+    :param oncohort: bool, True generates output file for OncohortDrive
     :return: None
     """
 
@@ -135,11 +138,12 @@ def main(input_file,
                 'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
                 'kmer: {}\nn_simulations: {}\n'
                 'simulation_mode: {}\nsimulation_window: {}\ncores: {}\n'
-                'gzip: {}'.format(
+                'gzip: {}\noncohort: {}'.format(
                 input_file, vep_file, output_directory,regions_file, genome,
                 str(element_mutations), str(cluster_mutations), str(cds),
                 str(smooth_window), str(cluster_window), cluster_score, element_score,
-                kmer, str(n_simulations), simulation_mode, str(simulation_window), str(cores),str(gzip)))
+                kmer, str(n_simulations), simulation_mode, str(simulation_window), str(cores),str(gzip),
+                str(oncohort)))
 
     logger.info('Initializing OncodriveCLUSTL...')
 
@@ -218,9 +222,10 @@ def main(input_file,
     postp.write_cluster_results(genome=genome, results=clusters_results, directory=output_directory, file=output_file,
                                 sorter=sorted_list_elements, gzip=gzip, cds_d=cds_d)
     logger.info('Clusters results calculated')
-    postp.write_oncohortdrive_results(mutations=input_file, directory=output_directory, file=output_file,
-                                      regions_d=regions_d)
-    logger.info('Oncohortdrive file generated')
+    if oncohort:
+        postp.write_oncohortdrive_results(mutations=input_file, directory=output_directory, file=output_file,
+                                          regions_d=regions_d)
+        logger.info('Oncohortdrive file generated')
     logger.info('Finished')
 
 if __name__ == '__main__':

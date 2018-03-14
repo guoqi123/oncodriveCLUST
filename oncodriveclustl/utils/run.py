@@ -312,6 +312,7 @@ class Experiment:
                 sim_scores_chunk.append(element_score)
                 sim_cluster_chunk.append(cutoff_clusters)
 
+
         else:
             for mutation in self.mutations_d[element]:
                 # Get hotspot for simulations
@@ -320,21 +321,26 @@ class Experiment:
 
                 # TODO CHECK
                 if self.simulation_mode == 'exon_restricted':
-                    if expected_hotspot_begin < mutation.region[0]:
+                    # Check if hospot outside region
+                    check_5 = expected_hotspot_begin < mutation.region[0]
+                    check_3 = expected_hotspot_end > (mutation.region[1] - 1)
+
+                    if check_5 and check_3:
                         hotspot_begin = mutation.region[0]
-                        hotspot_end = hotspot_begin + self.simulation_window
+                        hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
+                    elif check_5:
+                        hotspot_begin = mutation.region[0]
+                        hotspot_end = mutation.region[0] + self.simulation_window - 1  # window //2 per side
+                    elif check_3:
+                        hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
+                        hotspot_begin = hotspot_end - self.simulation_window + 1  # window //2 per side
                     else:
-                        if expected_hotspot_end > (mutation.region[1] -1):
-                            hotspot_end = mutation.region[1] - 1
-                            hotspot_begin = hotspot_end - self.simulation_window
-                        else:
-                            hotspot_begin = expected_hotspot_begin
-                            hotspot_end = expected_hotspot_end
+                        hotspot_begin = expected_hotspot_begin
+                        hotspot_end = expected_hotspot_end
                 else:
                     hotspot_begin = expected_hotspot_begin
                     hotspot_end = expected_hotspot_end
 
-                # TODO CHECK slicing
                 hotspot = tuple([hotspot_begin, hotspot_end])
                 start_index = hotspot[0] - (mutation.region[0] - half_window)
                 end_index = hotspot[1] - (mutation.region[0] - half_window) + 1  # +1 because it is a slice
