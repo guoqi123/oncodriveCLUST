@@ -66,8 +66,6 @@ def write_element_results(genome, results, directory, file, gzip):
             'P_EMPIRICAL':epval, 'P_ANALYTICAL':apval, 'P_TOPCLUSTER':topcpval,'CGC':cgc})
         i += 1
 
-    #print(df)
-
     try:
         # Makes sure the data are float
         df['P_ANALYTICAL'] = df['P_ANALYTICAL'].astype(float)
@@ -95,9 +93,12 @@ def write_element_results(genome, results, directory, file, gzip):
 
     except Exception as e:
         logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
+        df['Q_EMPIRICAL'] = np.nan
+        df['Q_ANALYTICAL'] = np.nan
+        df['Q_TOPCLUSTER'] = np.nan
         # Reorder columns
         df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
-                 'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER']]
+                 'P_EMPIRICAL', 'Q_EMPIRICAL', 'P_ANALYTICAL', 'Q_ANALYTICAL', 'P_TOPCLUSTER', 'Q_TOPCLUSTER']]
 
     # Create a sorted list of elements to order the clusters file
     sorted_list_elements = df['SYMBOL'].tolist()
