@@ -470,6 +470,8 @@ class Experiment:
                 (obs_clusters, self.chromosomes_d[element], self.strands_d[element], cgc)
             ))
 
+        return results
+
     def run(self):
         """
         Analyze elements
