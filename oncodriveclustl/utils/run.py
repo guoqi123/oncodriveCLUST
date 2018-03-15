@@ -9,7 +9,6 @@ from intervaltree import IntervalTree
 from collections import namedtuple
 from tqdm import tqdm
 import numpy as np
-import pandas as pd
 
 from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
@@ -457,7 +456,6 @@ class Experiment:
 
         # Calculate length
         element_length = self.length(element)
-
 
         return element, \
             (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),

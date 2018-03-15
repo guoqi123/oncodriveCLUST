@@ -113,8 +113,8 @@ def merge_clusters(clusters_tree, window):
     for interval in clusters_tree:
         clusters = interval.data.copy()
         n_clusters = len(clusters.keys())
-        # for k, v in clusters.items():
-        #    print(k, v)
+        #         for k, v in clusters.items():
+        #            print(k, v)
 
         # Get the maximums to iterate
         maxs = []
@@ -127,10 +127,9 @@ def merge_clusters(clusters_tree, window):
         while iterate != 0:  # Iterate until no clusters updates occur
             stop = 0
             for x in range(n_clusters):
-
                 # When x is a key in clusters
                 if x in clusters.keys():
-                    #print('iterate with cluster', x)
+                    # print('iterate with cluster', x)
                     maximum = clusters[x]['max']
                     left_margin = clusters[x]['left_m']
                     right_margin = clusters[x]['right_m']
@@ -170,14 +169,17 @@ def merge_clusters(clusters_tree, window):
                                 del clusters[intersect_cluster]
                                 maxs_set.remove(maxs[intersect_cluster])
                             # If not contiguous positions
-                            else:
+                            elif maximum[0] < (clusters[intersect_cluster]['max'][0]):
                                 # Do not merge
                                 missed_clusters[x] = clusters[x]
                                 del clusters[x]
                                 maxs_set.remove(maxs[x])
+                            # If same cluster
+                            else:
+                                # Don't iterate again
+                                maxs_set.remove(maxs[x])
             if stop == 0:
                 iterate = 0
-
         # print('--------------')
         # for k, v in clusters.items():
         #     print(k, v)
@@ -186,6 +188,7 @@ def merge_clusters(clusters_tree, window):
         for k, v in missed_clusters.items():
             clusters[k] = v
         merged_clusters_tree.addi(interval[0], interval[1], clusters)
+        missed_clusters = defaultdict(dict)
 
     return merged_clusters_tree
 

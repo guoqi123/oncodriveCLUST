@@ -10,7 +10,7 @@ from sklearn.model_selection import GridSearchCV
 class AnalyticalPvalue:
     """Class to calculate the analytical pvalue of elements"""
 
-    def __init__(self, jobs=1):
+    def __init__(self, jobs=4):
         """Initialize the AnalyticalPvalue class
         :param jobs: int, cores to use in the computation
         """
