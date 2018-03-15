@@ -577,9 +577,9 @@ class Experiment:
                                         sim_scores_list[e]) for e in simulated_elements + nocluster_elements]
                 post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan')) for
                                  e in noprobabilities_elements + belowcutoff_elements]
-                total_items = post_item_simulated + post_item_nan
 
-                total_items_split = chunkizator(total_items, int(math.ceil(len(total_items) / self.cores)))
+                total_items_split = list(chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / (self.cores-1)))))
+                total_items_split.append(post_item_nan)
                 for results in tqdm(executor.map(self.post_process, total_items_split), total=self.cores,
                                       desc="post processing".rjust(30)):
                     for e, er, cr in results:
