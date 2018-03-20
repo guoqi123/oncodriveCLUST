@@ -218,6 +218,7 @@ def clusters_mut(clusters_tree, mutations_in, cluster_mutations_cutoff):
                 cluster_samples.add(sample)
             if len(cluster_muts) >= cluster_mutations_cutoff:
                 clusters[cluster]['mutations'] = cluster_muts
+                clusters[cluster]['samples'] = cluster_samples
                 clusters[cluster]['fra_uniq_samples'] = len(cluster_samples)/len(cluster_muts)
             else:
                 del clusters[cluster]

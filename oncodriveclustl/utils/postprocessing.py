@@ -129,7 +129,7 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
     output_file = directory + '/clusters_' + file + '.tsv'
     header = ['RANK', 'SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'REGION',
               '5_COORD', 'MAX_COORD', '3_COORD',
-              'WIDTH', 'N_MUT', 'SCORE', 'P']
+              'WIDTH', 'N_MUT', 'N_SAMPLES', 'FRA_UNIQ_SAMPLES', 'SCORE', 'P']
 
     with open(output_file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
@@ -162,10 +162,10 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                             region_start = interval[0]
                             region_end = interval[1]
 
-                        fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                        fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
                             rank, sym, id, cgc, chr, strand, region_start, region_end,
                             v['left_m'][1], v['max'][1], v['right_m'][1], abs(v['right_m'][0] - v['left_m'][0] + 1),
-                            len(v['mutations']), v['score'], v['p']))
+                            len(v['mutations']), len(v['samples']), v['fra_uniq_samples'], v['score'], v['p']))
 
     # Sort
     # TODO change to avoid writing not compressed file
