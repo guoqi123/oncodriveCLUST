@@ -197,7 +197,7 @@ def clusters_mut(clusters_tree, mutations_in, cluster_mutations_cutoff):
     """
     Get the number of mutations within a cluster, remove those below cutoff mutations
     :param clusters_tree, IntervalTree, data are dict of dict
-    :param mutations_in: int, len of list of mutations inside regions
+    :param mutations_in: list of mutations in regions
     :param cluster_mutations_cutoff: int, n cluster mutations cutoff
     :return:
         filter_clusters_tree: IntervalTree, data are dict of dict

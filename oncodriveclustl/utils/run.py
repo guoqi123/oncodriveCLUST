@@ -19,7 +19,7 @@ from oncodriveclustl.utils import plots as plot
 
 # Logger
 logger = daiquiri.getLogger()
-Mutation = namedtuple('Mutation', 'position, region, sample')
+Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample')
 
 
 
@@ -29,7 +29,7 @@ class Experiment:
     def __init__(self, regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome, path_pickle,
                  element_mutations_cutoff, cluster_mutations_cutoff, smooth_window, cluster_window,
                  cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores, seed,
-                 plot):
+                 conseq, plot):
         """Initialize the Experiment class
         :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
         :param cds_d: dictionary of dictionaries with relative cds position of genomic regions if cds is True
@@ -51,6 +51,7 @@ class Experiment:
         :param simulation_window: int, window to simulate mutations in hotspot mode
         :param cores: int, number of CPUs to use
         :param seed: int, seed
+        :param conseq: True, use aa consequence type
         :param plot: bool, True generates a clustering plot for an element
         :return: None
         """
@@ -90,6 +91,13 @@ class Experiment:
         else:
             self.cgc_genes = set()
 
+        if conseq:
+            # TODO Remove this hardcoded file
+            self.coding_consequence = pickle.load(open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', "rb"))
+        else:
+            self.coding_consequence = {}
+
+
     @staticmethod
     def tukey(window):
         """Tukey smoothing function generates tukey_filter for smoothing
@@ -101,6 +109,7 @@ class Experiment:
         filter_ = tukey(np.arange(-half_window, half_window + 1) / (half_window + 1))
         filter_ = filter_ / sum(filter_)
         return filter_
+
 
     @staticmethod
     def load_genome(genome):
@@ -135,7 +144,7 @@ class Experiment:
             prob_factor = 1 / sum(probs)
             return [prob_factor * p for p in probs]
 
-        # TODO check what happens here
+        # TODO check
         except ZeroDivisionError as e:
             logger.error('{}. No mutational probabilities derived from signatures in element {}'.format(e, element))
             return False
@@ -154,12 +163,6 @@ class Experiment:
         delta = 1 if self.kmer == 3 else 2
         nucleot = {'A', 'C', 'G', 'T'}
         probs_tree = IntervalTree()
-        # if self.cds_d:
-        #     simulation_window = 0
-        #     correction = 0
-        # else:
-        #     simulation_window = self.simulation_window
-        #     correction = 1
 
         simulation_window = self.simulation_window
         correction = 1
@@ -194,8 +197,6 @@ class Experiment:
                     probabilities.append(prob)
 
                 # Normalize and add probabilities to probs_tree
-                # if sum(probabilities) != 0:
-                #    probabilities = self.normalize(element, probabilities)
                 probs_tree.addi(interval[0], interval[1], probabilities)
 
             # Check probabilities
@@ -221,7 +222,6 @@ class Experiment:
 
     def analysis(self, element, mutations, analysis_mode='sim'):
         """
-        # TODO
         Calculate smoothing, clustering and element score for observed or simulated mutations
         :param element: element of analysis.
         :param mutations: list, list of mutations of an element
@@ -254,7 +254,6 @@ class Experiment:
 
     def simulate_and_analysis(self, item):
         """
-        # TODO
         Simulate mutations and analyze simulations
         :param item: tuple, element of analysis data
         :return:
@@ -263,101 +262,86 @@ class Experiment:
             sim_cluster_chunk: list, simulated cluster's results
         """
         element, probs_tree, n_sim = item
+        id = element.split('_')[1]
         sim_scores_chunk = []
         sim_cluster_chunk = []
         df = []
         half_window = (self.simulation_window - 1) // 2
 
+        delta = 1 if self.kmer == 3 else 2
+        nucleot = {'A', 'C', 'G', 'T'}
+        signatures = pickle.load(open(self.path_pickle, "rb"))
+        signatures = signatures['probabilities']
+
         # Simulate mutations
-        if self.simulation_mode == 'cds':
-            probabilities = np.array([])
-            element_length = self.length(element)
-            reverse_cds_t = IntervalTree()
+        for mutation in self.mutations_d[element]:
+            # Get hotspot for simulations
+            expected_hotspot_begin = mutation.position - half_window
+            expected_hotspot_end = mutation.position + half_window
 
-            # Reverse cds taking into account simulation window
-            reverse_cds_t.addi(0, half_window, self.regions_d[element].begin() - half_window)
-            for genomic, cds in self.cds_d[element].items():
-                reverse_cds_t.addi(cds[0] + half_window, cds[1] + half_window + 1, genomic)  # + 1, end not included
+            if self.simulation_mode == 'exon_restricted':
+                # Check if hospot outside region
+                check_5 = expected_hotspot_begin < mutation.region[0]
+                check_3 = expected_hotspot_end > (mutation.region[1] - 1)
 
-            # Append probabilities
-            for interval in sorted(probs_tree):
-                region_probabilities = interval.data.copy()
-                if self.cds_d[element][interval[0]].start == 1:
-                    left_slicer = 0
-                else:
-                    left_slicer = half_window
-                if self.cds_d[element][interval[0]].end == element_length:
-                    right_slicer = None
-                else:
-                    right_slicer = -half_window
-                probabilities = np.append(probabilities, region_probabilities[left_slicer:right_slicer])
-
-            # Iterate through mutations
-            for mutation in self.mutations_d[element]:
-                # Get hotspot of indexes for simulations (index of genomic start region + (mutation - start))
-                index_hotspot_begin = self.cds_d[element][mutation.region[0]].start + mutation.position - mutation.region[0]
-                hotspot = tuple([index_hotspot_begin, index_hotspot_begin + self.simulation_window])
-                simulations_index = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=(n_sim),
-                                               p=self.normalize(element, probabilities[hotspot[0]:hotspot[1] + 1]))
-                # Add simulations
-                l = []
-                for s in simulations_index:
-                    position = (s - list(reverse_cds_t[s])[0][0]) + list(reverse_cds_t[s])[0][2]
-                    l.append(Mutation(position, mutation.region, mutation.sample))
-                df.append(l)
-
-            # Start analysis
-            for simulated_mutations in zip(*df):
-                cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
-                sim_scores_chunk.append(element_score)
-                sim_cluster_chunk.append(cutoff_clusters)
-
-
-        else:
-            for mutation in self.mutations_d[element]:
-                # Get hotspot for simulations
-                expected_hotspot_begin = mutation.position - half_window
-                expected_hotspot_end = mutation.position + half_window
-
-                # TODO CHECK
-                if self.simulation_mode == 'exon_restricted':
-                    # Check if hospot outside region
-                    check_5 = expected_hotspot_begin < mutation.region[0]
-                    check_3 = expected_hotspot_end > (mutation.region[1] - 1)
-
-                    if check_5 and check_3:
-                        hotspot_begin = mutation.region[0]
-                        hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
-                    elif check_5:
-                        hotspot_begin = mutation.region[0]
-                        hotspot_end = mutation.region[0] + self.simulation_window - 1  # window //2 per side
-                    elif check_3:
-                        hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
-                        hotspot_begin = hotspot_end - self.simulation_window + 1  # window //2 per side
-                    else:
-                        hotspot_begin = expected_hotspot_begin
-                        hotspot_end = expected_hotspot_end
+                if check_5 and check_3:
+                    hotspot_begin = mutation.region[0]
+                    hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
+                elif check_5:
+                    hotspot_begin = mutation.region[0]
+                    hotspot_end = mutation.region[0] + self.simulation_window - 1  # window //2 per side
+                elif check_3:
+                    hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
+                    hotspot_begin = hotspot_end - self.simulation_window + 1  # window //2 per side
                 else:
                     hotspot_begin = expected_hotspot_begin
                     hotspot_end = expected_hotspot_end
+            else:
+                hotspot_begin = expected_hotspot_begin
+                hotspot_end = expected_hotspot_end
 
-                hotspot = tuple([hotspot_begin, hotspot_end])
-                start_index = hotspot[0] - (mutation.region[0] - half_window)
-                end_index = hotspot[1] - (mutation.region[0] - half_window) + 1  # +1 because it is a slice
-                for interval in probs_tree[mutation.region[0]]:  # unique iteration
-                    simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=(n_sim),
-                                                   p=self.normalize(element, interval.data[start_index:end_index]))
-                    # Add simulations
-                    l = []
-                    for s in simulations:
-                        l.append(Mutation(s, mutation.region, mutation.sample))
+            hotspot = tuple([hotspot_begin, hotspot_end])
+            start_index = hotspot[0] - (mutation.region[0] - half_window)
+            end_index = hotspot[1] - (mutation.region[0] - half_window) + 1  # +1 because it is a slice
+            for interval in probs_tree[mutation.region[0]]:  # unique iteration
+                simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=n_sim,
+                                               p=self.normalize(element, interval.data[start_index:end_index]))
+                # Get alternates for simulated mutations
+                probs_alternates = []
+                changes = []
+                start = mutation.position - delta
+                size = delta * 2 + 1
+                ref_kmer = self.genome_build(self.chromosomes_d[element], start, size)
+                for alt in nucleot.difference({ref_kmer[delta]}):  # mutational prob to any other kmer
+                    alt_kmer = ref_kmer[: self.kmer // 2] + alt + ref_kmer[self.kmer // 2 + 1:]
+                    probs_alternates.append(signatures[(ref_kmer, alt_kmer)])
+                    changes.append(alt)
+                alternates = np.random.choice(changes, size=n_sim, p=self.normalize(element, probs_alternates))
+
+                # TODO improve
+                # Add simulations
+                l = []
+                if self.coding_consequence:
+                    for count, pos in enumerate(simulations):
+                        alternate = alternates[count]
+                        id_alt = id + '_' + alternate
+                        if id_alt in self.coding_consequence.keys():
+                            muttype = 0 if pos not in self.coding_consequence[id_alt] else 1
+                        else:
+                            muttype = 1
+                        l.append(Mutation(pos, mutation.region, alternates[count], muttype, mutation.sample))
+                    df.append(l)
+                else:
+                    muttype = 1
+                    for count, pos in enumerate(simulations):
+                        l.append(Mutation(pos, mutation.region, alternates[count], muttype, mutation.sample))
                     df.append(l)
 
-            # Start analysis
-            for simulated_mutations in zip(*df):
-                cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
-                sim_scores_chunk.append(element_score)
-                sim_cluster_chunk.append(cutoff_clusters)
+        # Start analysis
+        for simulated_mutations in zip(*df):
+            cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
+            sim_scores_chunk.append(element_score)
+            sim_cluster_chunk.append(cutoff_clusters)
 
         return element, sim_scores_chunk, sim_cluster_chunk
 
@@ -452,7 +436,11 @@ class Experiment:
                     empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
             else:
                 n_clusters = n_clusters_sim = obs_score = float('nan')
-                empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
+
+                if len(self.mutations_d[element]) == 1:
+                    empirical_pvalue = analytical_pvalue = top_cluster_pvalue = 1
+                else:
+                    empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
             # Get GCG boolean
             cgc = element.split('_')[0] in self.cgc_genes

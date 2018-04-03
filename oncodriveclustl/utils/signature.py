@@ -8,6 +8,7 @@ import daiquiri
 from tqdm import tqdm
 
 from oncodriveclustl.utils import preprocessing as prep
+logger = daiquiri.getLogger()
 
 
 class Parser:
@@ -118,11 +119,6 @@ class Signature:
                 position = int(line[parser.POSITION])
                 ref = line[parser.REF]
                 alt = line[parser.ALT]
-                # mutation_type = line[parser.TYPE]
-
-                # if mutation_type != 'subs':
-                #     continue
-
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
                     if ref != '-' and alt != '-':

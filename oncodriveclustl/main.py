@@ -62,6 +62,7 @@ LOGS = {
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
 @click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
+@click.option('--conseq', is_flag=True, help='Use mutations consequence type (CODING)',)
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element',)
 @click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive',)
 def main(input_file,
@@ -86,6 +87,7 @@ def main(input_file,
          log_level,
          gzip,
          cds,
+         conseq,
          plot,
          oncohort):
     """Oncodriveclustl is a program that looks for mutational hotspots
@@ -111,6 +113,7 @@ def main(input_file,
     :param log_level: verbosity of the logger
     :param gzip: bool, True generates gzip compressed output file
     :param cds: bool, True calculates clustering on cds
+    :param conseq: bool, True uses consequence type for cds
     :param plot: bool, True generates a clustering plot for an element
     :param oncohort: bool, True generates output file for OncohortDrive
     :return: None
@@ -138,18 +141,19 @@ def main(input_file,
                 'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
                 'kmer: {}\nn_simulations: {}\n'
                 'simulation_mode: {}\nsimulation_window: {}\ncores: {}\n'
-                'gzip: {}\noncohort: {}'.format(
+                'gzip: {}\noncohort: {}\n'
+                'tabix: {}'.format(
                 input_file, vep_file, output_directory,regions_file, genome,
                 str(element_mutations), str(cluster_mutations), str(cds),
                 str(smooth_window), str(cluster_window), cluster_score, element_score,
                 kmer, str(n_simulations), simulation_mode, str(simulation_window), str(cores),str(gzip),
-                str(oncohort)))
+                str(oncohort), str(conseq)))
 
     logger.info('Initializing OncodriveCLUSTL...')
 
-    # Check simulation parameters
-    if simulation_mode == 'cds' and cds is False:
-        logger.error('Simulation mode "-sim {}" requires analysis mode "--cds"'.format(simulation_mode))
+    # Check parameters
+    if conseq and cds is False:
+        logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))
         quit()
 
     # Create a list of elements to analyze
@@ -191,7 +195,7 @@ def main(input_file,
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
     regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d = pars.parse(regions_file, elements,
-                                                                                    input_file, cds, vep_file)
+                                                                                    input_file, cds, vep_file, conseq)
     mut = 0
     elem = 0
     for k, v in mutations_d.items():
@@ -213,7 +217,7 @@ def main(input_file,
                                 cluster_score, element_score,
                                 int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
-                                cores, seed, plot
+                                cores, seed, conseq, plot
                                 ).run()
     # Write results
     sorted_list_elements = postp.write_element_results(genome=genome, results=elements_results,

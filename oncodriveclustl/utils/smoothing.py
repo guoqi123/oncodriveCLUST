@@ -63,13 +63,15 @@ def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
     else:
         # Smooth simulated mutations outside regions
         for mutation in mutations:
-            if not first_smooth_tree[mutation.position]:
-                for interval in first_smooth_tree[mutation.region[0]]:
-                    new_begin = interval.begin - (simulation_window + len(tukey_filter) - 2) // 2  # always integer
-                    index = mutation.position - new_begin
-                    tukey_begin = index - (len(tukey_filter) - 1) // 2
-                    # Smooth mutations
-                    interval.data[tukey_begin: tukey_begin + len(tukey_filter)] += tukey_filter
+            # TODO TABIX change
+            if mutation.muttype == 1:
+                if not first_smooth_tree[mutation.position]:
+                    for interval in first_smooth_tree[mutation.region[0]]:
+                        new_begin = interval.begin - (simulation_window + len(tukey_filter) - 2) // 2  # always integer
+                        index = mutation.position - new_begin
+                        tukey_begin = index - (len(tukey_filter) - 1) // 2
+                        # Smooth mutations
+                        interval.data[tukey_begin: tukey_begin + len(tukey_filter)] += tukey_filter
 
         # Remove extra bp
         for interval in first_smooth_tree:
@@ -89,13 +91,15 @@ def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
 
         # Smooth mutations inside regions
         for mutation in mutations:
-            if first_smooth_tree[mutation.position]:
-                for interval in cds_tree[mutation.position]:
-                    # Get index of mutation in cds
-                    index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
-                    # Smooth mutations
-                    interval.data[index: (index + len(tukey_filter))] += tukey_filter
-                mutations_in.append(mutation)
+            # TODO TABIX change
+            if mutation.muttype == 1:
+                if first_smooth_tree[mutation.position]:
+                    for interval in cds_tree[mutation.position]:
+                        # Get index of mutation in cds
+                        index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
+                        # Smooth mutations
+                        interval.data[index: (index + len(tukey_filter))] += tukey_filter
+                    mutations_in.append(mutation)
 
         # Remove extra bp
         for interval in cds_tree:

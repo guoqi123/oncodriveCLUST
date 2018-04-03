@@ -1,17 +1,23 @@
 # Import modules
+import os
 import gzip
 import csv
 import daiquiri
+import pickle
 
 from collections import defaultdict
 from collections import namedtuple
 from intervaltree import IntervalTree
+import numpy as np
 
 from oncodriveclustl.utils import preprocessing as prep
 
 
-Mutation = namedtuple('Mutation', 'position, region, sample')
+Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample')
 Cds = namedtuple('Cds', 'start, end')
+
+def dict_of_sets():
+    return defaultdict(set)
 
 
 def read_regions(input_regions, elements):
@@ -52,25 +58,6 @@ def read_regions(input_regions, elements):
     if len(elements) == 1 and len(regions_d) != 1:
         logger.warning('{} has more than one Ensembl id'.format(elements))
 
-
-    # Check regions
-    # set_30 = set()
-    # set_10 = set()
-    # for k, v in regions_d.items():
-    #     for interval in v:
-    #         if (list(interval)[1] - list(interval)[0]) <= 30:
-    #             set_30.add(k)
-    #         if (list(interval)[1] - list(interval)[0]) <= 10:
-    #             set_10.add(k)
-    #
-    # for element in set_30:
-    #     print(element)
-    # print(len(set_30))
-    # for element in set_10:
-    #     print(element)
-    # print('<= 30: ', len(set_30))
-    # print('<= 10: ', len(set_10))
-
     return regions_d, chromosomes_d, strands_d, trees
 
 
@@ -94,12 +81,14 @@ def map_regions_cds(regions_d):
 
     return cds_d
 
-def read_mutations(input_mutations, trees, vep_file):
+
+def read_mutations(input_mutations, trees, vep_file, conseq):
     """
     Read mutations file and intersect with regions. Only substitutions.
     :param input_mutations: path to file containing mutations
     :param trees: dictionary of dictionary of IntervalTrees containing intervals of genomic elements per chromosome
     :param vep_file: path to file containing mutations in vep format
+    :param conseq: True, use aa consequence type
     :return:
         mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple
         samples_d: dictionary, key = sample, value = number of mutations
@@ -124,44 +113,77 @@ def read_mutations(input_mutations, trees, vep_file):
                 if conseq in vep_moderate_high:
                     ident = variation.split('__')[0]
                     ident_vep.add(ident)
+    if conseq:
+        dict_of_sets()
+        with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
+            conseq_d = pickle.load(fd)
 
-    with read_function(input_mutations, mode) as read_file:
-        fd = csv.DictReader(read_file, delimiter=delimiter)
-        for line in fd:
-            chromosome = line['CHROMOSOME']
-            position = int(line['POSITION'])
-            ref = line['REF']
-            alt = line['ALT']
-            sample = line['SAMPLE']
-            ident = line['ID']
-            samples_d[sample] += 1
-            # Read substitutions only
-            if len(ref) == 1 and len(alt) == 1:
-                if ref != '-' and alt != '-':
-                    if not vep_file:
+        # Read mutations
+        with read_function(input_mutations, mode) as read_file:
+            fd = csv.DictReader(read_file, delimiter=delimiter)
+            for line in fd:
+                chromosome = line['CHROMOSOME']
+                position = int(line['POSITION'])
+                ref = line['REF']
+                alt = line['ALT']
+                sample = line['SAMPLE']
+                samples_d[sample] += 1
+                # Read substitutions only
+                if len(ref) == 1 and len(alt) == 1:
+                    if ref != '-' and alt != '-':
                         if trees[chromosome][int(position)] != set():
                             results = trees[chromosome][int(position)]
                             for res in results:
-                                m = Mutation(position, (res.begin, res.end), sample)
+                                #muttype = np.random.choice([0, 1], size=1, p=[0.2, 0.8])
+                                id = res.data.split('_')[1]
+                                id_alt = id + '_' + alt
+                                if id_alt in conseq_d.keys():
+                                    muttype = 0 if position not in conseq_d[id_alt] else 1
+                                else:
+                                    muttype = 1
+                                m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
                                 mutations_d[res.data].append(m)
-                    else:
-                        if ident in ident_vep:
+    else:
+        with read_function(input_mutations, mode) as read_file:
+            fd = csv.DictReader(read_file, delimiter=delimiter)
+            for line in fd:
+                chromosome = line['CHROMOSOME']
+                position = int(line['POSITION'])
+                ref = line['REF']
+                alt = line['ALT']
+                sample = line['SAMPLE']
+                ident = line['ID']
+                samples_d[sample] += 1
+                # Read substitutions only
+                if len(ref) == 1 and len(alt) == 1:
+                    if ref != '-' and alt != '-':
+                        if not vep_file:
                             if trees[chromosome][int(position)] != set():
                                 results = trees[chromosome][int(position)]
                                 for res in results:
-                                    m = Mutation(position, (res.begin, res.end), sample)
+                                    muttype = 1
+                                    m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
                                     mutations_d[res.data].append(m)
+                        else:
+                            if ident in ident_vep:
+                                if trees[chromosome][int(position)] != set():
+                                    results = trees[chromosome][int(position)]
+                                    for res in results:
+                                        muttype = 1
+                                        m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
+                                        mutations_d[res.data].append(m)
 
     return mutations_d, samples_d
 
 
-def parse(input_regions, elements, input_mutations, cds, vep_file):
+def parse(input_regions, elements, input_mutations, cds, vep_file, conseq):
     """Parse genomic regions and dataset of cancer type mutations
     :param input_regions: path to file containing mutational data
     :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
     :param input_mutations: path tab file
     :param cds: bool, True calculates clustering on cds
     :param vep_file: path to vep file
+    :param conseq: True, use aa consequence type
     :return
         regions_d: dictionary of IntervalTrees with genomic regions for elements
         cds_d: dictionary of dictionaries with relative cds position of genomic regions
@@ -178,8 +200,8 @@ def parse(input_regions, elements, input_mutations, cds, vep_file):
         cds_d = map_regions_cds(regions_d)
     else:
         cds_d = {}
-    logger.debug('Regions parsed')
-    mutations_d, samples_d = read_mutations(input_mutations, trees, vep_file)
-    logger.debug('Mutations parsed')
+    logger.info('Regions parsed')
+    mutations_d, samples_d = read_mutations(input_mutations, trees, vep_file, conseq)
+    logger.info('Mutations parsed')
 
     return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d
