@@ -168,13 +168,13 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                             len(v['mutations']), len(v['samples']), v['fra_uniq_samples'], v['score'], v['p']))
 
     # Sort
-    # TODO change to avoid writing not compressed file
     df = pd.read_csv(output_file, sep='\t', header=0)
     df.sort_values(by=['RANK', 'P', 'SCORE'], ascending=[True, True, False], inplace=True)
 
     if gzip is True:
         output_file = output_file + '.gz'
         df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False, compression='gzip')
+        os.remove(output_file)
     else:
         df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
 

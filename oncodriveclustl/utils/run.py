@@ -1,15 +1,16 @@
 # Import modules
 import os.path
 from concurrent.futures import ProcessPoolExecutor as Pool
-
-import daiquiri
-import pickle
 import math
 from collections import defaultdict
-from intervaltree import IntervalTree
 from collections import namedtuple
+import pickle
+
+import daiquiri
+from intervaltree import IntervalTree
 from tqdm import tqdm
 import numpy as np
+import tabix
 
 from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
@@ -82,6 +83,7 @@ class Experiment:
         self.cores = cores
         self.seed = seed
         self.plot = plot
+        self.conseq = conseq
 
         # Read CGC
         if self.genome_build.__name__ == 'hg19':
@@ -91,11 +93,24 @@ class Experiment:
         else:
             self.cgc_genes = set()
 
-        if conseq:
+        # Read vep pickle
+        if self.conseq:
             # TODO Remove this hardcoded file
-            self.coding_consequence = pickle.load(open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', "rb"))
+            with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
+                self.coding_consequence = pickle.load(fd)
         else:
             self.coding_consequence = {}
+
+    # def __enter__(self):
+    #     if self.conseq:
+    #         # TODO Remove this hardcoded file
+    #         with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
+    #             self.coding_consequence = pickle.load(fd)
+    #         # self.tb = tabix.open('/workspace/datasets/phd_snp_g/input_files_cds/vep_canonical.tsv.gz')
+    #     else:
+    #         self.coding_consequence = {}
+    #
+    #     return self
 
 
     @staticmethod
@@ -306,35 +321,48 @@ class Experiment:
             for interval in probs_tree[mutation.region[0]]:  # unique iteration
                 simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=n_sim,
                                                p=self.normalize(element, interval.data[start_index:end_index]))
-                # Get alternates for simulated mutations
-                probs_alternates = []
-                changes = []
-                start = mutation.position - delta
-                size = delta * 2 + 1
-                ref_kmer = self.genome_build(self.chromosomes_d[element], start, size)
-                for alt in nucleot.difference({ref_kmer[delta]}):  # mutational prob to any other kmer
-                    alt_kmer = ref_kmer[: self.kmer // 2] + alt + ref_kmer[self.kmer // 2 + 1:]
-                    probs_alternates.append(signatures[(ref_kmer, alt_kmer)])
-                    changes.append(alt)
-                alternates = np.random.choice(changes, size=n_sim, p=self.normalize(element, probs_alternates))
 
                 # TODO improve
                 # Add simulations
                 l = []
                 if self.coding_consequence:
+                    print('got here')
+                    quit()
                     for count, pos in enumerate(simulations):
-                        alternate = alternates[count]
-                        id_alt = id + '_' + alternate
-                        if id_alt in self.coding_consequence.keys():
-                            muttype = 0 if pos not in self.coding_consequence[id_alt] else 1
-                        else:
+                        # Get alternate for simulated mutation
+                        probs_alternates = []
+                        changes = []
+                        start = mutation.position - delta
+                        size = delta * 2 + 1
+                        ref_kmer = self.genome_build(self.chromosomes_d[element], start, size)
+                        for alt in nucleot.difference({ref_kmer[delta]}):  # mutational prob to any other kmer
+                            alt_kmer = ref_kmer[: self.kmer // 2] + alt + ref_kmer[self.kmer // 2 + 1:]
+                            probs_alternates.append(signatures[(ref_kmer, alt_kmer)])
+                            changes.append(alt)
+                        alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))
+
+                        # Get consequence
+                        ensid = element.split('_')[1]
+                        try:
+                            muttype = 0 if pos in self.coding_consequence[ensid][alternate] else 1
+                        except:
                             muttype = 1
-                        l.append(Mutation(pos, mutation.region, alternates[count], muttype, mutation.sample))
-                    df.append(l)
+
+                        # consequences = [
+                        #     c[8] for c in self.tb.query(self.chromosomes_d[element], pos - 1, pos) if c[4] == alternate
+                        # ]
+                        # muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
+                        l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
+                        df.append(l)
+
+                    print(df)
+                    quit()
+
                 else:
                     muttype = 1
+                    alt = 'N'
                     for count, pos in enumerate(simulations):
-                        l.append(Mutation(pos, mutation.region, alternates[count], muttype, mutation.sample))
+                        l.append(Mutation(pos, mutation.region, alt, muttype, mutation.sample))
                     df.append(l)
 
         # Start analysis
@@ -410,24 +438,27 @@ class Experiment:
                         # Cluster analytical p-values
                         sim_clusters_score = []
                         obs_clusters_score = []
-                        for simulation in sim_clusters_list:
-                            for interval in simulation:
-                                for cluster, values in interval.data.items():
-                                    sim_clusters_score.append(values['score'])
-
-                        obj = ap.AnalyticalPvalue()
-                        obj.calculate_bandwidth(sim_clusters_score)
+                        # for simulation in sim_clusters_list:
+                        #     for interval in simulation:
+                        #         for cluster, values in interval.data.items():
+                        #             sim_clusters_score.append(values['score'])
+                        #
+                        # obj = ap.AnalyticalPvalue()
+                        # obj.calculate_bandwidth(sim_clusters_score)
 
                         for interval in obs_clusters:
                             for cluster, values in interval.data.items():
                                 obs_clusters_score.append(values['score'])
-                                cluster_p_value = obj.calculate(values['score'])
-                                interval.data[cluster]['p'] = cluster_p_value
+                                # cluster_p_value = obj.calculate(values['score'])
+                                # interval.data[cluster]['p'] = cluster_p_value
+                                interval.data[cluster]['p'] = float('nan')
+
                         n_clusters = len(obs_clusters_score)
                         n_clusters_sim = True
 
                         # Element top cluster analytical p-value
-                        top_cluster_pvalue = obj.calculate(max(obs_clusters_score))
+                        #top_cluster_pvalue = obj.calculate(max(obs_clusters_score))
+                        top_cluster_pvalue = float('nan')
                         logger.debug('P-values calculated')
 
                 else:

@@ -2,13 +2,14 @@
 import os
 import gzip
 import csv
-import daiquiri
 import pickle
-
 from collections import defaultdict
 from collections import namedtuple
-from intervaltree import IntervalTree
+
+import daiquiri
+import tabix
 import numpy as np
+from intervaltree import IntervalTree
 
 from oncodriveclustl.utils import preprocessing as prep
 
@@ -114,7 +115,8 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                     ident = variation.split('__')[0]
                     ident_vep.add(ident)
     if conseq:
-        dict_of_sets()
+        # tb = tabix.open('/workspace/datasets/phd_snp_g/input_files_cds/vep_canonical.tsv.gz')
+        # dict_of_sets()
         with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
             conseq_d = pickle.load(fd)
 
@@ -135,12 +137,20 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                             results = trees[chromosome][int(position)]
                             for res in results:
                                 #muttype = np.random.choice([0, 1], size=1, p=[0.2, 0.8])
-                                id = res.data.split('_')[1]
-                                id_alt = id + '_' + alt
-                                if id_alt in conseq_d.keys():
-                                    muttype = 0 if position not in conseq_d[id_alt] else 1
-                                else:
+
+                                ensid = res.data.split('_')[1]
+                                try:
+                                    muttype = 0 if position in conseq_d[ensid][alt].values() else 1
+                                except:
                                     muttype = 1
+
+                                # consequences = [
+                                #     c[8] for c in tb.query(chromosome, position - 1, position) if c[4] == alt
+                                # ]
+                                # if len(set(consequences)) > 1:
+                                #     logger.warning('More than one consequence type in {}'.format(res.data))
+                                # muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
+
                                 m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
                                 mutations_d[res.data].append(m)
     else:

@@ -65,6 +65,8 @@ LOGS = {
 @click.option('--conseq', is_flag=True, help='Use mutations consequence type (CODING)',)
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element',)
 @click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive',)
+
+
 def main(input_file,
          vep_file,
          output_directory,
@@ -152,6 +154,10 @@ def main(input_file,
     logger.info('Initializing OncodriveCLUSTL...')
 
     # Check parameters
+    if not 1000 <= n_simulations < 10001:
+        logger.error('Invalid number of simulations: please choose integer in range [1000, 10000]')
+        quit()
+
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))
         quit()
