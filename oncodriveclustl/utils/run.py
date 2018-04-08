@@ -10,13 +10,14 @@ import daiquiri
 from intervaltree import IntervalTree
 from tqdm import tqdm
 import numpy as np
-import tabix
 
 from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
 from oncodriveclustl.utils import score
 from oncodriveclustl.utils import analyticalpval as ap
 from oncodriveclustl.utils import plots as plot
+from oncodriveclustl.utils import tabix as tbx
+
 
 # Logger
 logger = daiquiri.getLogger()
@@ -326,8 +327,7 @@ class Experiment:
                 # Add simulations
                 l = []
                 if self.coding_consequence:
-                    print('got here')
-                    quit()
+                    tb = tbx.Query()
                     for count, pos in enumerate(simulations):
                         # Get alternate for simulated mutation
                         probs_alternates = []
@@ -342,21 +342,12 @@ class Experiment:
                         alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))
 
                         # Get consequence
-                        ensid = element.split('_')[1]
-                        try:
-                            muttype = 0 if pos in self.coding_consequence[ensid][alternate] else 1
-                        except:
-                            muttype = 1
-
-                        # consequences = [
-                        #     c[8] for c in self.tb.query(self.chromosomes_d[element], pos - 1, pos) if c[4] == alternate
-                        # ]
-                        # muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
+                        consequences = [
+                            c[8] for c in tb.query_tabix(pos, self.chromosomes_d[element]) if c[4] == alternate
+                        ]
+                        muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
                         l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
                         df.append(l)
-
-                    print(df)
-                    quit()
 
                 else:
                     muttype = 1

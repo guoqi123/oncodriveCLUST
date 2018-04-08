@@ -1,18 +1,14 @@
 # Import modules
-import os
 import gzip
 import csv
-import pickle
 from collections import defaultdict
 from collections import namedtuple
 
 import daiquiri
-import tabix
-import numpy as np
 from intervaltree import IntervalTree
 
 from oncodriveclustl.utils import preprocessing as prep
-
+from oncodriveclustl.utils import tabix as tbx
 
 Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample')
 Cds = namedtuple('Cds', 'start, end')
@@ -99,26 +95,9 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
     samples_d = defaultdict(int)
     read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
 
-    if vep_file:
-        ident_vep = set()
-        vep_moderate_high = {'protein_altering_variant', 'missense_variant', 'inframe_deletion', 'inframe_insertion',
-                             'transcript_amplification', 'start_lost', 'stop_lost', 'frameshift_variant', 'stop_gained',
-                             'splice_donor_variant', 'splice_acceptor_variant', 'transcript_ablation'}
 
-        # Get ids from mutations impact moderate to high (> missense)
-        with gzip.open(vep_file, 'rb') as fd:
-            next(fd)
-            for line in fd:
-                line = line.decode()
-                variation, location, _, _, _, _, conseq = line.strip().split('\t')[:7]
-                if conseq in vep_moderate_high:
-                    ident = variation.split('__')[0]
-                    ident_vep.add(ident)
     if conseq:
-        # tb = tabix.open('/workspace/datasets/phd_snp_g/input_files_cds/vep_canonical.tsv.gz')
-        # dict_of_sets()
-        with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
-            conseq_d = pickle.load(fd)
+        tb = tbx.Query()
 
         # Read mutations
         with read_function(input_mutations, mode) as read_file:
@@ -136,21 +115,12 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                         if trees[chromosome][int(position)] != set():
                             results = trees[chromosome][int(position)]
                             for res in results:
-                                #muttype = np.random.choice([0, 1], size=1, p=[0.2, 0.8])
-
-                                ensid = res.data.split('_')[1]
-                                try:
-                                    muttype = 0 if position in conseq_d[ensid][alt].values() else 1
-                                except:
-                                    muttype = 1
-
-                                # consequences = [
-                                #     c[8] for c in tb.query(chromosome, position - 1, position) if c[4] == alt
-                                # ]
+                                consequences = [
+                                    c[8] for c in tb.query_tabix(position, chromosome) if c[4] == alt
+                                ]
                                 # if len(set(consequences)) > 1:
-                                #     logger.warning('More than one consequence type in {}'.format(res.data))
-                                # muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
-
+                                #     logger.debug('More than one consequence type in {}'.format(res.data))
+                                muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
                                 m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
                                 mutations_d[res.data].append(m)
     else:
@@ -174,14 +144,6 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                                     muttype = 1
                                     m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
                                     mutations_d[res.data].append(m)
-                        else:
-                            if ident in ident_vep:
-                                if trees[chromosome][int(position)] != set():
-                                    results = trees[chromosome][int(position)]
-                                    for res in results:
-                                        muttype = 1
-                                        m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
-                                        mutations_d[res.data].append(m)
 
     return mutations_d, samples_d
 
