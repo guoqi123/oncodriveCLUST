@@ -410,7 +410,7 @@ class Experiment:
                         empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
 
                         # Element score analytical p-value
-                        sim_scores_array_1000 = np.random.choice(sim_scores_list, size=200, replace=False)
+                        sim_scores_array_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
                         obj = ap.AnalyticalPvalue()
 
                         obj.calculate_bandwidth(sim_scores_array_1000)
