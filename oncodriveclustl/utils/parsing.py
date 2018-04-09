@@ -8,7 +8,7 @@ import daiquiri
 from intervaltree import IntervalTree
 
 from oncodriveclustl.utils import preprocessing as prep
-from oncodriveclustl.utils import tabix as tbx
+from oncodriveclustl.utils import veptabix as tbx
 
 Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample')
 Cds = namedtuple('Cds', 'start, end')

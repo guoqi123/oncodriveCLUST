@@ -16,7 +16,7 @@ from oncodriveclustl.utils import clustering as clu
 from oncodriveclustl.utils import score
 from oncodriveclustl.utils import analyticalpval as ap
 from oncodriveclustl.utils import plots as plot
-from oncodriveclustl.utils import tabix as tbx
+from oncodriveclustl.utils import veptabix as tbx
 
 
 # Logger
@@ -94,24 +94,15 @@ class Experiment:
         else:
             self.cgc_genes = set()
 
-        # Read vep pickle
+        # Read vep
         if self.conseq:
             # TODO Remove this hardcoded file
-            with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
-                self.coding_consequence = pickle.load(fd)
-        else:
-            self.coding_consequence = {}
+            # with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
+            #     self.coding_consequence = pickle.load(fd)
+            self.tb = tbx.Query()
 
-    # def __enter__(self):
-    #     if self.conseq:
-    #         # TODO Remove this hardcoded file
-    #         with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
-    #             self.coding_consequence = pickle.load(fd)
-    #         # self.tb = tabix.open('/workspace/datasets/phd_snp_g/input_files_cds/vep_canonical.tsv.gz')
-    #     else:
-    #         self.coding_consequence = {}
-    #
-    #     return self
+        # else:
+        #     self.coding_consequence = {}
 
 
     @staticmethod
@@ -326,8 +317,7 @@ class Experiment:
                 # TODO improve
                 # Add simulations
                 l = []
-                if self.coding_consequence:
-                    tb = tbx.Query()
+                if self.conseq:
                     for count, pos in enumerate(simulations):
                         # Get alternate for simulated mutation
                         probs_alternates = []
@@ -343,7 +333,7 @@ class Experiment:
 
                         # Get consequence
                         consequences = [
-                            c[8] for c in tb.query_tabix(pos, self.chromosomes_d[element]) if c[4] == alternate
+                            c[8] for c in self.tb.query_tabix(pos, self.chromosomes_d[element]) if c[4] == alternate
                         ]
                         muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
                         l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
@@ -420,7 +410,7 @@ class Experiment:
                         empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
 
                         # Element score analytical p-value
-                        sim_scores_array_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
+                        sim_scores_array_1000 = np.random.choice(sim_scores_list, size=200, replace=False)
                         obj = ap.AnalyticalPvalue()
 
                         obj.calculate_bandwidth(sim_scores_array_1000)
@@ -458,11 +448,7 @@ class Experiment:
                     empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
             else:
                 n_clusters = n_clusters_sim = obs_score = float('nan')
-
-                if len(self.mutations_d[element]) == 1:
-                    empirical_pvalue = analytical_pvalue = top_cluster_pvalue = 1
-                else:
-                    empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
+                empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
             # Get GCG boolean
             cgc = element.split('_')[0] in self.cgc_genes
