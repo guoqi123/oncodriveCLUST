@@ -560,7 +560,8 @@ class Experiment:
                         executor.map(self.simulate_and_analysis, simulations), total=len(simulations),
                         desc="simulations".rjust(30)):
                     sim_scores_list[element] += sim_scores_chunk
-                    sim_clusters_list[element] += sim_cluster_chunk
+                    # TODO remove = ---> +=
+                    sim_clusters_list[element] = sim_cluster_chunk
 
                     # TODO increase simulations for elements without simulated clusters
 
