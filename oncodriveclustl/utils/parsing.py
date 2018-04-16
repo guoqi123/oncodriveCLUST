@@ -1,6 +1,7 @@
 # Import modules
 import gzip
 import csv
+import pickle
 from collections import defaultdict
 from collections import namedtuple
 
@@ -97,7 +98,8 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
 
 
     if conseq:
-        tb = tbx.Query()
+        with open('/workspace/projects/oncodriveclustl/inputs/vep/vep_canonical.pickle', 'rb') as fd:
+            conseq_d = pickle.load(fd)
 
         # Read mutations
         with read_function(input_mutations, mode) as read_file:
@@ -115,12 +117,11 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                         if trees[chromosome][int(position)] != set():
                             results = trees[chromosome][int(position)]
                             for res in results:
-                                consequences = [
-                                    c[8] for c in tb.query_tabix(position, chromosome) if c[4] == alt
-                                ]
-                                # if len(set(consequences)) > 1:
-                                #     logger.debug('More than one consequence type in {}'.format(res.data))
-                                muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
+                                ensid = res.data.split('_')[1]
+                                if ensid in conseq_d.keys():
+                                    muttype = 0 if str(position) in conseq_d[ensid][alt] else 1
+                                else:
+                                    muttype = 1
                                 m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
                                 mutations_d[res.data].append(m)
     else:

@@ -97,12 +97,8 @@ class Experiment:
         # Read vep
         if self.conseq:
             # TODO Remove this hardcoded file
-            # with open('/home/carnedo/projects/inputs/vep/vep_canonical.pickle', 'rb') as fd:
-            #     self.coding_consequence = pickle.load(fd)
-            self.tb = tbx.Query()
-
-        # else:
-        #     self.coding_consequence = {}
+            with open('/workspace/projects/oncodriveclustl/inputs/vep/vep_canonical.pickle', 'rb') as fd:
+                self.conseq_d = pickle.load(fd)
 
 
     @staticmethod
@@ -269,7 +265,7 @@ class Experiment:
             sim_cluster_chunk: list, simulated cluster's results
         """
         element, probs_tree, n_sim = item
-        id = element.split('_')[1]
+        ensid = element.split('_')[1]
         sim_scores_chunk = []
         sim_cluster_chunk = []
         df = []
@@ -313,7 +309,6 @@ class Experiment:
             for interval in probs_tree[mutation.region[0]]:  # unique iteration
                 simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=n_sim,
                                                p=self.normalize(element, interval.data[start_index:end_index]))
-
                 # TODO improve
                 # Add simulations
                 l = []
@@ -329,21 +324,19 @@ class Experiment:
                             alt_kmer = ref_kmer[: self.kmer // 2] + alt + ref_kmer[self.kmer // 2 + 1:]
                             probs_alternates.append(signatures[(ref_kmer, alt_kmer)])
                             changes.append(alt)
-                        alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))
-
+                        alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))[0]
                         # Get consequence
-                        consequences = [
-                            c[8] for c in self.tb.query_tabix(pos, self.chromosomes_d[element]) if c[4] == alternate
-                        ]
-                        muttype = 0 if all([i == 'synonymous_variant' for i in consequences]) else 1
+                        if ensid in self.conseq_d.keys():
+                            muttype = 0 if str(pos) in self.conseq_d[ensid][alternate] else 1
+                        else:
+                            muttype = 1
                         l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
                         df.append(l)
-
                 else:
                     muttype = 1
-                    alt = 'N'
+                    alternate = 'N'
                     for count, pos in enumerate(simulations):
-                        l.append(Mutation(pos, mutation.region, alt, muttype, mutation.sample))
+                        l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
                     df.append(l)
 
         # Start analysis

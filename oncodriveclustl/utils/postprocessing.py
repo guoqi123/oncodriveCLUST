@@ -172,8 +172,8 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
     df.sort_values(by=['RANK', 'P', 'SCORE'], ascending=[True, True, False], inplace=True)
 
     if gzip is True:
-        output_file = output_file + '.gz'
-        df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False, compression='gzip')
+        output_file_gz = output_file + '.gz'
+        df.to_csv(path_or_buf=output_file_gz, sep='\t', na_rep='', index=False, compression='gzip')
         os.remove(output_file)
     else:
         df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
