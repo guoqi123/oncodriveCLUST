@@ -16,7 +16,6 @@ from oncodriveclustl.utils import clustering as clu
 from oncodriveclustl.utils import score
 from oncodriveclustl.utils import analyticalpval as ap
 from oncodriveclustl.utils import plots as plot
-from oncodriveclustl.utils import veptabix as tbx
 
 
 # Logger
@@ -94,13 +93,6 @@ class Experiment:
         else:
             self.cgc_genes = set()
 
-        # Read vep
-        if self.conseq:
-            # TODO Remove this hardcoded file
-            with open('/workspace/projects/oncodriveclustl/inputs/vep/vep_canonical.pickle', 'rb') as fd:
-                self.conseq_d = pickle.load(fd)
-
-
     @staticmethod
     def tukey(window):
         """Tukey smoothing function generates tukey_filter for smoothing
@@ -112,7 +104,6 @@ class Experiment:
         filter_ = tukey(np.arange(-half_window, half_window + 1) / (half_window + 1))
         filter_ = filter_ / sum(filter_)
         return filter_
-
 
     @staticmethod
     def load_genome(genome):
@@ -265,16 +256,23 @@ class Experiment:
             sim_cluster_chunk: list, simulated cluster's results
         """
         element, probs_tree, n_sim = item
-        ensid = element.split('_')[1]
         sim_scores_chunk = []
         sim_cluster_chunk = []
         df = []
         half_window = (self.simulation_window - 1) // 2
 
-        delta = 1 if self.kmer == 3 else 2
-        nucleot = {'A', 'C', 'G', 'T'}
-        signatures = pickle.load(open(self.path_pickle, "rb"))
-        signatures = signatures['probabilities']
+        if self.conseq:
+            delta = 1 if self.kmer == 3 else 2
+            nucleot = {'A', 'C', 'G', 'T'}
+            signatures = pickle.load(open(self.path_pickle, "rb"))
+            signatures = signatures['probabilities']
+            ensid = element.split('_')[1]
+            path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/elements/{}.pickle'.format(ensid)
+            try:
+                with open(path_to_vep_pickle, 'rb') as fd:
+                    conseq_d = pickle.load(fd)
+            except FileNotFoundError:
+                self.conseq = False
 
         # Simulate mutations
         for mutation in self.mutations_d[element]:
@@ -309,7 +307,6 @@ class Experiment:
             for interval in probs_tree[mutation.region[0]]:  # unique iteration
                 simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=n_sim,
                                                p=self.normalize(element, interval.data[start_index:end_index]))
-                # TODO improve
                 # Add simulations
                 l = []
                 if self.conseq:
@@ -326,10 +323,7 @@ class Experiment:
                             changes.append(alt)
                         alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))[0]
                         # Get consequence
-                        if ensid in self.conseq_d.keys():
-                            muttype = 0 if str(pos) in self.conseq_d[ensid][alternate] else 1
-                        else:
-                            muttype = 1
+                        muttype = 0 if str(pos) in conseq_d[alternate] else 1
                         l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
                         df.append(l)
                 else:
@@ -343,10 +337,11 @@ class Experiment:
         for simulated_mutations in zip(*df):
             cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
             sim_scores_chunk.append(element_score)
-            sim_cluster_chunk.append(cutoff_clusters)
-
+            for interval in cutoff_clusters:
+                clusters = interval.data.copy()
+                for cluster, values in clusters.items():
+                    sim_cluster_chunk.append(values['score'])
         return element, sim_scores_chunk, sim_cluster_chunk
-
 
     @staticmethod
     def empirical_pvalue(observed, simulations):
@@ -378,18 +373,18 @@ class Experiment:
 
         results = []
         for item in items:
-            element, obs_clusters, obs_score, sim_clusters_list, sim_scores_list = item
+            element, obs_clusters, obs_score, sim_clusters_scores, sim_element_scores = item
 
             # If analyzed element and element has clusters
             if type(obs_clusters) != float:
-                if type(sim_scores_list) != float:
-                    if sum(sim_scores_list) == 0:
+                if type(sim_element_scores) != float:
+                    if sum(sim_element_scores) == 0:
                         logger.warning('No simulated clusters in {}. '
                                        'Observed cluster p-values calculated with pseudocount'.format(element))
                         n_clusters = 0
                         # Get false p-value
                         obj = ap.AnalyticalPvalue()
-                        obj.calculate_bandwidth(sim_scores_list)
+                        obj.calculate_bandwidth(sim_element_scores)
                         pseudo_pvalue = obj.calculate(obs_score)
                         for interval in obs_clusters:
                             for cluster, values in interval.data.items():
@@ -400,39 +395,29 @@ class Experiment:
 
                     else:
                         # Element score empirical p-value
-                        empirical_pvalue = self.empirical_pvalue(obs_score, sim_scores_list)
+                        empirical_pvalue = self.empirical_pvalue(obs_score, sim_element_scores)
 
                         # Element score analytical p-value
-                        sim_scores_array_1000 = np.random.choice(sim_scores_list, size=1000, replace=False)
+                        sim_scores_array_1000 = np.random.choice(sim_element_scores, size=1000, replace=False)
                         obj = ap.AnalyticalPvalue()
-
                         obj.calculate_bandwidth(sim_scores_array_1000)
                         analytical_pvalue = obj.calculate(obs_score)
 
                         # Cluster analytical p-values
-                        sim_clusters_score = []
+                        obj = ap.AnalyticalPvalue()
+                        obj.calculate_bandwidth(sim_clusters_scores)
                         obs_clusters_score = []
-                        # for simulation in sim_clusters_list:
-                        #     for interval in simulation:
-                        #         for cluster, values in interval.data.items():
-                        #             sim_clusters_score.append(values['score'])
-                        #
-                        # obj = ap.AnalyticalPvalue()
-                        # obj.calculate_bandwidth(sim_clusters_score)
-
                         for interval in obs_clusters:
                             for cluster, values in interval.data.items():
-                                obs_clusters_score.append(values['score'])
-                                # cluster_p_value = obj.calculate(values['score'])
-                                # interval.data[cluster]['p'] = cluster_p_value
-                                interval.data[cluster]['p'] = float('nan')
-
+                                cluster_p_value = obj.calculate(values['score'])
+                                interval.data[cluster]['p'] = cluster_p_value
+                                #interval.data[cluster]['p'] = float('nan')
+                                obs_clusters_score.append((values['score'], cluster_p_value))
                         n_clusters = len(obs_clusters_score)
                         n_clusters_sim = True
 
                         # Element top cluster analytical p-value
-                        #top_cluster_pvalue = obj.calculate(max(obs_clusters_score))
-                        top_cluster_pvalue = float('nan')
+                        top_cluster_pvalue = max(obs_clusters_score)[1]
                         logger.debug('P-values calculated')
 
                 else:

@@ -98,9 +98,6 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
 
 
     if conseq:
-        with open('/workspace/projects/oncodriveclustl/inputs/vep/vep_canonical.pickle', 'rb') as fd:
-            conseq_d = pickle.load(fd)
-
         # Read mutations
         with read_function(input_mutations, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
@@ -118,9 +115,17 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                             results = trees[chromosome][int(position)]
                             for res in results:
                                 ensid = res.data.split('_')[1]
-                                if ensid in conseq_d.keys():
-                                    muttype = 0 if str(position) in conseq_d[ensid][alt] else 1
-                                else:
+                                path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/' \
+                                                     'elements/{}.pickle'.format(ensid)
+                                try:
+                                    with open(path_to_vep_pickle, 'rb') as fd:
+                                        conseq_d = pickle.load(fd)
+                                        muttype = 0 if str(position) in conseq_d[alt] else 1
+
+                                except FileNotFoundError as e:
+                                    logger.error(
+                                        '{}\nVep file for element {} could not be read. Analysis will be done without '
+                                        'considering mutations consequence type\n'.format(e, res.data))
                                     muttype = 1
                                 m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
                                 mutations_d[res.data].append(m)
