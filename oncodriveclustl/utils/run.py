@@ -4,8 +4,8 @@ from concurrent.futures import ProcessPoolExecutor as Pool
 import math
 from collections import defaultdict
 from collections import namedtuple
-import pickle
 
+import pickle
 import daiquiri
 from intervaltree import IntervalTree
 from tqdm import tqdm
@@ -323,7 +323,7 @@ class Experiment:
                             changes.append(alt)
                         alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))[0]
                         # Get consequence
-                        muttype = 0 if str(pos) in conseq_d[alternate] else 1
+                        muttype = 0 if str(pos) in conseq_d.get(alternate, []) else 1
                         l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
                         df.append(l)
                 else:
@@ -417,7 +417,7 @@ class Experiment:
                         n_clusters_sim = True
 
                         # Element top cluster analytical p-value
-                        top_cluster_pvalue = max(obs_clusters_score)[1]
+                        top_cluster_pvalue = sorted(obs_clusters_score, key=lambda k: (k[0], -k[1]), reverse=True)[0][1]
                         logger.debug('P-values calculated')
 
                 else:

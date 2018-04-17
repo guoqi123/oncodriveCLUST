@@ -120,8 +120,7 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                                 try:
                                     with open(path_to_vep_pickle, 'rb') as fd:
                                         conseq_d = pickle.load(fd)
-                                        muttype = 0 if str(position) in conseq_d[alt] else 1
-
+                                        muttype = 0 if str(position) in conseq_d.get(alt, []) else 1
                                 except FileNotFoundError as e:
                                     logger.error(
                                         '{}\nVep file for element {} could not be read. Analysis will be done without '
