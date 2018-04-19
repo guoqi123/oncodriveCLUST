@@ -43,10 +43,10 @@ def read_regions(input_regions, elements):
                 if elements and symbol not in elements:
                     continue
                 if int(start) != int(end):
-                    trees[chromosome][int(start): int(end) + 1] = symbol + '_' + ensid
-                    regions_d[symbol + '_' + ensid].addi(int(start), (int(end) + 1))
-                    chromosomes_d[symbol + '_' + ensid] = chromosome
-                    strands_d[symbol + '_' + ensid] = strand
+                    trees[chromosome][int(start): int(end) + 1] = symbol + '//' + ensid
+                    regions_d[symbol + '//' + ensid].addi(int(start), (int(end) + 1))
+                    chromosomes_d[symbol + '//' + ensid] = chromosome
+                    strands_d[symbol + '//' + ensid] = strand
         if not regions_d.keys():
             logger.critical('No elements found in genomic regions. Please, check input data')
             quit()
@@ -114,13 +114,13 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                         if trees[chromosome][int(position)] != set():
                             results = trees[chromosome][int(position)]
                             for res in results:
-                                ensid = res.data.split('_')[1]
+                                ensid = res.data.split('//')[1]
                                 path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/' \
                                                      'elements/{}.pickle'.format(ensid)
                                 try:
                                     with open(path_to_vep_pickle, 'rb') as fd:
                                         conseq_d = pickle.load(fd)
-                                        muttype = 0 if str(position) in conseq_d.get(alt, []) else 1
+                                        muttype = 0 if position in conseq_d.get(alt, []) else 1
                                 except FileNotFoundError as e:
                                     logger.error(
                                         '{}\nVep file for element {} could not be read. Analysis will be done without '

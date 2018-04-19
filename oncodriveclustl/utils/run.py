@@ -266,7 +266,7 @@ class Experiment:
             nucleot = {'A', 'C', 'G', 'T'}
             signatures = pickle.load(open(self.path_pickle, "rb"))
             signatures = signatures['probabilities']
-            ensid = element.split('_')[1]
+            ensid = element.split('//')[1]
             path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/elements/{}.pickle'.format(ensid)
             try:
                 with open(path_to_vep_pickle, 'rb') as fd:
@@ -323,7 +323,7 @@ class Experiment:
                             changes.append(alt)
                         alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))[0]
                         # Get consequence
-                        muttype = 0 if str(pos) in conseq_d.get(alternate, []) else 1
+                        muttype = 0 if pos in conseq_d.get(alternate, []) else 1
                         l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
                         df.append(l)
                 else:
@@ -404,6 +404,8 @@ class Experiment:
                         analytical_pvalue = obj.calculate(obs_score)
 
                         # Cluster analytical p-values
+                        if len(sim_clusters_scores) > 1000:
+                            sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
                         obj = ap.AnalyticalPvalue()
                         obj.calculate_bandwidth(sim_clusters_scores)
                         obs_clusters_score = []
@@ -429,7 +431,7 @@ class Experiment:
                 empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
             # Get GCG boolean
-            cgc = element.split('_')[0] in self.cgc_genes
+            cgc = element.split('//')[0] in self.cgc_genes
 
             # Calculate length
             element_length = self.length(element)
@@ -464,12 +466,8 @@ class Experiment:
                 analyzed_elements.append(elem)
             else:
                 belowcutoff_elements.append(elem)
-        if len(analyzed_elements) == 0:
-            logger.critical('There are no element above cutoff element mutations to analyze')
-            quit()
-        else:
-            logger.info('Calculating results {} element{}...'.format(len(analyzed_elements),
-                        's' if len(analyzed_elements) > 1 else ''))
+        logger.info('Calculating results {} element{}...'.format(len(analyzed_elements),
+                    's' if len(analyzed_elements) > 1 else ''))
         # Plot
         if self.plot:
             for element in analyzed_elements:
@@ -538,8 +536,7 @@ class Experiment:
                         executor.map(self.simulate_and_analysis, simulations), total=len(simulations),
                         desc="simulations".rjust(30)):
                     sim_scores_list[element] += sim_scores_chunk
-                    # TODO remove = ---> +=
-                    sim_clusters_list[element] = sim_cluster_chunk
+                    sim_clusters_list[element] += sim_cluster_chunk
 
                     # TODO increase simulations for elements without simulated clusters
 

@@ -204,14 +204,18 @@ def main(input_file,
                                                                                     input_file, cds, vep_file, conseq)
     mut = 0
     elem = 0
+    element_mutations_cutoff = False
     for k, v in mutations_d.items():
         mut += len(v)
         elem += 1
+        if not element_mutations_cutoff:
+            if len(v) >= element_mutations:
+                element_mutations_cutoff = True
     logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
     logger.info('Validated elements with mutations: {}'.format(elem))
     logger.info('Total substitution mutations: {}'.format(mut))
-    if mut < element_mutations:
-        logger.critical('Not enough mutations to perform analysis')
+    if not element_mutations_cutoff:
+        logger.critical('No element with enough mutations to perform analysis')
         quit()
 
     # Initialize Experiment class variables and run

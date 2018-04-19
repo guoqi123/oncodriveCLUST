@@ -56,7 +56,7 @@ def write_element_results(genome, results, directory, file, gzip):
 
     i = 0
     for element, values in results.items():
-        sym, id = element.split('_')
+        sym, id = element.split('//')
         chr, strand, length, muts, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
         if genome != 'hg19':
             cgc = 'Non Available'
@@ -137,7 +137,7 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
             if cds_d:
                 for genomic, cds in cds_d[element].items():
                     reverse_cds_d.addi(cds[0], cds[1] + 1, genomic)   # end + 1
-            sym, id = element.split('_')
+            sym, id = element.split('//')
             clustersinfo, chr, strand, cgc = values
             if genome != 'hg19':
                 cgc = 'Non Available'
