@@ -201,7 +201,7 @@ class Experiment:
                             prob.append(signatures[(ref_kmer, alt_kmer)])
                             if self.conseq:
                                 # Get consequence
-                                con = 0 if position in conseq_d.get(alt, 1) else 1
+                                con = 0 if position in conseq_d.get(alt, []) else 1
                                 conseq.append(con)
                             else:
                                 conseq = [1, 1, 1]
