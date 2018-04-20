@@ -20,8 +20,7 @@ from oncodriveclustl.utils import plots as plot
 
 # Logger
 logger = daiquiri.getLogger()
-Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample')
-
+Mutation = namedtuple('Mutation', 'position, region, muttype, sample')
 
 
 class Experiment:
@@ -36,7 +35,7 @@ class Experiment:
         :param cds_d: dictionary of dictionaries with relative cds position of genomic regions if cds is True
         :param chromosomes_d: dict, dictionary containing chromosomes from all analyzed elements
         :param strands_d: dic, dictionary containing strands from all analyzed elements
-        :param mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple(position, sample)
+        :param mutations_d: dictionary, key = element, value = list of mutations as namedtuple(position, sample)
         :param samples_d: dictionary, key = sample, value = number of mutations
         :param genome: genome to use
         :param path_pickle: path to signatures pickle
@@ -149,7 +148,10 @@ class Experiment:
         :param element: element to calculate pre-smoothing
         :return:
             probs_tree: IntervalTree of genomic regions, interval.data are normalized mutational probabilities for each
-            position. Length == genomic + simulation window
+            position for each of the three alternates. Length == 3*(genomic + simulation window)
+            conseq_tree: IntervalTree of genomic regions, interval.data are boolean arrays representing synonymous or
+            non-synonymous changes of each alternate per position. Length == 3*(genomic + simulation window). Tree empty
+            if self.conseq is False.
             skip: bool, if True skip further analysis
         """
         skip = False
@@ -157,11 +159,20 @@ class Experiment:
         delta = 1 if self.kmer == 3 else 2
         nucleot = {'A', 'C', 'G', 'T'}
         probs_tree = IntervalTree()
-
+        conseq_tree = IntervalTree()
         simulation_window = self.simulation_window
-        correction = 1
+        correction = 1   # (simw // 2 ) * 2 == simw - 1
 
-        if os.path.isfile(self.path_pickle):
+        if self.conseq:
+            ensid = element.split('//')[1]
+            path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/elements/{}.pickle'.format(ensid)
+            try:
+                with open(path_to_vep_pickle, 'rb') as fd:
+                    conseq_d = pickle.load(fd)
+            except FileNotFoundError:
+                skip = True
+
+        if not skip and os.path.isfile(self.path_pickle):
             # Read signatures pickle
             signatures = pickle.load(open(self.path_pickle, "rb"))
             signatures = signatures['probabilities']
@@ -170,6 +181,7 @@ class Experiment:
             # Iterate through genomic regions to get their sequences
             for interval in self.regions_d[element]:
                 probabilities = []
+                consequences = []
                 start = interval[0] - (simulation_window // 2) - delta
                 size = interval[1] - interval[0] + (simulation_window - correction) + delta*2
                 # genomic start -d -sw//2, genomic end +d +sw//2
@@ -177,33 +189,43 @@ class Experiment:
 
                 # Search kmer probabilities
                 for n in range(delta, len(sequence)-delta):  # start to end
+                    position = start + n
                     nu += 1
                     ref_kmer = sequence[n - delta: n + delta + 1]
                     n_number = ref_kmer.count('N')
                     if n_number == 0:
-                        prob = 0
+                        prob = []
+                        conseq = []
                         for alt in nucleot.difference({ref_kmer[self.kmer//2]}):  # mutational prob to any other kmer
                             alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
-                            prob += signatures[(ref_kmer, alt_kmer)]
+                            prob.append(signatures[(ref_kmer, alt_kmer)])
+                            if self.conseq:
+                                # Get consequence
+                                con = 0 if position in conseq_d.get(alt, 1) else 1
+                                conseq.append(con)
+                            else:
+                                conseq = [1, 1, 1]
                     else:
-                        prob = 0
-                    # Append to probabilities
-                    probabilities.append(prob)
-
-                # Normalize and add probabilities to probs_tree
+                        prob = [0,0,0]
+                        conseq = [1, 1, 1]
+                    # Append
+                    probabilities.extend(prob)
+                    consequences.extend(conseq)
+                # Add to tree
                 probs_tree.addi(interval[0], interval[1], probabilities)
+                conseq_tree.addi(interval[0], interval[1], consequences)
 
-            # Check probabilities
+            # Check
             check = 0
             for interval in probs_tree:
                 probabilities = interval.data
                 if probabilities:
                     check = 1
                     if sum(probabilities) == 0:
-                        logger.critical('All context based mutational probabilities per position in {} equal to 0\n'
+                        logger.critical('All context based mutational probabilities per alternate in {} equal to 0\n'
                                         '{} analysis is skipped'.format(element, element))
                         skip = True
-                    if len(probabilities) != (interval[1] - interval[0] + simulation_window - correction):
+                    if len(probabilities) != 3*(interval[1] - interval[0] + simulation_window - correction):
                         logger.warning('{} probabilities list length is different than expected, '
                                        'please review results'.format(element))
                         skip = True
@@ -212,7 +234,7 @@ class Experiment:
                                 '{} analysis is skipped'.format(element, element))
                 skip = True
 
-        return probs_tree, skip
+        return probs_tree, conseq_tree, skip
 
     def analysis(self, element, mutations, analysis_mode='sim'):
         """
@@ -230,7 +252,7 @@ class Experiment:
         else:
             cds_d = {}
 
-        smooth_tree, mutations_in = smo.smooth(element, self.regions_d[element], cds_d, mutations, self.tukey_filter, self.simulation_window)
+        smooth_tree, mutations_in = smo.smooth(self.regions_d[element], cds_d, mutations, self.tukey_filter, self.simulation_window)
         index_tree = clu.find_locals(smooth_tree, cds_d)
         raw_clusters_tree = clu.raw_clusters(index_tree)
         merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
@@ -255,24 +277,11 @@ class Experiment:
             sim_scores_chunk: list, simulated element's results
             sim_cluster_chunk: list, simulated cluster's results
         """
-        element, probs_tree, n_sim = item
+        element, probs_tree, conseq_tree, n_sim = item
         sim_scores_chunk = []
         sim_cluster_chunk = []
         df = []
         half_window = (self.simulation_window - 1) // 2
-
-        if self.conseq:
-            delta = 1 if self.kmer == 3 else 2
-            nucleot = {'A', 'C', 'G', 'T'}
-            signatures = pickle.load(open(self.path_pickle, "rb"))
-            signatures = signatures['probabilities']
-            ensid = element.split('//')[1]
-            path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/elements/{}.pickle'.format(ensid)
-            try:
-                with open(path_to_vep_pickle, 'rb') as fd:
-                    conseq_d = pickle.load(fd)
-            except FileNotFoundError:
-                self.conseq = False
 
         # Simulate mutations
         for mutation in self.mutations_d[element]:
@@ -301,39 +310,22 @@ class Experiment:
                 hotspot_begin = expected_hotspot_begin
                 hotspot_end = expected_hotspot_end
 
-            hotspot = tuple([hotspot_begin, hotspot_end])
-            start_index = hotspot[0] - (mutation.region[0] - half_window)
-            end_index = hotspot[1] - (mutation.region[0] - half_window) + 1  # +1 because it is a slice
+            # Map to index
+            start_index = 3*(hotspot_begin - (mutation.region[0] - half_window))
+            end_index = 3*(hotspot_end - (mutation.region[0] - half_window) + 1)  # +1 because it is a range and slice
             for interval in probs_tree[mutation.region[0]]:  # unique iteration
-                simulations = np.random.choice(range(hotspot[0], hotspot[1] + 1), size=n_sim,
+                simulations = np.random.choice(range(start_index, end_index), size=n_sim,
                                                p=self.normalize(element, interval.data[start_index:end_index]))
-                # Add simulations
+                # Add info per simulated mutation
                 l = []
-                if self.conseq:
-                    for count, pos in enumerate(simulations):
-                        # Get alternate for simulated mutation
-                        probs_alternates = []
-                        changes = []
-                        start = mutation.position - delta
-                        size = delta * 2 + 1
-                        ref_kmer = self.genome_build(self.chromosomes_d[element], start, size)
-                        for alt in nucleot.difference({ref_kmer[delta]}):  # mutational prob to any other kmer
-                            alt_kmer = ref_kmer[: self.kmer // 2] + alt + ref_kmer[self.kmer // 2 + 1:]
-                            probs_alternates.append(signatures[(ref_kmer, alt_kmer)])
-                            changes.append(alt)
-                        alternate = np.random.choice(changes, size=1, p=self.normalize(element, probs_alternates))[0]
-                        # Get consequence
-                        muttype = 0 if pos in conseq_d.get(alternate, []) else 1
-                        l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
-                        df.append(l)
-                else:
-                    muttype = 1
-                    alternate = 'N'
-                    for count, pos in enumerate(simulations):
-                        l.append(Mutation(pos, mutation.region, alternate, muttype, mutation.sample))
-                    df.append(l)
+                for count, index in enumerate(simulations):
+                    muttype = list(conseq_tree[interval[0]])[0][2][index]
+                    position = mutation.region[0] - half_window + index//3
+                    l.append(Mutation(position, mutation.region, muttype, mutation.sample))
+                df.append(l)
 
         # Start analysis
+        logger.debug('Start analyzing simulations')
         for simulated_mutations in zip(*df):
             cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
             sim_scores_chunk.append(element_score)
@@ -341,6 +333,7 @@ class Experiment:
                 clusters = interval.data.copy()
                 for cluster, values in clusters.items():
                     sim_cluster_chunk.append(values['score'])
+
         return element, sim_scores_chunk, sim_cluster_chunk
 
     @staticmethod
@@ -513,11 +506,11 @@ class Experiment:
                     # Check if probabilities can be calculated
                     logger.debug('Calculating context based mutational '
                                  'probabilities for region {} {}...'.format(interval[0], interval[1]))
-                    probs_tree, skip = self.mut_probabilities(element)
+                    probs_tree, conseq_tree, skip = self.mut_probabilities(element)
                     if not skip:
                         element_size = ((len(self.mutations_d[element]) * self.n_simulations) // pf_num_simulations) + 1
                         chunk_size = (self.n_simulations // element_size) + 1
-                        simulations += [(element, probs_tree, n_sim) for n_sim in partitions_list(self.n_simulations,
+                        simulations += [(element, probs_tree, conseq_tree, n_sim) for n_sim in partitions_list(self.n_simulations,
                                         chunk_size)]
                         simulated_elements.append(element)
                     # Skip analysis if problems with mutational probabilities

@@ -5,7 +5,7 @@ from collections import namedtuple
 import numpy as np
 
 
-def smooth(element, regions, cds_d, mutations, tukey_filter, simulation_window):
+def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
     """Generate a smoothing curve for a list of element's mutations
     :param regions: IntervalTree with genomic positions of an element
     :param cds_d: dict, keys are start genomic regions, values are cds positions

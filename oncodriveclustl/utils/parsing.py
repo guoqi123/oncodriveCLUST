@@ -9,10 +9,10 @@ import daiquiri
 from intervaltree import IntervalTree
 
 from oncodriveclustl.utils import preprocessing as prep
-from oncodriveclustl.utils import veptabix as tbx
 
-Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample')
+Mutation = namedtuple('Mutation', 'position, region, muttype, sample')
 Cds = namedtuple('Cds', 'start, end')
+
 
 def dict_of_sets():
     return defaultdict(set)
@@ -96,7 +96,6 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
     samples_d = defaultdict(int)
     read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
 
-
     if conseq:
         # Read mutations
         with read_function(input_mutations, mode) as read_file:
@@ -126,7 +125,7 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                                         '{}\nVep file for element {} could not be read. Analysis will be done without '
                                         'considering mutations consequence type\n'.format(e, res.data))
                                     muttype = 1
-                                m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
+                                m = Mutation(position, (res.begin, res.end), muttype, sample)
                                 mutations_d[res.data].append(m)
     else:
         with read_function(input_mutations, mode) as read_file:
@@ -137,7 +136,6 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                 ref = line['REF']
                 alt = line['ALT']
                 sample = line['SAMPLE']
-                ident = line['ID']
                 samples_d[sample] += 1
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
@@ -147,7 +145,7 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                                 results = trees[chromosome][int(position)]
                                 for res in results:
                                     muttype = 1
-                                    m = Mutation(position, (res.begin, res.end), alt, muttype, sample)
+                                    m = Mutation(position, (res.begin, res.end), muttype, sample)
                                     mutations_d[res.data].append(m)
 
     return mutations_d, samples_d
