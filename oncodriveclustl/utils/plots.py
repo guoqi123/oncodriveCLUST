@@ -1,14 +1,8 @@
 # Import modules
-import os
 import logging
-from intervaltree import IntervalTree
 
 import numpy as np
-import pandas as pd
-
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import seaborn as sns; sns.set(color_codes=False)
 
 # Global variables
 logs = {
@@ -52,7 +46,7 @@ def plot(element, strand, smoothing, mutations, length, raw_clusters_tree, merge
 
     :return:
     """
-    plt.figure(figsize=(24, 6))
+    plt.figure(figsize=(12, 4))
     ax1 = plt.subplot2grid((1, 5), (0, 0), colspan=4)
 
     title = element
@@ -63,49 +57,49 @@ def plot(element, strand, smoothing, mutations, length, raw_clusters_tree, merge
         smoothing = smoothing[::-1]
         mutations = mutations[::-1]
 
-    ax1.plot(smoothing, c='darkblue')
-    ax1.set_ylabel('smoothing score', color='darkblue', fontsize=22)
+    ax1.plot(smoothing, c='royalblue')
+    ax1.set_ylabel('Smoothing score', color='royalblue', fontsize=16)
 
     ax2 = ax1.twinx()
     ax2.plot(mutations, c='red', alpha=.5)
-    ax2.set_ylabel('n mutations', color='red', fontsize=22)
+    ax2.set_ylabel('Number of mutations', color='red', fontsize=16)
 
-    ax1.tick_params('y', colors='darkblue', labelsize=18)
-    ax2.tick_params('y', colors='red', labelsize=18)
+    ax1.tick_params('y', colors='royalblue', labelsize=12)
+    ax2.tick_params('y', colors='red', labelsize=12)
 
-    plot_max, plot_clusters = prepare_clusters_data(strand=strand, length=length,
-                                                clusters_tree=raw_clusters_tree)
-    for maxima in plot_max:
-        ax1.plot(maxima, 1, '.', ms=15, c='cornflowerblue')
-    for cluster in plot_clusters:
-        ax1.plot((cluster[0], cluster[1]), (1, 1), c='cornflowerblue')
-
-    plot_max2, plot_clusters2 = prepare_clusters_data(strand=strand, length=length,
-                                                  clusters_tree=merge_clusters_tree)
-    for maxima in plot_max2:
-        ax1.plot(maxima, 1.25, '.', ms=15, c='blue')
-    for cluster in plot_clusters2:
-        ax1.plot((cluster[0], cluster[1]), (1.25, 1.25), c='blue')
+    # plot_max, plot_clusters = prepare_clusters_data(strand=strand, length=length,
+    #                                             clusters_tree=raw_clusters_tree)
+    # for maxima in plot_max:
+    #     ax1.plot(maxima, 1, '.', ms=15, c='cornflowerblue')
+    # for cluster in plot_clusters:
+    #     ax1.plot((cluster[0], cluster[1]), (1, 1), c='cornflowerblue')
+    #
+    # plot_max2, plot_clusters2 = prepare_clusters_data(strand=strand, length=length,
+    #                                               clusters_tree=merge_clusters_tree)
+    # for maxima in plot_max2:
+    #     ax1.plot(maxima, 1.25, '.', ms=15, c='blue')
+    # for cluster in plot_clusters2:
+    #     ax1.plot((cluster[0], cluster[1]), (1.25, 1.25), c='blue')
 
     plot_max3, plot_clusters3 = prepare_clusters_data(strand=strand, length=length,
                                                   clusters_tree=filter_clusters_tree)
     for maxima in plot_max3:
-        ax1.plot(maxima, 1.5, '.', ms=15, c='darkblue')
+        ax1.plot(maxima, 0.45, '.', ms=10, c='darkblue')
     for cluster in plot_clusters3:
-        ax1.plot((cluster[0], cluster[1]), (1.5, 1.5), c='darkblue')
+        ax1.plot((cluster[0], cluster[1]), (0.45, 0.45), c='darkblue')
 
-    lightgrey_patch = mpatches.Patch(color='cornflowerblue', label='Smoothing')
-    grey_patch = mpatches.Patch(color='blue', label='Merged')
-    black_patch = mpatches.Patch(color='darkblue', label='Filtered')
-    plt.legend(handles=[black_patch, grey_patch, lightgrey_patch], fontsize=20)
 
-    ax2.grid(False)
+    # lightgrey_patch = mpatches.Patch(color='cornflowerblue', label='Smoothing')
+    # grey_patch = mpatches.Patch(color='blue', label='Merged')
+    # black_patch = mpatches.Patch(color='darkblue', label='Filtered')
+    # plt.legend(handles=[black_patch, grey_patch, lightgrey_patch], fontsize=20)
+
+    ax1.set_axisbelow(True)
+    ax1.grid(color='lightgrey', linestyle='--', linewidth=1)
 
     plt.title(title, fontsize=26)
-
+    plt.savefig('/home/carnedo/outputs/clusters_plots/plot.svg', bbox_inches='tight')
     plt.show()
-
-    # plt.savefig(output_dir +'/'+ info + 'clusters.png')
 
 
 def run_plot(element, mutations, cds_d, strand, chromosome, smooth_window,

@@ -62,7 +62,7 @@ LOGS = {
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
 @click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
-@click.option('--conseq', is_flag=True, help='Use mutations consequence type (CODING)',)
+@click.option('--conseq', is_flag=True, help='Use mutations consequence type from VEP (CODING)',)
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element',)
 @click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive',)
 
@@ -144,7 +144,7 @@ def main(input_file,
                 'kmer: {}\nn_simulations: {}\n'
                 'simulation_mode: {}\nsimulation_window: {}\ncores: {}\n'
                 'gzip: {}\noncohort: {}\n'
-                'tabix: {}'.format(
+                'conseq (VEP): {}'.format(
                 input_file, vep_file, output_directory,regions_file, genome,
                 str(element_mutations), str(cluster_mutations), str(cds),
                 str(smooth_window), str(cluster_window), cluster_score, element_score,
@@ -154,9 +154,9 @@ def main(input_file,
     logger.info('Initializing OncodriveCLUSTL...')
 
     # Check parameters
-    # if not 1000 <= n_simulations < 10001:
-    #     logger.error('Invalid number of simulations: please choose integer in range [1000, 10000]')
-    #     quit()
+    if n_simulations < 1000:
+        logger.error('Invalid number of simulations: please choose integer greater than 1000')
+        quit()
 
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))

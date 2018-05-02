@@ -198,7 +198,7 @@ def write_oncohortdrive_results(mutations, directory, file, regions_d):
     with open(clusters_file, 'r') as cf:
         next(cf)
         for line in cf:
-            _, sym, ensid, _, _, _, _, clust_l, _, clust_r, _, _, score, p = line.strip().split('\t')
+            _, sym, ensid, _, _, _, _, clust_l, _, clust_r, _, _, _, _, score, p = line.strip().split('\t')
             element = sym + '_' + ensid
             left_coord = int(clust_l)
             right_coord = int(clust_r)
@@ -243,3 +243,5 @@ def write_oncohortdrive_results(mutations, directory, file, regions_d):
     with open(output_file, 'rb') as of:
         with gzip.open(output_file_gz, 'wb') as ofgz:
             shutil.copyfileobj(of, ofgz)
+    # Remove not compressed file
+    os.remove(output_file)
