@@ -66,7 +66,11 @@ class AnalyticalPvalue:
             expected = np.array([0] * 999 + [pseudocount])
         else:
             expected = np.array(expected)
-        self.gkde = gaussian_kde(expected)
+        try:
+            self.gkde = gaussian_kde(expected)
+        except np.linalg.linalg.LinAlgError as e:
+            expected[-1] += 10**(-14)
+            self.gkde = gaussian_kde(expected)
         self.bandwidth = self._get_best_estimator(expected)
         self.gkde.set_bandwidth(bw_method=self.bandwidth)
 
