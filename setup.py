@@ -23,6 +23,7 @@ setup(
     name="oncodriveclustl",
     version=__version__,
     packages=find_packages(),
+    package_data={'oncodriveclustl': ['data/*.tsv']},
     author=__author__,
     author_email=__author_email__,
     description=__description__,
