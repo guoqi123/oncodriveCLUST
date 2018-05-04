@@ -339,12 +339,11 @@ class Experiment:
     @staticmethod
     def empirical_pvalue(observed, simulations):
         """
-        Calculate empirical p-value
+        Calculate empirical p-value using pseudocount (1)
         :param observed: int, observed score
         :param simulations: list, simulated score
         :return: float, p-value
         """
-        # TODO: pseudocount
         return (len([x for x in simulations if x >= observed]) + 1) / len(simulations)
 
     def length(self, element):
@@ -363,7 +362,7 @@ class Experiment:
         :param item: tuple, elements results
         :return:
         """
-
+        pseudo_pvalue = 1.1102230246251566e-19
         results = []
         for item in items:
             element, obs_clusters, obs_score, sim_clusters_scores, sim_element_scores = item
@@ -371,20 +370,26 @@ class Experiment:
             # If analyzed element and element has clusters
             if type(obs_clusters) != float:
                 if type(sim_element_scores) != float:
+
+                    n_clusters_sim = len(sim_clusters_scores)
+
                     if sum(sim_element_scores) == 0:
                         logger.warning('No simulated clusters in {}. '
                                        'Observed cluster p-values calculated with pseudocount'.format(element))
+
+                        # Calculate p-value for element
                         n_clusters = 0
-                        # Get false p-value
                         obj = ap.AnalyticalPvalue()
                         obj.calculate_bandwidth(sim_element_scores)
-                        pseudo_pvalue = obj.calculate(obs_score)
+                        obs_pvalue = obj.calculate(obs_score)
+
+                        # Add pseudocount p-value for clusters
                         for interval in obs_clusters:
                             for cluster, values in interval.data.items():
                                 interval.data[cluster]['p'] = pseudo_pvalue
                                 n_clusters += 1
-                        empirical_pvalue = analytical_pvalue = top_cluster_pvalue = pseudo_pvalue
-                        n_clusters_sim = False
+                        empirical_pvalue = self.empirical_pvalue(obs_score, sim_element_scores)
+                        analytical_pvalue = top_cluster_pvalue = obs_pvalue
 
                     else:
                         # Element score empirical p-value
@@ -397,19 +402,28 @@ class Experiment:
                         analytical_pvalue = obj.calculate(obs_score)
 
                         # Cluster analytical p-values
-                        if len(sim_clusters_scores) > 1000:
-                            sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
-                        obj = ap.AnalyticalPvalue()
-                        obj.calculate_bandwidth(sim_clusters_scores)
                         obs_clusters_score = []
-                        for interval in obs_clusters:
-                            for cluster, values in interval.data.items():
-                                cluster_p_value = obj.calculate(values['score'])
-                                interval.data[cluster]['p'] = cluster_p_value
-                                #interval.data[cluster]['p'] = float('nan')
-                                obs_clusters_score.append((values['score'], cluster_p_value))
+
+                        if n_clusters_sim < 3:  #TODO Check
+                            for interval in obs_clusters:
+                                for cluster, values in interval.data.items():
+                                    interval.data[cluster]['p'] = pseudo_pvalue
+                                    obs_clusters_score.append((values['score'], pseudo_pvalue))
+                        else:
+                            if n_clusters_sim > 1000:
+                                # Random choice 1000 simulated cluster scores
+                                sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
+
+                            # Fit distribution
+                            obj = ap.AnalyticalPvalue()
+                            obj.calculate_bandwidth(sim_clusters_scores)
+                            for interval in obs_clusters:
+                                for cluster, values in interval.data.items():
+                                    cluster_p_value = obj.calculate(values['score'])
+                                    interval.data[cluster]['p'] = cluster_p_value
+                                    obs_clusters_score.append((values['score'], cluster_p_value))
+
                         n_clusters = len(obs_clusters_score)
-                        n_clusters_sim = True
 
                         # Element top cluster analytical p-value
                         top_cluster_pvalue = sorted(obs_clusters_score, key=lambda k: (k[0], -k[1]), reverse=True)[0][1]
