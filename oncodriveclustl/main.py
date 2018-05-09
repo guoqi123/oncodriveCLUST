@@ -156,11 +156,11 @@ def main(input_file,
     # Check parameters
     if n_simulations < 1000:
         logger.error('Invalid number of simulations: please choose integer greater than 1000')
-        quit()
+        quit(-1)
 
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))
-        quit()
+        quit(-1)
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -179,10 +179,10 @@ def main(input_file,
     if plot:
         if len(elements) != 1:
             logger.critical('Plot can only be calculated for one element')
-            quit()
+            quit(-1)
         if not cds:
             logger.critical('Plots are only available for cds')
-            quit()
+            quit(-1)
 
     # Compute dataset kmer signatures
     signatures_pickle = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
@@ -216,7 +216,7 @@ def main(input_file,
     logger.info('Total substitution mutations: {}'.format(mut))
     if not element_mutations_cutoff:
         logger.critical('No element with enough mutations to perform analysis')
-        quit()
+        quit(-1)
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
