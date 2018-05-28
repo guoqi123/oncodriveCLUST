@@ -10,7 +10,6 @@ install_requires = [
     'intervaltree',
     'bgreference',
     'tqdm',
-    'colorlog',
     'scipy',
     'scikit-learn',
     'statsmodels',

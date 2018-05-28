@@ -1,4 +1,5 @@
 # Import modules
+import sys
 import os
 import gzip
 import csv
@@ -17,6 +18,7 @@ def check_compression(file):
     global logger
     logger = daiquiri.getLogger()
 
+    comp = None
     if os.path.isfile(file):
         try:
             with gzip.open(file, 'rb') as fd:
@@ -27,14 +29,14 @@ def check_compression(file):
             try:
                 with open(file, 'r') as fd:
                     for line in fd:
-                        comp = 'None'
+                        comp = None
                         break
             except Exception as e:
                 logger.critical('{}. Incorrect file format for {}'.format(e, file))
-                quit()
+                sys.exit(1)
     else:
         logger.critical('{} file not found'.format(file))
-        quit()
+        sys.exit(1)
 
     return comp
 
@@ -54,14 +56,13 @@ def check_tabular_csv(file):
     if comp == 'gz':
         read_function = gzip.open
         mode = 'rt'
-
     else:
         read_function = open
         mode = 'r'
 
     with read_function(file) as fd:
         for line in fd:
-            if comp != 'None':
+            if comp:
                 line = line.decode()
             dialect = csv.Sniffer().sniff(line, delimiters=None)
             chr = 'CHROMOSOME' in line
@@ -70,16 +71,11 @@ def check_tabular_csv(file):
             alt = 'ALT' in line
             sample = 'SAMPLE' in line
             break
+
+        if chr == pos == ref == alt == sample == True:
+            return read_function, mode, dialect.delimiter
+
         else:
-            chr = pos = ref = alt = sample = False
+            logger.critical('{} does not contain header and/or header is not in correct format'.format(file))
+            sys.exit(1)
 
-    if chr == pos == ref == alt == sample == True:
-        header = True
-    else:
-        logger.critical('{} does not contain header and/or header not in correct format'.format(file))
-        quit()
-
-    return read_function, mode, dialect.delimiter
-
-
-# TODO: check non overlapping regions

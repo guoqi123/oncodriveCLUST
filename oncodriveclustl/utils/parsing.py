@@ -1,4 +1,5 @@
 # Import modules
+import sys
 import gzip
 import csv
 import pickle
@@ -12,11 +13,6 @@ from oncodriveclustl.utils import preprocessing as prep
 
 Mutation = namedtuple('Mutation', 'position, region, muttype, sample')
 Cds = namedtuple('Cds', 'start, end')
-
-
-def dict_of_sets():
-    return defaultdict(set)
-
 
 def read_regions(input_regions, elements):
     """
@@ -35,8 +31,6 @@ def read_regions(input_regions, elements):
     strands_d = defaultdict()
     comp = prep.check_compression(input_regions)
 
-    # Testing againg
-
     if comp == 'gz':
         with gzip.open(input_regions, 'rb') as fd:
             for line in fd:
@@ -51,10 +45,10 @@ def read_regions(input_regions, elements):
                     strands_d[symbol + '//' + ensid] = strand
         if not regions_d.keys():
             logger.critical('No elements found in genomic regions. Please, check input data')
-            quit()
+            sys.exit(1)
     else:
-        logger.critical('Genomic regions are not compressed, please input .gz file')
-        quit()
+        logger.critical('Genomic regions are not compressed, please input GZIP compressed file')
+        sys.exit(1)
     if len(elements) == 1 and len(regions_d) != 1:
         logger.warning('{} has more than one Ensembl id'.format(elements))
 
