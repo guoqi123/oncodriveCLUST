@@ -35,6 +35,8 @@ def read_regions(input_regions, elements):
     strands_d = defaultdict()
     comp = prep.check_compression(input_regions)
 
+    # Testing againg
+
     if comp == 'gz':
         with gzip.open(input_regions, 'rb') as fd:
             for line in fd:
