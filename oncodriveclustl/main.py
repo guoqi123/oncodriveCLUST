@@ -33,7 +33,7 @@ LOGS = {
               help='File with the symbol of the elements to analyze')
 @click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
               help='Symbol of the element to analyze')
-@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg19', 'mm10', 'c3h', 'car', 'cast']),
+@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
               help='Genome to use')
 @click.option('-emut', '--element-mutations', type=click.INT, default=2,
               help='Cutoff of element mutations. Default is 2')

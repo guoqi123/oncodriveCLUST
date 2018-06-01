@@ -10,6 +10,7 @@ import daiquiri
 from intervaltree import IntervalTree
 from tqdm import tqdm
 import numpy as np
+import bgreference as bg
 
 from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
@@ -65,7 +66,7 @@ class Experiment:
         self.strands_d = strands_d
         self.mutations_d = mutations_d
         self.samples_d = samples_d
-        self.genome_build = self.load_genome(genome)
+        self.genome = genome
         self.path_pickle = path_pickle
         self.element_mutations_cutoff = element_mutations_cutoff
         self.cluster_mutations_cutoff = cluster_mutations_cutoff
@@ -85,7 +86,7 @@ class Experiment:
         self.conseq = conseq
 
         # Read CGC
-        if self.genome_build.__name__ == 'hg19':
+        if self.genome == 'hg19':
             # TODO Remove this hardcoded file
             with open(os.path.join(os.path.dirname(__file__), '../data/CGCMay17_cancer_types_TCGA.tsv'), 'r') as fd:
                 self.cgc_genes = set([line.split('\t')[0] for line in fd])
@@ -103,26 +104,6 @@ class Experiment:
         filter_ = tukey(np.arange(-half_window, half_window + 1) / (half_window + 1))
         filter_ = filter_ / sum(filter_)
         return filter_
-
-    @staticmethod
-    def load_genome(genome):
-        """
-        Load the appropriate genome build
-        :param genome: str, genome
-        :return: instance of the bgreference
-        """
-        if genome == 'hg19':
-            from bgreference import hg19 as genome_build
-        elif genome == 'mm10':
-            from bgreference import mm10 as genome_build
-        elif genome == 'c3h':
-            from bgreference import c3h as genome_build
-        elif genome == 'car':
-            from bgreference import car as genome_build
-        else:
-            from bgreference import cast as genome_build
-
-        return genome_build
 
     @staticmethod
     def normalize(element, probs):
@@ -185,7 +166,7 @@ class Experiment:
                 start = interval[0] - (simulation_window // 2) - delta
                 size = interval[1] - interval[0] + (simulation_window - correction) + delta*2
                 # genomic start -d -sw//2, genomic end +d +sw//2
-                sequence = self.genome_build(self.chromosomes_d[element], start, size)
+                sequence = bg.refseq(self.genome, self.chromosomes_d[element], start, size)
 
                 # Search kmer probabilities
                 for n in range(delta, len(sequence)-delta):  # start to end

@@ -6,6 +6,7 @@ import gzip
 import click
 import daiquiri
 from tqdm import tqdm
+import bgreference as bg
 
 from oncodriveclustl.utils import preprocessing as prep
 logger = daiquiri.getLogger()
@@ -33,30 +34,9 @@ class Signature:
         self.mutation_type = mutation_type
         self.kmer = kmer
         self.start_at_0 = start_at_0
-        self.genome_build = self.load_genome(genome)
-
+        self.genome = genome
         fx = self.triplets if kmer == 3 else self.pentamers
         self.signatures = {'counts': fx(), 'probabilities': fx()}
-
-    @staticmethod
-    def load_genome(genome):
-        """
-        Load the appropriate genome build
-        :param genome: str, genome
-        :return: instance of the bgreference
-        """
-        if genome == 'hg19':
-            from bgreference import hg19 as genome_build
-        elif genome == 'mm10':
-            from bgreference import mm10 as genome_build
-        elif genome == 'c3h':
-            from bgreference import c3h as genome_build
-        elif genome == 'car':
-            from bgreference import car as genome_build
-        else:
-            from bgreference import cast as genome_build
-
-        return genome_build
 
     @staticmethod
     def triplets():
@@ -123,16 +103,17 @@ class Signature:
                 if len(ref) == 1 and len(alt) == 1:
                     if ref != '-' and alt != '-':
                         if self.kmer == 3:
-                            signature_ref = self.genome_build(chromosome, position - 1, 3).upper()
+
+                            signature_ref = bg.refseq(self.genome, chromosome,  position - 1, 3).upper()
                             # Check reference nucleotide in mutations file equals reference genome nucleotide
                             if signature_ref[1] != ref:
                                 logger.warning('Input REF nucleotide {} in position {} is not equal to '
                                                     'reference genome {} REF nucleotide {}'.format(
-                                    ref, position, self.genome_build.__name__, signature_ref[1]
+                                    ref, position, self.genome, signature_ref[1]
                                 ))
                             signature_alt = ''.join([signature_ref[0], alt, signature_ref[-1]])
                         else:
-                            signature_ref = self.genome_build(chromosome, position - 2, 5).upper()
+                            signature_ref = bg.refseq(self.genome, chromosome,  position - 2, 5).upper()
                             signature_alt = ''.join(
                                 [signature_ref[0], signature_ref[1], alt, signature_ref[-2], signature_ref[-1]]
                             )
