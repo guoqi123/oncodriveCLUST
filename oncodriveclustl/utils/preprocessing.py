@@ -31,10 +31,10 @@ def check_compression(file):
                         break
             except Exception as e:
                 logger.critical('{}. Incorrect file format for {}'.format(e, file))
-                quit()
+
     else:
         logger.critical('{} file not found'.format(file))
-        quit()
+        quit(-1)
 
     return comp
 
@@ -77,7 +77,7 @@ def check_tabular_csv(file):
         header = True
     else:
         logger.critical('{} does not contain header and/or header not in correct format'.format(file))
-        quit()
+        quit(-1)
 
     return read_function, mode, dialect.delimiter
 

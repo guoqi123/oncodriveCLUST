@@ -49,10 +49,10 @@ def read_regions(input_regions, elements):
                     strands_d[symbol + '//' + ensid] = strand
         if not regions_d.keys():
             logger.critical('No elements found in genomic regions. Please, check input data')
-            quit()
+            quit(-1)
     else:
         logger.critical('Genomic regions are not compressed, please input .gz file')
-        quit()
+        quit(-1)
     if len(elements) == 1 and len(regions_d) != 1:
         logger.warning('{} has more than one Ensembl id'.format(elements))
 
