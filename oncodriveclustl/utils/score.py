@@ -1,7 +1,3 @@
-# Import modules
-from collections import defaultdict
-
-
 def element_score(clusters_tree, mode, method):
     """
     Given the clusters of an element, calculate a global score for it
@@ -20,15 +16,4 @@ def element_score(clusters_tree, mode, method):
             score += values['score']  # Add up cluster scores
             interval.data[cluster]['mode'] = mode
 
-    # TODO remove mean
-    if method == 'mean':
-        if n_clusters:
-            element_score = score / n_clusters
-        else:
-            element_score = 0
-    elif method == 'sum':
-            element_score = score
-    else:
-        element_score = 0
-
-    return element_score
+    return score

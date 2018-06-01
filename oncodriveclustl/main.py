@@ -1,6 +1,7 @@
 # Oncodriveclustl run
 import logging
 import os
+import sys
 
 import click
 import daiquiri
@@ -32,7 +33,7 @@ LOGS = {
               help='File with the symbol of the elements to analyze')
 @click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
               help='Symbol of the element to analyze')
-@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg19', 'mm10', 'c3h', 'car', 'cast']),
+@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
               help='Genome to use')
 @click.option('-emut', '--element-mutations', type=click.INT, default=2,
               help='Cutoff of element mutations. Default is 2')
@@ -138,29 +139,41 @@ def main(input_file,
     global logger
     logger = daiquiri.getLogger()
 
-    logger.info('\ninput_file: {}\nvep: {}\noutput_directory: {}\nregions_file: {}\ngenome: {}\n'
-                'element_mutations: {}\ncluster_mutations: {}\ncds: {}\nsmooth_window: {}\n'
-                'cluster_window: {}\ncluster_score: {}\nelement_score: {}\n'
-                'kmer: {}\nn_simulations: {}\n'
-                'simulation_mode: {}\nsimulation_window: {}\ncores: {}\n'
-                'gzip: {}\noncohort: {}\n'
-                'conseq (VEP): {}'.format(
-                input_file, vep_file, output_directory,regions_file, genome,
-                str(element_mutations), str(cluster_mutations), str(cds),
-                str(smooth_window), str(cluster_window), cluster_score, element_score,
-                kmer, str(n_simulations), simulation_mode, str(simulation_window), str(cores),str(gzip),
-                str(oncohort), str(conseq)))
+    logger.info('\n'.join([
+        '',
+        'input_file: {}'.format(input_file),
+        'vep: {}'.format(vep_file),
+        'output_directory: {}'.format(output_directory),
+        'regions_file: {}'.format(regions_file),
+        'genome: {}'.format(genome),
+        'element_mutations: {}'.format(element_mutations),
+        'cluster_mutations: {}'.format(cluster_mutations),
+        'cds: {}'.format(cds),
+        'smooth_window: {}'.format(smooth_window),
+        'cluster_window: {}'.format(cluster_window),
+        'cluster_score: {}'.format(cluster_score),
+        'element_score: {}'.format(element_score),
+        'kmer: {}'.format(kmer),
+        'simulation_mode: {}'.format(simulation_mode),
+        'simulation_window: {}'.format(simulation_window),
+        'n_simulations: {}'.format(n_simulations),
+        'cores: {}'.format(cores),
+        'gzip: {}'.format(gzip),
+        'oncohort: {}'.format(oncohort),
+        'VEP conseq: {}'.format(conseq),
+        ''
+    ]))
 
     logger.info('Initializing OncodriveCLUSTL...')
 
     # Check parameters
     if n_simulations < 1000:
         logger.error('Invalid number of simulations: please choose integer greater than 1000')
-        quit(-1)
+        sys.exit(1)
 
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))
-        quit(-1)
+        sys.exit(1)
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -179,10 +192,10 @@ def main(input_file,
     if plot:
         if len(elements) != 1:
             logger.critical('Plot can only be calculated for one element')
-            quit(-1)
+            sys.exit(1)
         if not cds:
             logger.critical('Plots are only available for cds')
-            quit(-1)
+            sys.exit(1)
 
     # Compute dataset kmer signatures
     signatures_pickle = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
@@ -216,7 +229,7 @@ def main(input_file,
     logger.info('Total substitution mutations: {}'.format(mut))
     if not element_mutations_cutoff:
         logger.critical('No element with enough mutations to perform analysis')
-        quit(-1)
+        sys.exit(1)
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
