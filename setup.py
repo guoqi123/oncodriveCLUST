@@ -8,6 +8,7 @@ install_requires = [
     'daiquiri',
     'click',
     'intervaltree',
+    'bgdata',
     'bgreference',
     'tqdm',
     'scipy',

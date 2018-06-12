@@ -10,7 +10,8 @@ import daiquiri
 from intervaltree import IntervalTree
 from tqdm import tqdm
 import numpy as np
-import bgreference as bg
+import bgdata as bgd
+import bgreference as bgr
 
 from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
@@ -93,6 +94,11 @@ class Experiment:
         else:
             self.cgc_genes = set()
 
+        if self.conseq:
+            self.conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
+        else:
+            self.conseq_path = None
+
     @staticmethod
     def tukey(window):
         """Tukey smoothing function generates tukey_filter for smoothing
@@ -118,7 +124,6 @@ class Experiment:
             prob_factor = 1 / sum(probs)
             return [prob_factor * p for p in probs]
 
-        # TODO check
         except ZeroDivisionError as e:
             logger.error('{}. No mutational probabilities derived from signatures in element {}'.format(e, element))
             return False
@@ -146,7 +151,7 @@ class Experiment:
 
         if self.conseq:
             ensid = element.split('//')[1]
-            path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/elements/{}.pickle'.format(ensid)
+            path_to_vep_pickle = self.conseq_path + '/{}.pickle'.format(ensid)
             try:
                 with open(path_to_vep_pickle, 'rb') as fd:
                     conseq_d = pickle.load(fd)
@@ -166,7 +171,7 @@ class Experiment:
                 start = interval[0] - (simulation_window // 2) - delta
                 size = interval[1] - interval[0] + (simulation_window - correction) + delta*2
                 # genomic start -d -sw//2, genomic end +d +sw//2
-                sequence = bg.refseq(self.genome, self.chromosomes_d[element], start, size)
+                sequence = bgr.refseq(self.genome, self.chromosomes_d[element], start, size)
 
                 # Search kmer probabilities
                 for n in range(delta, len(sequence)-delta):  # start to end
@@ -270,7 +275,7 @@ class Experiment:
             expected_hotspot_begin = mutation.position - half_window
             expected_hotspot_end = mutation.position + half_window
 
-            if self.simulation_mode == 'exon_restricted':
+            if self.simulation_mode == 'region_restricted':
                 # Check if hospot outside region
                 check_5 = expected_hotspot_begin < mutation.region[0]
                 check_3 = expected_hotspot_end > (mutation.region[1] - 1)

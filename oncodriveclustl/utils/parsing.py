@@ -1,5 +1,4 @@
 # Import modules
-import sys
 import gzip
 import csv
 import pickle
@@ -8,6 +7,7 @@ from collections import namedtuple
 
 import daiquiri
 from intervaltree import IntervalTree
+import bgdata as bgd
 
 from oncodriveclustl.utils import preprocessing as prep
 
@@ -45,10 +45,10 @@ def read_regions(input_regions, elements):
                     strands_d[symbol + '//' + ensid] = strand
         if not regions_d.keys():
             logger.critical('No elements found in genomic regions. Please, check input data')
-            sys.exit(1)
+            quit(-1)
     else:
         logger.critical('Genomic regions are not compressed, please input GZIP compressed file')
-        sys.exit(1)
+        quit(-1)
     if len(elements) == 1 and len(regions_d) != 1:
         logger.warning('{} has more than one Ensembl id'.format(elements))
 
@@ -91,6 +91,7 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
     mutations_d = defaultdict(list)
     samples_d = defaultdict(int)
     read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
+    conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
 
     if conseq:
         # Read mutations
@@ -110,8 +111,7 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                             results = trees[chromosome][int(position)]
                             for res in results:
                                 ensid = res.data.split('//')[1]
-                                path_to_vep_pickle = '/workspace/projects/oncodriveclustl/inputs/vep/' \
-                                                     'elements/{}.pickle'.format(ensid)
+                                path_to_vep_pickle = conseq_path + '/{}.pickle'.format(ensid)
                                 try:
                                     with open(path_to_vep_pickle, 'rb') as fd:
                                         conseq_d = pickle.load(fd)

@@ -1,5 +1,4 @@
 # Import modules
-import sys
 import os
 import gzip
 import csv
@@ -33,10 +32,10 @@ def check_compression(file):
                         break
             except Exception as e:
                 logger.critical('{}. Incorrect file format for {}'.format(e, file))
-                sys.exit(1)
+                quit(-1)
     else:
         logger.critical('{} file not found'.format(file))
-        sys.exit(1)
+        quit(-1)
 
     return comp
 
@@ -77,5 +76,5 @@ def check_tabular_csv(file):
 
         else:
             logger.critical('{} does not contain header and/or header is not in correct format'.format(file))
-            sys.exit(1)
+            quit(-1)
 

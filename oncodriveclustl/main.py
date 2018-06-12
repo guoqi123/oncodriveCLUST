@@ -1,7 +1,6 @@
 # Oncodriveclustl run
 import logging
 import os
-import sys
 
 import click
 import daiquiri
@@ -51,8 +50,8 @@ LOGS = {
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
-@click.option('-sim', '--simulation-mode', default='exon', help='Simulation mode',  # TODO change exon for region
-              type=click.Choice(['exon', 'cds', 'exon_restricted']))
+@click.option('-sim', '--simulation-mode', default='region', help='Simulation mode',
+              type=click.Choice(['mutation_centered', 'region_restricted']))
 @click.option('-simw', '--simulation-window', type=click.INT, default=60,
               help='Simulation window. Default is 20')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
@@ -169,11 +168,11 @@ def main(input_file,
     # Check parameters
     if n_simulations < 1000:
         logger.error('Invalid number of simulations: please choose integer greater than 1000')
-        sys.exit(1)
+        quit(-1)
 
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))
-        sys.exit(1)
+        quit(-1)
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -192,10 +191,10 @@ def main(input_file,
     if plot:
         if len(elements) != 1:
             logger.critical('Plot can only be calculated for one element')
-            sys.exit(1)
+            quit(-1)
         if not cds:
             logger.critical('Plots are only available for cds')
-            sys.exit(1)
+            quit(-1)
 
     # Compute dataset kmer signatures
     signatures_pickle = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
@@ -229,7 +228,7 @@ def main(input_file,
     logger.info('Total substitution mutations: {}'.format(mut))
     if not element_mutations_cutoff:
         logger.critical('No element with enough mutations to perform analysis')
-        sys.exit(1)
+        quit(-1)
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
