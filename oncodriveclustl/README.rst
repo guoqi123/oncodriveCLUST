@@ -25,7 +25,7 @@ OncodriveCLUSTL depends on Python 3.5 and some external libraries. You can get t
    which is required to compile the ``*.pyx`` files.
 
 The first time that you run OncodriveCLUSTL it will download the genome reference from our servers. For the analysis of coding regions, if you specify it, it will also download our latest run from Variant Effect Prediction Tool (VEP)
-version 88 (McLaren et al., 2016) from our servers to build the clusters using non-synonymous mutations. VEP tool is freely available from `</home/carnedo/projects/oncodriveclustl/oncodriveclustl/README.rst/>`_
+version 88 (McLaren et al., 2016) from our servers to build the clusters using non-synonymous mutations. VEP tool is freely available from `<https://www.ensembl.org/info/docs/tools/vep/>`_
 By default the downloaded datasets go to ``~/.bgdata``. If you want to move these datasets to another folder you have to define the system environment variable BGDATA_LOCAL with an export command.
 
 The following command will show you the help::
@@ -61,7 +61,7 @@ The results will be saved in a folder named ``cds``.
 Documentation
 -------------
 
-Find OncodriveFML documentation in `ReadTheDocs <http://oncodrivefml.readthedocs.io/en/latest/>`_.
+Find OncodriveCLUSTL documentation in `ReadTheDocs <http://oncodrivefml.readthedocs.io/en/latest/>`_.
 
 You can also compile the documentation yourself using `Sphinx <http://www.sphinx-doc.org/en/stable/>`_,
 if you have cloned the repository.
