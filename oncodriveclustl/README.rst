@@ -3,10 +3,15 @@
 OncodriveCLUSTL
 ============
 
+One of the main goals of cancer research is the identification of the genomic elements that drive tumorigenesis. This is a big challenge specially for mutations in the non-coding genome, for which new computational tools need to be addressed. We present OncodriveCLUSTL, a sequence-based clustering method for the detection of cancer drivers in any genomic region of interest  using a local simulation of the mutational process affecting them.
+
 .. _readme license:
 
 License
 -------
+
+OncodriveCLUSTL is made available to the general public subject to certain conditions described in its `LICENSE <LICENSE>`_.
+For the avoidance of doubt, you may use the software and any data accessed through UPF software for academic, non-commercial and personal use only, and you may not copy, distribute, transmit, duplicate, reduce or alter in any way for commercial purposes, or for the purpose of redistribution, without a license from the Universitat Pompeu Fabra (UPF). Requests for information regarding a license for commercial use or redistribution of OncodriveFML may be sent via e-mail to innovacio@upf.edu.
 
 .. _readme install:
 
