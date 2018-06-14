@@ -38,10 +38,10 @@ LOGS = {
               help='Cutoff of element mutations. Default is 2')
 @click.option('-cmut', '--cluster-mutations', type=click.INT, default=2,
               help='Cutoff of cluster mutations. Default is 2')
-@click.option('-sw', '--smooth-window', type=click.INT, default=25,
-              help='Smoothing window. Default is 50')
-@click.option('-cw', '--cluster-window', type=click.INT, default=50,
-              help='Cluster window. Default is 50')
+@click.option('-sw', '--smooth-window', type=click.INT, default=30,
+              help='Smoothing window. Default is 30')
+@click.option('-cw', '--cluster-window', type=click.INT, default=30,
+              help='Cluster window. Default is 30')
 @click.option('-cs', '--cluster-score', default='fmutations', help='Cluster score formula',
               type=click.Choice(['fmutations']))
 @click.option('-es', '--element-score', default='sum', help='Element score formula',
@@ -50,10 +50,10 @@ LOGS = {
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=10000,
               help='number of simulations. Default is 10000')
-@click.option('-sim', '--simulation-mode', default='region', help='Simulation mode',
+@click.option('-sim', '--simulation-mode', default='mutation_centered', help='Simulation mode',
               type=click.Choice(['mutation_centered', 'region_restricted']))
-@click.option('-simw', '--simulation-window', type=click.INT, default=60,
-              help='Simulation window. Default is 20')
+@click.option('-simw', '--simulation-window', type=click.INT, default=45,
+              help='Simulation window. Default is 45')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
               help='Number of cores to use in the computation. By default it uses all the available cores.')
 @click.option('--seed', type=click.INT, default=None,
