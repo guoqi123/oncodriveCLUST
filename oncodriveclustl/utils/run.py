@@ -171,7 +171,10 @@ class Experiment:
                 start = interval[0] - (simulation_window // 2) - delta
                 size = interval[1] - interval[0] + (simulation_window - correction) + delta*2
                 # genomic start -d -sw//2, genomic end +d +sw//2
-                sequence = bgr.refseq(self.genome, self.chromosomes_d[element], start, size)
+                try:
+                    sequence = bgr.refseq(self.genome, self.chromosomes_d[element], start, size)
+                except ValueError as e:
+                    logger.error(e, element, start, size, interval[0], interval[1])
 
                 # Search kmer probabilities
                 for n in range(delta, len(sequence)-delta):  # start to end

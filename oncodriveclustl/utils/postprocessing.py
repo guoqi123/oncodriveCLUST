@@ -146,12 +146,13 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                 for interval in clustersinfo:
                     for c, v in interval.data.items():
                         if cds_d:
-                            for interval in reverse_cds_d[v['left_m'][0]]:
-                                start_l = interval.data
-                                end_l = interval.data + (interval[1] - interval[0])
-                            for interval in reverse_cds_d[v['right_m'][0]]:
-                                start_r = interval.data
-                                end_r = interval.data + (interval[1] - interval[0])
+                            for i in reverse_cds_d[v['left_m'][0]]:
+                                start_l = i.data
+                                end_l = i.data + (i[1] - i[0])
+                            for i in reverse_cds_d[v['right_m'][0]]:
+                                start_r = i.data
+                                end_r = i.data + (i[1] - i[0])
+
                             if start_l != start_r:
                                 region_start = (start_l, end_l)
                                 region_end = (start_r, end_r)
