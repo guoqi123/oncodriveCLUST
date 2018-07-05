@@ -113,9 +113,6 @@ def merge_clusters(clusters_tree, window):
     for interval in clusters_tree:
         clusters = interval.data.copy()
         n_clusters = len(clusters.keys())
-        #         for k, v in clusters.items():
-        #            print(k, v)
-
         # Get the maximums to iterate
         maxs = []
         for c, v in clusters.items():
@@ -129,7 +126,6 @@ def merge_clusters(clusters_tree, window):
             for x in range(n_clusters):
                 # When x is a key in clusters
                 if x in clusters.keys():
-                    # print('iterate with cluster', x)
                     maximum = clusters[x]['max']
                     left_margin = clusters[x]['left_m']
                     right_margin = clusters[x]['right_m']
@@ -180,10 +176,6 @@ def merge_clusters(clusters_tree, window):
                                 maxs_set.remove(maxs[x])
             if stop == 0:
                 iterate = 0
-        # print('--------------')
-        # for k, v in clusters.items():
-        #     print(k, v)
-        # print('--------------')
 
         for k, v in missed_clusters.items():
             clusters[k] = v

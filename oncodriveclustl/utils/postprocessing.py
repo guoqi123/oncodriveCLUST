@@ -39,14 +39,15 @@ def write_element_results(genome, results, directory, file, gzip):
     :param genome: reference genome
     :param results: dict, dictionary of results, keys are element's symbols
     :param directory: str, output directory
-    :param file: str, output file, if elements in elements file
+    :param file: str, output file
     :param gzip: bool, True generates gzip compressed output file
     :return: None
     """
 
+    file = os.path.join(directory, file)
+
     global logger
     logger = daiquiri.getLogger()
-    output_file = directory + '/elements_' + file + '.txt'
 
     header = ['SYMBOL', 'ENSID', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS',
               'SCORE',
@@ -104,10 +105,9 @@ def write_element_results(genome, results, directory, file, gzip):
     sorted_list_elements = df['SYMBOL'].tolist()
 
     if gzip is True:
-        output_file = output_file + '.gz'
-        df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False, compression='gzip')
+        df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False, compression='gzip')
     else:
-        df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
+        df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False)
 
     return sorted_list_elements
 
@@ -124,14 +124,14 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
     :return: None
     """
     reverse_cds_d = IntervalTree()
-
     sorterindex = dict(zip(sorter, range(len(sorter))))
-    output_file = directory + '/clusters_' + file + '.tsv'
+    file = os.path.join(directory, file)
+
     header = ['RANK', 'SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'REGION',
               '5_COORD', 'MAX_COORD', '3_COORD',
               'WIDTH', 'N_MUT', 'N_SAMPLES', 'FRA_UNIQ_SAMPLES', 'SCORE', 'P']
 
-    with open(output_file, 'w') as fd:
+    with open(file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
         for element, values in results.items():
             if cds_d:
@@ -169,34 +169,38 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                             len(v['mutations']), len(v['samples']), v['fra_uniq_samples'], v['score'], v['p']))
 
     # Sort
-    df = pd.read_csv(output_file, sep='\t', header=0)
+    df = pd.read_csv(file, sep='\t', header=0, compression=None)
     df.sort_values(by=['RANK', 'P', 'SCORE'], ascending=[True, True, False], inplace=True)
 
     if gzip is True:
-        output_file_gz = output_file + '.gz'
-        df.to_csv(path_or_buf=output_file_gz, sep='\t', na_rep='', index=False, compression='gzip')
-        os.remove(output_file)
+        df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False, compression='gzip')
     else:
-        df.to_csv(path_or_buf=output_file, sep='\t', na_rep='', index=False)
+        df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False)
 
 
-def write_oncohortdrive_results(mutations, directory, file, regions_d):
+def write_oncohortdrive_results(mutations_file, directory, file, regions_d):
     """
     Generate compressed file with input BED + mutations mapped to cluters (score, p-value, significance)
-    :param mutations: input mutations file
+    :param mutations_file: input mutations file
     :param directory: str, output directory
-    :param file: str, output file, if elements in elements file
+    :param file: str, clusters output file to read
     :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
     :return: None
     """
-    mutations_file = mutations
-    clusters_file = directory + '/clusters_' + file + '.tsv'
-    output_file = directory + '/oncohortdrive_' + file + '.out'
     clusters_tree = IntervalTree()
     Cluster = namedtuple('Cluster', 'sym, ensid, score, p, sig')
+    clusters_file = os.path.join(directory, file)
+    output_file = os.path.join(directory, 'oncohortdrive_results.out')  # TODO: if elements file, this will overwrite
 
     # Read clusters file
-    with open(clusters_file, 'r') as cf:
+    if 'gz' in clusters_file:
+        read_function = gzip.open
+        mode = 'rt'
+    else:
+        read_function = open
+        mode = 'r'
+
+    with read_function(clusters_file, mode) as cf:
         next(cf)
         for line in cf:
             _, sym, ensid, _, _, _, _, clust_l, _, clust_r, _, _, _, _, score, p = line.strip().split('\t')
@@ -213,12 +217,11 @@ def write_oncohortdrive_results(mutations, directory, file, regions_d):
                 clusters_tree.addi(left_coord, right_coord + 1, Cluster(sym, ensid, score, p, sig))
 
     # Generate output file
-    read_function, mode, delimiter = prep.check_tabular_csv(mutations)
+    read_function, mode, delimiter = prep.check_tabular_csv(mutations_file)
 
     with open(output_file, 'w') as of:
         header = ['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE', 'SYM', 'SYM_ENSID', 'SCORE', 'PVALUE', 'SIG_0.05']
         of.write('{}\n'.format('\t'.join(header)))
-
         with read_function(mutations_file, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
             for line in fd:

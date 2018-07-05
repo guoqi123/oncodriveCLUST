@@ -1,6 +1,6 @@
 .. _readme:
 
-OncodriveCLUSTL
+OncodriveCLUSTL (MSc version)
 ============
 
 One of the main goals of cancer research is the identification of the genomic elements that drive tumorigenesis. This is a big challenge specially for mutations in the non-coding genome, for which new computational tools need to be addressed. We present OncodriveCLUSTL, a sequence-based clustering method for the detection of cancer drivers in any genomic region of interest  using a local simulation of the mutational process affecting them.
@@ -10,24 +10,22 @@ One of the main goals of cancer research is the identification of the genomic el
 License
 -------
 
-OncodriveCLUSTL is made available to the general public subject to certain conditions described in its `LICENSE <LICENSE>`_.
-For the avoidance of doubt, you may use the software and any data accessed through UPF software for academic, non-commercial and personal use only, and you may not copy, distribute, transmit, duplicate, reduce or alter in any way for commercial purposes, or for the purpose of redistribution, without a license from the Universitat Pompeu Fabra (UPF). Requests for information regarding a license for commercial use or redistribution of OncodriveFML may be sent via e-mail to innovacio@upf.edu.
+OncodriveCLUSTL will be available to the general public subject to certain conditions described in its `LICENSE <LICENSE>`_.
 
 .. _readme install:
 
 Installation
 ------------
 
-OncodriveCLUSTL depends on Python 3.5 and some external libraries. You can get the latest code from the repository and install with ``pip``::
+OncodriveCLUSTL depends on Python 3.6 and some external libraries. First you need to downloadn and uncompress the oncodriveclustl-0.1.0.tar.gz file.
+Then you can install it with ``pip``::
 
-        $ git clone git@bitbucket.org:bbglab/oncodriveclustl.git
-        $ cd oncodriveclustl
+        $ cd oncodriveclustl-0.1.0/
         $ pip install .
 
-.. note::
+We recommend using `conda <https://www.anaconda.com/download/>`_ to install Python 3.6 and OncodriveCLUSTL.
 
-   OncodriveCLUSTL has a set up dependency with `Cython <http://cython.org/>`_,
-   which is required to compile the ``*.pyx`` files.
+.. note::
 
 The first time that you run OncodriveCLUSTL it will download the genome reference from our servers. For the analysis of coding regions, if you specify it, it will also download our latest run from Variant Effect Prediction Tool (VEP)
 version 88 (McLaren et al., 2016) from our servers to build the clusters using non-synonymous mutations. VEP tool is freely available from `<https://www.ensembl.org/info/docs/tools/vep/>`_
@@ -42,36 +40,15 @@ The following command will show you the help::
 Run the example
 ---------------
 
-Download and extract the example files (if you cloned the repository skip this step)::
+After installing OncodriveCLUSTL, you can run an example of TCGA breast adenocarcinomas (Weinstein et al., 2013) for coding regions (Mularoni et al., 2016) using 1000 simulations.
+First you need to download and uncompress the example.tar.xz file. Then you can type::
 
-   $ wget https://bitbucket.org/bbglab/oncodrivefml/downloads/oncodrivefml-examples_v2.0.tar.gz
-   $ tar xvzf oncodrivefml-examples_v2.0.tar.gz
+   $ oncodriveclustl -i example/BRCA.txt -r example/cds_regions.gz -o example/output_example -sim region_restricted --cds -n 1000
 
-If you want to speed up the download of the genome reference that is also needed,
-run this command::
+The results will be saved in a folder named ``output_example``.
 
-   $ bg-data datasets genomereference hg19
+If you want to run a specific gene, you can type::
+   $ oncodriveclustl -i example/BRCA.txt -r example/cds_regions.gz -o example/output_example -sim region_restricted --cds -n 1000 -e PIK3CA
 
-To run the example, we have included a bash script (``run.sh``)
-than will execute OncodriveCLUSTL. The script should be executed in
-the folder where the files have been extracted::
-
-   $ ./run.sh
-
-The results will be saved in a folder named ``cds``.
-
-
-.. _readme docs:
-
-Documentation
--------------
-
-Find OncodriveCLUSTL documentation in `ReadTheDocs <http://oncodrivefml.readthedocs.io/en/latest/>`_.
-
-You can also compile the documentation yourself using `Sphinx <http://www.sphinx-doc.org/en/stable/>`_,
-if you have cloned the repository.
-To do so, install the optional packages in ``optional-requirements.txt`` and build the
-documentation in the docs folder::
-
-    $ cd docs
-    $ make html
+You can plot the observed clusters for a gene::
+   $ oncodriveclustl -i example/BRCA.txt -r example/cds_regions.gz -o example/output_example --cds -e PIK3CA --plot

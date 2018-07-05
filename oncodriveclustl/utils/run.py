@@ -30,7 +30,7 @@ class Experiment:
 
     def __init__(self, regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome, path_pickle,
                  element_mutations_cutoff, cluster_mutations_cutoff, smooth_window, cluster_window,
-                 cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores, seed,
+                 cluster_score, element_score, kmer, n_simulations, simulation_mode, simulation_window, cores,
                  conseq, plot):
         """Initialize the Experiment class
         :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
@@ -52,7 +52,6 @@ class Experiment:
         :param simulation_mode: str, simulation mode
         :param simulation_window: int, window to simulate mutations in hotspot mode
         :param cores: int, number of CPUs to use
-        :param seed: int, seed
         :param conseq: True, use aa consequence type
         :param plot: bool, True generates a clustering plot for an element
         :return: None
@@ -82,7 +81,6 @@ class Experiment:
         self.simulation_mode = simulation_mode
         self.simulation_window = simulation_window + (1 - simulation_window % 2)
         self.cores = cores
-        self.seed = seed
         self.plot = plot
         self.conseq = conseq
 

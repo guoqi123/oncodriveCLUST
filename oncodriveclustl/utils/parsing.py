@@ -76,12 +76,11 @@ def map_regions_cds(regions_d):
     return cds_d
 
 
-def read_mutations(input_mutations, trees, vep_file, conseq):
+def read_mutations(input_mutations, trees, conseq):
     """
     Read mutations file and intersect with regions. Only substitutions.
     :param input_mutations: path to file containing mutations
     :param trees: dictionary of dictionary of IntervalTrees containing intervals of genomic elements per chromosome
-    :param vep_file: path to file containing mutations in vep format
     :param conseq: True, use aa consequence type
     :return:
         mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple
@@ -136,24 +135,22 @@ def read_mutations(input_mutations, trees, vep_file, conseq):
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
                     if ref != '-' and alt != '-':
-                        if not vep_file:
-                            if trees[chromosome][int(position)] != set():
-                                results = trees[chromosome][int(position)]
-                                for res in results:
-                                    muttype = 1
-                                    m = Mutation(position, (res.begin, res.end), muttype, sample)
-                                    mutations_d[res.data].append(m)
+                        if trees[chromosome][int(position)] != set():
+                            results = trees[chromosome][int(position)]
+                            for res in results:
+                                muttype = 1
+                                m = Mutation(position, (res.begin, res.end), muttype, sample)
+                                mutations_d[res.data].append(m)
 
     return mutations_d, samples_d
 
 
-def parse(input_regions, elements, input_mutations, cds, vep_file, conseq):
+def parse(input_regions, elements, input_mutations, cds, conseq):
     """Parse genomic regions and dataset of cancer type mutations
     :param input_regions: path to file containing mutational data
     :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
     :param input_mutations: path tab file
     :param cds: bool, True calculates clustering on cds
-    :param vep_file: path to vep file
     :param conseq: True, use aa consequence type
     :return
         regions_d: dictionary of IntervalTrees with genomic regions for elements
@@ -172,7 +169,7 @@ def parse(input_regions, elements, input_mutations, cds, vep_file, conseq):
     else:
         cds_d = {}
     logger.info('Regions parsed')
-    mutations_d, samples_d = read_mutations(input_mutations, trees, vep_file, conseq)
+    mutations_d, samples_d = read_mutations(input_mutations, trees, conseq)
     logger.info('Mutations parsed')
 
     return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d

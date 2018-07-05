@@ -21,20 +21,8 @@ def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
     final_smooth_tree = IntervalTree()
     mutations_in = []
 
-    """
-    print('---------------------------------------------------')
-    # Calculate length
-    element_length = 0
-    for interval in regions:
-        element_length += (interval[1] - interval[0])
-    print('element: ', element_length)
-    print('tukey: ', len(tukey_filter))
-    print('simulation: ', simulation_window)
-    """
-
     # Generate smoothing arrays for regions
     for interval in regions:
-       # print('region ', interval)
         # Add extra bases for smoothing of simulated mutations that fall outside regions and tukey_filter
         first_smooth_tree.addi(interval.begin, interval.end,
                          np.zeros((interval.end - interval.begin + len(tukey_filter) + simulation_window - 2)))
@@ -63,7 +51,6 @@ def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
     else:
         # Smooth simulated mutations outside regions
         for mutation in mutations:
-            # TODO TABIX change
             if mutation.muttype == 1:
                 if not first_smooth_tree[mutation.position]:
                     for interval in first_smooth_tree[mutation.region[0]]:
@@ -91,7 +78,6 @@ def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
 
         # Smooth mutations inside regions
         for mutation in mutations:
-            # TODO TABIX change
             if mutation.muttype == 1:
                 if first_smooth_tree[mutation.position]:
                     for interval in cds_tree[mutation.position]:

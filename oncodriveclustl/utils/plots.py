@@ -41,7 +41,7 @@ def prepare_clusters_data(strand, length, clusters_tree, false_margin=5):
     return plot_max, plot_clusters
 
 
-def plot(element, strand, smoothing, mutations, length, raw_clusters_tree, merge_clusters_tree, filter_clusters_tree):
+def plot(element, strand, smoothing, mutations, length, filter_clusters_tree):
     """
 
     :return:
@@ -57,29 +57,17 @@ def plot(element, strand, smoothing, mutations, length, raw_clusters_tree, merge
         smoothing = smoothing[::-1]
         mutations = mutations[::-1]
 
-    ax1.plot(smoothing, c='royalblue')
-    ax1.set_ylabel('Smoothing score', color='royalblue', fontsize=16)
-
     ax2 = ax1.twinx()
-    ax2.plot(mutations, c='red', alpha=.5)
-    ax2.set_ylabel('Number of mutations', color='red', fontsize=16)
+    ax2.plot(mutations, c='red', alpha=.5, linewidth=2.0)
+    ax2.set_ylabel('Number of mutations', color='red', fontsize=20)
 
-    ax1.tick_params('y', colors='royalblue', labelsize=12)
-    ax2.tick_params('y', colors='red', labelsize=12)
+    ax1.plot(smoothing, c='royalblue', linewidth=3.0)
+    ax1.set_ylabel('Smoothing score', color='royalblue', fontsize=20)
 
-    # plot_max, plot_clusters = prepare_clusters_data(strand=strand, length=length,
-    #                                             clusters_tree=raw_clusters_tree)
-    # for maxima in plot_max:
-    #     ax1.plot(maxima, 1, '.', ms=15, c='cornflowerblue')
-    # for cluster in plot_clusters:
-    #     ax1.plot((cluster[0], cluster[1]), (1, 1), c='cornflowerblue')
-    #
-    # plot_max2, plot_clusters2 = prepare_clusters_data(strand=strand, length=length,
-    #                                               clusters_tree=merge_clusters_tree)
-    # for maxima in plot_max2:
-    #     ax1.plot(maxima, 1.25, '.', ms=15, c='blue')
-    # for cluster in plot_clusters2:
-    #     ax1.plot((cluster[0], cluster[1]), (1.25, 1.25), c='blue')
+    ax1.tick_params('y', colors='royalblue', labelsize=16)
+    ax2.tick_params('y', colors='red', labelsize=16)
+    ax1.tick_params('x', labelsize=16)
+
 
     plot_max3, plot_clusters3 = prepare_clusters_data(strand=strand, length=length,
                                                   clusters_tree=filter_clusters_tree)
@@ -88,17 +76,13 @@ def plot(element, strand, smoothing, mutations, length, raw_clusters_tree, merge
     for cluster in plot_clusters3:
         ax1.plot((cluster[0], cluster[1]), (0.45, 0.45), c='darkblue')
 
-
-    # lightgrey_patch = mpatches.Patch(color='cornflowerblue', label='Smoothing')
-    # grey_patch = mpatches.Patch(color='blue', label='Merged')
-    # black_patch = mpatches.Patch(color='darkblue', label='Filtered')
-    # plt.legend(handles=[black_patch, grey_patch, lightgrey_patch], fontsize=20)
-
     ax1.set_axisbelow(True)
     ax1.grid(color='lightgrey', linestyle='--', linewidth=1)
 
-    plt.title(title, fontsize=26)
-    plt.savefig('/home/carnedo/outputs/clusters_plots/plot.svg', bbox_inches='tight')
+    plt.title(title, fontsize=28)
+    # plt.title('TERT (promoter)', fontsize=26)
+    # plt.savefig('/home/carnedo/Claudia/Inkscape/20180703/TERT.svg', dpi=300, bbox_inches='tight')
+
     plt.show()
 
 
@@ -131,5 +115,4 @@ def run_plot(element, mutations, cds_d, strand, chromosome, smooth_window,
         index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
         mutation_array[index] += 1
 
-    plot(element, strand, smoothing_array, mutation_array, length, raw_clusters_tree, merge_clusters_tree,
-         score_clusters_tree)
+    plot(element, strand, smoothing_array, mutation_array, length, score_clusters_tree)

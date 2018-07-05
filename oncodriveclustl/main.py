@@ -22,12 +22,10 @@ LOGS = {
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
-@click.option('-vep', '--vep-file', default=None, required=False, type=click.Path(exists=True),
-              help='File containing somatic mutations in vep format')
 @click.option('-o', '--output-directory', default=None, required=True,
-              help='Output directory')
+              help='Output directory to be created')
 @click.option('-r', '--regions-file', default=None, required=True, type=click.Path(exists=True),
-              help='File with the genomic regions to analyze')
+              help='GZIP compressed file with the genomic regions to analyze')
 @click.option('-ef', '--elements-file', default=None, type=click.Path(exists=True),
               help='File with the symbol of the elements to analyze')
 @click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
@@ -56,8 +54,6 @@ LOGS = {
               help='Simulation window. Default is 45')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
               help='Number of cores to use in the computation. By default it uses all the available cores.')
-@click.option('--seed', type=click.INT, default=None,
-              help='seed to use in the simulations')
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
@@ -68,7 +64,6 @@ LOGS = {
 
 
 def main(input_file,
-         vep_file,
          output_directory,
          regions_file,
          elements_file,
@@ -85,16 +80,14 @@ def main(input_file,
          simulation_mode,
          simulation_window,
          cores,
-         seed,
          log_level,
          gzip,
          cds,
          conseq,
          plot,
          oncohort):
-    """Oncodriveclustl is a program that looks for mutational hotspots
+    """OncodriveCLUSTL (MSc version) is a sequence based clustering method to identify cancer drivers across the genome
     :param input_file: input file
-    :param vep_file: input vep file, optional
     :param output_directory: output directory
     :param regions_file: path input genomic regions, tab file
     :param elements_file: file containing one element per row
@@ -111,7 +104,6 @@ def main(input_file,
     :param simulation_mode: str, simulation mode
     :param simulation_window: int, window to simulate mutations in hotspot mode
     :param cores: int, number of CPUs to use
-    :param seed: int, seed
     :param log_level: verbosity of the logger
     :param gzip: bool, True generates gzip compressed output file
     :param cds: bool, True calculates clustering on cds
@@ -125,11 +117,18 @@ def main(input_file,
     if not os.path.exists(output_directory):
         os.makedirs(output_directory, exist_ok=True)
 
-    # Get file name
+    # Get output files name
     if elements_file is not None:
         output_file = elements_file.split('/')[-1]
     else:
         output_file = 'results'
+    if gzip:
+        elements_output_file = 'elements_{}.txt.gz'.format(output_file)
+        clusters_output_file = 'clusters_{}.tsv.gz'.format(output_file)
+    else:
+        elements_output_file = 'elements_{}.txt'.format(output_file)
+        clusters_output_file = 'clusters_{}.tsv'.format(output_file)
+
 
     daiquiri.setup(level=LOGS[log_level], outputs=(
         daiquiri.output.STDERR,
@@ -138,10 +137,10 @@ def main(input_file,
     global logger
     logger = daiquiri.getLogger()
 
+    logger.info('OncodriveCLUSTL')
     logger.info('\n'.join([
         '',
         'input_file: {}'.format(input_file),
-        'vep: {}'.format(vep_file),
         'output_directory: {}'.format(output_directory),
         'regions_file: {}'.format(regions_file),
         'genome: {}'.format(genome),
@@ -213,7 +212,7 @@ def main(input_file,
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
     regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d = pars.parse(regions_file, elements,
-                                                                                    input_file, cds, vep_file, conseq)
+                                                                                    input_file, cds, conseq)
     mut = 0
     elem = 0
     element_mutations_cutoff = False
@@ -239,17 +238,30 @@ def main(input_file,
                                 cluster_score, element_score,
                                 int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
-                                cores, seed, conseq, plot
+                                cores, conseq, plot
                                 ).run()
-    # Write results
-    sorted_list_elements = postp.write_element_results(genome=genome, results=elements_results,
-                                                       directory=output_directory, file=output_file, gzip=gzip)
+
+    # Write elements results (returns list of ranked elements)
+    sorted_list_elements = postp.write_element_results(genome=genome,
+                                                       results=elements_results,
+                                                       directory=output_directory,
+                                                       file=elements_output_file,
+                                                       gzip=gzip)
     logger.info('Elements results calculated')
-    postp.write_cluster_results(genome=genome, results=clusters_results, directory=output_directory, file=output_file,
-                                sorter=sorted_list_elements, gzip=gzip, cds_d=cds_d)
+    # Write clusters results
+    postp.write_cluster_results(genome=genome,
+                                results=clusters_results,
+                                directory=output_directory,
+                                file=clusters_output_file,
+                                sorter=sorted_list_elements,
+                                gzip=gzip,
+                                cds_d=cds_d)
     logger.info('Clusters results calculated')
+    # Write Oncohortdrive results
     if oncohort:
-        postp.write_oncohortdrive_results(mutations=input_file, directory=output_directory, file=output_file,
+        postp.write_oncohortdrive_results(mutations_file=input_file,
+                                          directory=output_directory,
+                                          file=clusters_output_file,
                                           regions_d=regions_d)
         logger.info('Oncohortdrive file generated')
     logger.info('Finished')
