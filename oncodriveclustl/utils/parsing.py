@@ -11,7 +11,7 @@ import bgdata as bgd
 
 from oncodriveclustl.utils import preprocessing as prep
 
-Mutation = namedtuple('Mutation', 'position, region, muttype, sample')
+Mutation = namedtuple('Mutation', 'position, region, muttype, sample, cancertype')
 Cds = namedtuple('Cds', 'start, end')
 
 def read_regions(input_regions, elements):
@@ -85,11 +85,14 @@ def read_mutations(input_mutations, trees, conseq):
     :return:
         mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple
         samples_d: dictionary, key = sample, value = number of mutations
+        cohorts_d: dictionary, key = element, value = set of cohorts with element mutations
     """
     global Mutation
     mutations_d = defaultdict(list)
     samples_d = defaultdict(int)
-    read_function, mode, delimiter = prep.check_tabular_csv(input_mutations)
+    cohorts_d = defaultdict(set)
+    read_function, mode, delimiter, cancer_type_header = prep.check_tabular_csv(input_mutations)
+    file_prefix = input_mutations.split('/')[-1].split('.')[0]
     conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
 
     if conseq:
@@ -102,7 +105,12 @@ def read_mutations(input_mutations, trees, conseq):
                 ref = line['REF']
                 alt = line['ALT']
                 sample = line['SAMPLE']
+                if cancer_type_header:
+                    cancer_type = line['CANCER_TYPE']
+                else:
+                    cancer_type = file_prefix
                 samples_d[sample] += 1
+
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
                     if ref != '-' and alt != '-':
@@ -120,8 +128,9 @@ def read_mutations(input_mutations, trees, conseq):
                                         '{}\nVep file for element {} could not be read. Analysis will be done without '
                                         'considering mutations consequence type\n'.format(e, res.data))
                                     muttype = 1
-                                m = Mutation(position, (res.begin, res.end), muttype, sample)
+                                m = Mutation(position, (res.begin, res.end), muttype, sample, cancer_type)
                                 mutations_d[res.data].append(m)
+                                cohorts_d[res.data].add(cancer_type)
     else:
         with read_function(input_mutations, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
@@ -131,6 +140,10 @@ def read_mutations(input_mutations, trees, conseq):
                 ref = line['REF']
                 alt = line['ALT']
                 sample = line['SAMPLE']
+                if cancer_type_header:
+                    cancer_type = line['CANCER_TYPE']
+                else:
+                    cancer_type = file_prefix
                 samples_d[sample] += 1
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
@@ -139,10 +152,11 @@ def read_mutations(input_mutations, trees, conseq):
                             results = trees[chromosome][int(position)]
                             for res in results:
                                 muttype = 1
-                                m = Mutation(position, (res.begin, res.end), muttype, sample)
+                                m = Mutation(position, (res.begin, res.end), muttype, sample, cancer_type)
                                 mutations_d[res.data].append(m)
+                                cohorts_d[res.data].add(cancer_type)
 
-    return mutations_d, samples_d
+    return mutations_d, samples_d, cohorts_d
 
 
 def parse(input_regions, elements, input_mutations, cds, conseq):
@@ -159,6 +173,7 @@ def parse(input_regions, elements, input_mutations, cds, conseq):
         strands_d: dict, keys are elements, values are strands
         mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple
         samples_d: dictionary, key = sample, value = number of mutations
+        cohorts_d: dictionary, key = element, value = set of cohorts with element mutations
     """
     global logger
     logger = daiquiri.getLogger()
@@ -169,7 +184,7 @@ def parse(input_regions, elements, input_mutations, cds, conseq):
     else:
         cds_d = {}
     logger.info('Regions parsed')
-    mutations_d, samples_d = read_mutations(input_mutations, trees, conseq)
+    mutations_d, samples_d, cohorts_d = read_mutations(input_mutations, trees, conseq)
     logger.info('Mutations parsed')
 
-    return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d
+    return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d

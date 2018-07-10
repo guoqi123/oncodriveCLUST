@@ -1,4 +1,6 @@
 # Import modules
+import os
+from collections import defaultdict
 import pickle
 import csv
 import gzip
@@ -20,23 +22,24 @@ class Parser:
         self.REF = 'REF'
         self.ALT = 'ALT'
         self.SAMPLE = 'SAMPLE'
-        self.TYPE = 'TYPE'
+        # self.TYPE = 'TYPE'
         self.CANCER_TYPE = 'CANCER_TYPE'
-        self.SIGNATURE = 'SIGNATURE'
-        self.TRANSCRIPT = 'TRANSCRIPT'
-        self.SYMBOL = 'SYMBOL'
+        # self.SIGNATURE = 'SIGNATURE'
+        # self.TRANSCRIPT = 'TRANSCRIPT'
+        # self.SYMBOL = 'SYMBOL'
 
 
 class Signature:
     """Class to calculate the mutational signatures of a dataset"""
 
-    def __init__(self, kmer, genome, log_level, start_at_0=False, mutation_type='subs'):
-        self.mutation_type = mutation_type
+    def __init__(self, kmer, genome, log_level, start_at_0=False, mutation_type='subs', pancancer=False):
         self.kmer = kmer
-        self.start_at_0 = start_at_0
         self.genome = genome
+        self.start_at_0 = start_at_0
+        self.mutation_type = mutation_type
+        self.pancancer = pancancer
         fx = self.triplets if kmer == 3 else self.pentamers
-        self.signatures = {'counts': fx(), 'probabilities': fx()}
+        self.signatures = defaultdict(lambda: {'counts': fx(), 'probabilities': fx()})
 
     @staticmethod
     def triplets():
@@ -70,10 +73,19 @@ class Signature:
                                              ''.join([nuc_1, nuc_2, alt, nuc_4, nuc_5])))
         return {key: 0 for key in results}
 
-    def save(self, signature_file):
-        """Save the signature to an output file"""
-        with open(signature_file, 'wb') as fd:
-            pickle.dump(self.signatures, fd, protocol=2)
+    def save(self, directory, prefix):
+        """Save the signature to an output file
+        :param directory: path to output directory
+        :param prefix: str, prefix for output file
+        :return None
+        """
+        for cohort, values in self.signatures.items():
+            if cohort == 'COHORT':
+                output_file = os.path.join(directory, '{}_kmer_{}.pickle'.format(prefix, self.kmer))
+            else:
+                output_file = os.path.join(directory, '{}_kmer_{}.pickle'.format(cohort, self.kmer))
+            with open(output_file, 'wb') as fd:
+                pickle.dump(values, fd, protocol=2)
 
     @staticmethod
     def load(signature_file):
@@ -85,11 +97,12 @@ class Signature:
     def calculate(self, mutations_file):
         """Calculate the signature of a dataset
         :param mutations_file: path to file containing mutations
+        :param pancancer: bool, True if pancancer analysis
         :return: None
         """
         parser = Parser()
 
-        read_function, mode, delimiter = prep.check_tabular_csv(mutations_file)
+        read_function, mode, delimiter, _ = prep.check_tabular_csv(mutations_file)
 
         with read_function(mutations_file, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
@@ -99,11 +112,14 @@ class Signature:
                 position = int(line[parser.POSITION])
                 ref = line[parser.REF]
                 alt = line[parser.ALT]
+                if self.pancancer:
+                    cancer_type = line[parser.CANCER_TYPE]
+                else:
+                    cancer_type = 'COHORT'
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
                     if ref != '-' and alt != '-':
                         if self.kmer == 3:
-
                             signature_ref = bg.refseq(self.genome, chromosome,  position - 1, 3).upper()
                             # Check reference nucleotide in mutations file equals reference genome nucleotide
                             if signature_ref[1] != ref:
@@ -122,40 +138,19 @@ class Signature:
                         N_alt = signature_alt.count('N')
                         if N_ref == 0 and N_alt == 0:
                             try:
-                                self.signatures['counts'][(signature_ref, signature_alt)] += 1
+                                self.signatures[cancer_type]['counts'][(signature_ref, signature_alt)] += 1
                                 count += 1
                             except KeyError as e:
                                 logger.error('{} not found in dictionary of mutations. Mutation is not taken '
                                                   'into account for signatures calculation'.format(
                                     e, signature_ref, signature_alt
                                 ))
+
         # Calculate probabilities
-        try:
-            self.signatures['probabilities'] = {k: v / count for k, v in self.signatures['counts'].items()}
-        except ZeroDivisionError as e:
-            logger.error('{}. Impossible to calculate signatures, no substitution mutations found in {}'.format(
-                e, mutations_file
-            ))
-
-
-@click.command()
-@click.argument('input_file')
-@click.argument('output_file')
-@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg19', 'mm10', 'c3h']), help="genome to use")
-@click.option('-k', '--kmer', default='3', type=click.Choice(['3', '5']), help="number of nucleotides' signature")
-@click.option('--log-level', default='info', help='verbosity of the logger',
-              type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
-@click.option('--start_at_0', is_flag=True)
-def main(input_file, output_file, genome, kmer, start_at_0, log_level):
-    """Calculate the signature of a dataset"""
-
-    global logger
-    logger = daiquiri.getLogger()
-
-    # Calculate signatures
-    obj = Signature(kmer=int(kmer), genome=genome, log_level=log_level, start_at_0=start_at_0)
-    obj.calculate(input_file)
-    obj.save(output_file)
-
-if __name__ == '__main__':
-    main()
+        for cohort, values in self.signatures.items():
+            try:
+                values['probabilities'] = {k: v / count for k, v in values['counts'].items()}
+            except ZeroDivisionError as e:
+                logger.error('{}. Impossible to calculate signatures, no substitution mutations found in {}'.format(
+                    e, mutations_file
+                ))

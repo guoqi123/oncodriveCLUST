@@ -1,6 +1,7 @@
 # Oncodriveclustl run
 import logging
 import os
+import csv
 
 import click
 import daiquiri
@@ -8,6 +9,7 @@ import daiquiri
 from oncodriveclustl.utils import signature as sign
 from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import run as exp
+from oncodriveclustl.utils import preprocessing as prep
 from oncodriveclustl.utils import postprocessing as postp
 
 # Global variables
@@ -57,10 +59,11 @@ LOGS = {
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
-@click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)',)
-@click.option('--conseq', is_flag=True, help='Use mutations consequence type from VEP (CODING)',)
-@click.option('--plot', is_flag=True, help='Generate a clustering plot for an element',)
-@click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive',)
+@click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)')
+@click.option('--conseq', is_flag=True, help='Use mutations consequence type from VEP (CODING)')
+@click.option('--plot', is_flag=True, help='Generate a clustering plot for an element')
+@click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive')
+@click.option('--pancancer', is_flag=True, help='PanCancer cohort analysis')
 
 
 def main(input_file,
@@ -85,7 +88,8 @@ def main(input_file,
          cds,
          conseq,
          plot,
-         oncohort):
+         oncohort,
+         pancancer):
     """OncodriveCLUSTL (MSc version) is a sequence based clustering method to identify cancer drivers across the genome
     :param input_file: input file
     :param output_directory: output directory
@@ -110,6 +114,7 @@ def main(input_file,
     :param conseq: bool, True uses consequence type for cds
     :param plot: bool, True generates a clustering plot for an element
     :param oncohort: bool, True generates output file for OncohortDrive
+    :param pancancer: bool, True computes PanCancer cohort analysis
     :return: None
     """
 
@@ -159,9 +164,9 @@ def main(input_file,
         'gzip: {}'.format(gzip),
         'oncohort: {}'.format(oncohort),
         'VEP conseq: {}'.format(conseq),
+        'Pancancer: {}'.format(pancancer),
         ''
     ]))
-
     logger.info('Initializing OncodriveCLUSTL...')
 
     # Check parameters
@@ -172,6 +177,15 @@ def main(input_file,
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))
         quit(-1)
+
+    # If --plot, only one element is analyzed
+    if plot:
+        if len(elements) != 1:
+            logger.critical('Plot can only be calculated for one element')
+            quit(-1)
+        if not cds:
+            logger.critical('Plots are only available for cds')
+            quit(-1)
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -186,33 +200,64 @@ def main(input_file,
         )
         logger.info(', '.join(elements))
 
-    # If --plot, only one element is analyzed
-    if plot:
-        if len(elements) != 1:
-            logger.critical('Plot can only be calculated for one element')
-            quit(-1)
-        if not cds:
-            logger.critical('Plots are only available for cds')
-            quit(-1)
-
-    # Compute dataset kmer signatures
-    signatures_pickle = input_file.split('/')[-1][:-4] + '_' + kmer + '.pickle'
-    path_cache = output_directory + '/cache'
+    # Check format input file and calculate signature
+    read_function, mode, delimiter, cancer_type = prep.check_tabular_csv(input_file)
+    path_cache = os.path.join(output_directory, 'cache')
     os.makedirs(path_cache, exist_ok=True)
-    path_pickle = path_cache + '/' + signatures_pickle
-    if not os.path.isfile(path_pickle):
-        logger.info('Computing signatures...')
-        obj = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), log_level=log_level)
-        obj.calculate(input_file)
-        obj.save(path_pickle)
-        logger.info('Signatures computed')
+    obj = sign.Signature(start_at_0=True, genome='hg19', kmer=int(kmer), log_level='info', pancancer=pancancer)
+    cohorts_of_analysis = set()
+
+    if pancancer:
+        # Check header
+        if cancer_type:
+            # Read file and get input cohorts
+            pancancer_pickles = 0
+
+            with read_function(input_file, mode) as read_file:
+                fd = csv.DictReader(read_file, delimiter=delimiter)
+                for line in fd:
+                    cohorts_of_analysis.add(line['CANCER_TYPE'])
+            logger.info('PanCancer analysis for {} cohort{}'.format(len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) >1 else '')) # TODO warning if len == 1?
+
+            # Check if signatures computed
+            for cohort in cohorts_of_analysis:
+                path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer))
+                if os.path.isfile(path_pickle):
+                    pancancer_pickles += 1
+            if len(cohorts_of_analysis) == pancancer_pickles:
+                logger.info('Signatures computed')
+            # Calculate signatures
+            else:
+                logger.info('Computing signatures...')
+                obj.calculate(input_file)
+                obj.save(path_cache, prefix=None)
+                logger.info('Signatures computed')
+        else:
+            logger.critical('PanCancer analysis requires "CANCER_TYPE" column in input file')
+            quit(-1)
     else:
-        logger.info('Signatures computed')
+        # Check if signatures computed
+        file_prefix = input_file.split('/')[-1].split('.')[0]
+        path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
+        if os.path.isfile(path_pickle):
+            logger.info('Signatures computed')
+        # Calculate signatures
+        else:
+            logger.info('Computing signatures...')
+            obj.calculate(input_file)
+            obj.save(path_cache, prefix=file_prefix)
+            logger.info('Signatures computed')
+        cohorts_of_analysis.add(file_prefix)
 
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
-    regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d = pars.parse(regions_file, elements,
-                                                                                    input_file, cds, conseq)
+    regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
+        regions_file,
+        elements,
+        input_file,
+        cds,
+        conseq
+    )
     mut = 0
     elem = 0
     element_mutations_cutoff = False
@@ -232,7 +277,7 @@ def main(input_file,
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
                                 regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome,
-                                path_pickle,
+                                path_cache, cohorts_d,
                                 element_mutations, cluster_mutations,
                                 smooth_window, cluster_window,
                                 cluster_score, element_score,

@@ -69,10 +69,11 @@ def check_tabular_csv(file):
             ref = 'REF' in line
             alt = 'ALT' in line
             sample = 'SAMPLE' in line
+            cancer_type = 'CANCER_TYPE' in line
             break
 
         if chr == pos == ref == alt == sample == True:
-            return read_function, mode, dialect.delimiter
+            return read_function, mode, dialect.delimiter, cancer_type
 
         else:
             logger.critical('{} does not contain header and/or header is not in correct format'.format(file))
