@@ -36,7 +36,7 @@ class Experiment:
                  cluster_score, element_score,
                  kmer, n_simulations, simulation_mode, simulation_window,
                  cores,
-                 conseq,
+                 conseq, protein,
                  plot):
         """Initialize the Experiment class
         :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
@@ -60,6 +60,7 @@ class Experiment:
         :param simulation_window: int, window to simulate mutations in hotspot mode
         :param cores: int, number of CPUs to use
         :param conseq: True, use aa consequence type
+        :param protein: bool, True analyzes clustering in translated protein sequences
         :param plot: bool, True generates a clustering plot for an element
         :return: None
         """
@@ -91,6 +92,8 @@ class Experiment:
         self.cores = cores
         self.plot = plot
         self.conseq = conseq
+        self.protein = protein
+
 
         # Read CGC
         if self.genome == 'hg19':
@@ -168,7 +171,11 @@ class Experiment:
         # TODO to much memory?
         signatures_d = defaultdict()
         for cohort in self.cohorts_d[element]:
-            path_to_signature_pickle = os.path.join(self.path_cache, '{}_kmer_{}.pickle'.format(cohort, self.kmer))
+            if os.path.isfile(self.path_cache):
+                path_to_signature_pickle = self.path_cache
+            else:
+                path_to_signature_pickle = os.path.join(self.path_cache, '{}_kmer_{}.pickle'.format(cohort, self.kmer))
+
             if os.path.isfile(path_to_signature_pickle):
                 signature = pickle.load(open(path_to_signature_pickle, "rb"))
                 signatures_d[cohort] = signature['probabilities']
@@ -254,18 +261,24 @@ class Experiment:
             dict of dicts: cutoff clusters
             int, gene score
         """
-
         if self.cds_d:
             cds_d = self.cds_d[element]
         else:
             cds_d = {}
 
-        smooth_tree, mutations_in = smo.smooth(self.regions_d[element], cds_d, mutations, self.tukey_filter, self.simulation_window)
+        if not self.protein:
+            smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
+                                                              self.tukey_filter, self.simulation_window)
+        else:
+            smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], cds_d, mutations,
+                                                              self.tukey_filter, self.simulation_window)
+            cds_d = {}  # Next functions performed with cds False
+
         index_tree = clu.find_locals(smooth_tree, cds_d)
         raw_clusters_tree = clu.raw_clusters(index_tree)
         merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
         filter_clusters_tree = clu.clusters_mut(merge_clusters_tree, mutations_in, self.cluster_mutations_cutoff)
-        score_clusters_tree = clu.fmutations_score(filter_clusters_tree, self.regions_d[element], len(mutations_in))
+        score_clusters_tree = clu.fmutations_score(filter_clusters_tree, self.regions_d[element], len(mutations_in), self.protein)
         logger.debug('Clusters scores calculated')
         element_score = score.element_score(score_clusters_tree, analysis_mode, self.element_score)
         logger.debug('Element score calculated')
@@ -355,14 +368,18 @@ class Experiment:
         return (len([x for x in simulations if x >= observed]) + 1) / len(simulations)
 
     def length(self, element):
-        """Calculate length of an element (sum of input regions)
+        """Calculate length of an element (sum of input regions). If clustering in protein sequence, length in aa
         :param element: element to analyze
-        :return length: int, length of an element
+        :return length: int, length of an element (bp or aa)
         """
         length_ele = 0
+
         for interval in self.regions_d[element]:
             length_ele += (interval[1] - interval[0])
-        return length_ele
+        if self.protein:
+            return length_ele//3
+        else:
+            return length_ele
 
     def post_process(self, items):
         """

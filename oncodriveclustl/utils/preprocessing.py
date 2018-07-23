@@ -4,6 +4,7 @@ import gzip
 import csv
 
 import daiquiri
+import pickle
 
 
 def check_compression(file):
@@ -78,4 +79,25 @@ def check_tabular_csv(file):
         else:
             logger.critical('{} does not contain header and/or header is not in correct format'.format(file))
             quit(-1)
+
+
+def check_signature(file, kmer):
+    """
+    Check input signatures format
+    :param file:
+    :param kmer:
+    :return: error: True if file is not in correct format
+    """
+    error = False
+    try:
+        signature = pickle.load(open(file, "rb"))
+        # Input signatures calculated for same kmer
+        if len(list(signature['probabilities'].keys())[0][0]) != int(kmer):
+            error = True
+    except Exception:
+        # Input signatures cannot be read
+        error = True
+
+    return error
+
 

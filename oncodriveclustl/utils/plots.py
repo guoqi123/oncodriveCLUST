@@ -68,7 +68,6 @@ def plot(element, strand, smoothing, mutations, length, filter_clusters_tree):
     ax2.tick_params('y', colors='red', labelsize=16)
     ax1.tick_params('x', labelsize=16)
 
-
     plot_max3, plot_clusters3 = prepare_clusters_data(strand=strand, length=length,
                                                   clusters_tree=filter_clusters_tree)
     for maxima in plot_max3:

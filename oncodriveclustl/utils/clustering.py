@@ -219,17 +219,23 @@ def clusters_mut(clusters_tree, mutations_in, cluster_mutations_cutoff):
     return filter_clusters_tree
 
 
-def fmutations_score(clusters_tree, regions, mutations_in):
+def fmutations_score(clusters_tree, regions, mutations_in, protein):
     """
     Score clusters with fraction of mutations formula
     :param clusters_tree: IntervalTree, data are dict of dict
     :param regions: IntervalTree with genomic positions of an element
     :param mutations_in: int, len of list of mutations inside regions
+    :param protein: bool, True analyzes clustering in protein sequence
     :return:
             score_clusters_tree: IntervalTree, data are dict of dict
     """
     score_clusters_tree = IntervalTree()
     root = m.sqrt(2)
+
+    # Update regions if protein
+    if protein:
+        regions = IntervalTree()
+        regions.addi(clusters_tree.begin(), clusters_tree.end())
 
     for interval in clusters_tree:
         clusters = interval.data.copy()
@@ -245,6 +251,7 @@ def fmutations_score(clusters_tree, regions, mutations_in):
             for position, count in mutated_positions_d.items():
                 map_mut_pos = set()
                 map_smo_max = set()
+
                 if regions[position]:
                     for i in regions[position]:
                         map_mut_pos = i

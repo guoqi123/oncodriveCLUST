@@ -24,6 +24,8 @@ LOGS = {
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
+@click.option('-sign', '--input-signature', default=None, required=False, type=click.Path(exists=True),
+              help='File containing specified input context based mutational probabilities (signature)')
 @click.option('-o', '--output-directory', default=None, required=True,
               help='Output directory to be created')
 @click.option('-r', '--regions-file', default=None, required=True, type=click.Path(exists=True),
@@ -61,12 +63,12 @@ LOGS = {
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
 @click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)')
 @click.option('--conseq', is_flag=True, help='Use mutations consequence type from VEP (CODING)')
+@click.option('--protein', is_flag=True, help='Analyze clustering in translated protein sequences (CODING)')
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element')
 @click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive')
 @click.option('--pancancer', is_flag=True, help='PanCancer cohort analysis')
-
-
 def main(input_file,
+         input_signature,
          output_directory,
          regions_file,
          elements_file,
@@ -87,11 +89,13 @@ def main(input_file,
          gzip,
          cds,
          conseq,
+         protein,
          plot,
          oncohort,
          pancancer):
     """OncodriveCLUSTL (MSc version) is a sequence based clustering method to identify cancer drivers across the genome
     :param input_file: input file
+    :param input_signature: file containing input context based mutational probabilities (signature)
     :param output_directory: output directory
     :param regions_file: path input genomic regions, tab file
     :param elements_file: file containing one element per row
@@ -112,6 +116,7 @@ def main(input_file,
     :param gzip: bool, True generates gzip compressed output file
     :param cds: bool, True calculates clustering on cds
     :param conseq: bool, True uses consequence type for cds
+    :param protein: bool, True analyzes clustering in translated protein sequences
     :param plot: bool, True generates a clustering plot for an element
     :param oncohort: bool, True generates output file for OncohortDrive
     :param pancancer: bool, True computes PanCancer cohort analysis
@@ -146,6 +151,7 @@ def main(input_file,
     logger.info('\n'.join([
         '',
         'input_file: {}'.format(input_file),
+        'input_signature: {}'.format(input_signature),
         'output_directory: {}'.format(output_directory),
         'regions_file: {}'.format(regions_file),
         'genome: {}'.format(genome),
@@ -164,6 +170,7 @@ def main(input_file,
         'gzip: {}'.format(gzip),
         'oncohort: {}'.format(oncohort),
         'VEP conseq: {}'.format(conseq),
+        'Protein clustering: {}'.format(protein),
         'Pancancer: {}'.format(pancancer),
         ''
     ]))
@@ -175,7 +182,11 @@ def main(input_file,
         quit(-1)
 
     if conseq and cds is False:
-        logger.error('Analysis using mutations consequence type requires analysis mode "--cds"'.format(simulation_mode))
+        logger.error('Analysis using mutations consequence type requires analysis mode "--cds"')
+        quit(-1)
+
+    if protein and cds is False:
+        logger.error('Analysis in translated protein sequences requires analysis mode "--cds"')
         quit(-1)
 
     # If --plot, only one element is analyzed
@@ -201,53 +212,65 @@ def main(input_file,
         logger.info(', '.join(elements))
 
     # Check format input file and calculate signature
-    read_function, mode, delimiter, cancer_type = prep.check_tabular_csv(input_file)
-    path_cache = os.path.join(output_directory, 'cache')
-    os.makedirs(path_cache, exist_ok=True)
-    obj = sign.Signature(start_at_0=True, genome='hg19', kmer=int(kmer), log_level='info', pancancer=pancancer)
-    cohorts_of_analysis = set()
+    if not input_signature:
+        read_function, mode, delimiter, cancer_type = prep.check_tabular_csv(input_file)
+        path_cache = os.path.join(output_directory, 'cache')
+        os.makedirs(path_cache, exist_ok=True)
+        obj = sign.Signature(start_at_0=True, genome='hg19', kmer=int(kmer), log_level='info', pancancer=pancancer)
+        cohorts_of_analysis = set()
 
-    if pancancer:
-        # Check header
-        if cancer_type:
-            # Read file and get input cohorts
-            pancancer_pickles = 0
+        if pancancer:
+            # Check header
+            if cancer_type:
+                # Read file and get input cohorts
+                pancancer_pickles = 0
 
-            with read_function(input_file, mode) as read_file:
-                fd = csv.DictReader(read_file, delimiter=delimiter)
-                for line in fd:
-                    cohorts_of_analysis.add(line['CANCER_TYPE'])
-            logger.info('PanCancer analysis for {} cohort{}'.format(len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) >1 else '')) # TODO warning if len == 1?
+                with read_function(input_file, mode) as read_file:
+                    fd = csv.DictReader(read_file, delimiter=delimiter)
+                    for line in fd:
+                        cohorts_of_analysis.add(line['CANCER_TYPE'])
+                # TODO warning if len == 1?
+                logger.info('PanCancer analysis for {} cohort{}'.format(len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) >1 else ''))
 
+                # Check if signatures computed
+                for cohort in cohorts_of_analysis:
+                    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer))
+                    if os.path.isfile(path_pickle):
+                        pancancer_pickles += 1
+                if len(cohorts_of_analysis) == pancancer_pickles:
+                    logger.info('Signatures computed')
+                # Calculate signatures
+                else:
+                    logger.info('Computing signatures...')
+                    obj.calculate(input_file)
+                    obj.save(path_cache, prefix=None)
+                    logger.info('Signatures computed')
+            else:
+                logger.critical('PanCancer analysis requires "CANCER_TYPE" column in input file')
+                quit(-1)
+        else:
             # Check if signatures computed
-            for cohort in cohorts_of_analysis:
-                path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer))
-                if os.path.isfile(path_pickle):
-                    pancancer_pickles += 1
-            if len(cohorts_of_analysis) == pancancer_pickles:
+            file_prefix = input_file.split('/')[-1].split('.')[0]
+            path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
+            if os.path.isfile(path_pickle):
                 logger.info('Signatures computed')
             # Calculate signatures
             else:
                 logger.info('Computing signatures...')
                 obj.calculate(input_file)
-                obj.save(path_cache, prefix=None)
+                obj.save(path_cache, prefix=file_prefix)
                 logger.info('Signatures computed')
-        else:
-            logger.critical('PanCancer analysis requires "CANCER_TYPE" column in input file')
-            quit(-1)
+            cohorts_of_analysis.add(file_prefix)
     else:
-        # Check if signatures computed
-        file_prefix = input_file.split('/')[-1].split('.')[0]
-        path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
-        if os.path.isfile(path_pickle):
-            logger.info('Signatures computed')
-        # Calculate signatures
-        else:
-            logger.info('Computing signatures...')
-            obj.calculate(input_file)
-            obj.save(path_cache, prefix=file_prefix)
-            logger.info('Signatures computed')
-        cohorts_of_analysis.add(file_prefix)
+        # Check format
+        path_cache = input_signature
+        error = prep.check_signature(input_signature, kmer)
+        if error:
+            logger.critical('Signatures file could not be read. Please check {}'.format(input_signature))
+            quit(-1)
+        if pancancer:
+            logger.critical('PanCancer analysis computes signatures from the input file. No input signatures allowed')
+            quit(-1)
 
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
@@ -256,7 +279,8 @@ def main(input_file,
         elements,
         input_file,
         cds,
-        conseq
+        conseq,
+        protein
     )
     mut = 0
     elem = 0
@@ -267,8 +291,8 @@ def main(input_file,
         if not element_mutations_cutoff:
             if len(v) >= element_mutations:
                 element_mutations_cutoff = True
-    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
-    logger.info('Validated elements with mutations: {}'.format(elem))
+    logger.info('Validated {} in genomic regions: {}'.format('elements' if not protein else 'transcripts', len(regions_d.keys())))
+    logger.info('Validated {} with mutations: {}'.format('elements' if not protein else 'transcripts', elem))
     logger.info('Total substitution mutations: {}'.format(mut))
     if not element_mutations_cutoff:
         logger.critical('No element with enough mutations to perform analysis')
@@ -283,7 +307,7 @@ def main(input_file,
                                 cluster_score, element_score,
                                 int(kmer),
                                 n_simulations, simulation_mode, simulation_window,
-                                cores, conseq, plot
+                                cores, conseq, protein, plot
                                 ).run()
 
     # Write elements results (returns list of ranked elements)
@@ -293,6 +317,7 @@ def main(input_file,
                                                        file=elements_output_file,
                                                        gzip=gzip)
     logger.info('Elements results calculated')
+
     # Write clusters results
     postp.write_cluster_results(genome=genome,
                                 results=clusters_results,
@@ -302,6 +327,7 @@ def main(input_file,
                                 gzip=gzip,
                                 cds_d=cds_d)
     logger.info('Clusters results calculated')
+
     # Write Oncohortdrive results
     if oncohort:
         postp.write_oncohortdrive_results(mutations_file=input_file,

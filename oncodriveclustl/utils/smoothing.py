@@ -4,9 +4,10 @@ from collections import namedtuple
 
 import numpy as np
 
+Mutation = namedtuple('Mutation', 'position, region, muttype, sample, cancertype')
 
-def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
-    """Generate a smoothing curve for a list of element's mutations
+def smooth_nucleotide(regions, cds_d, mutations, tukey_filter, simulation_window):
+    """Generate a smoothing curve for a list of element's mutations in the nucleotide sequence
     :param regions: IntervalTree with genomic positions of an element
     :param cds_d: dict, keys are start genomic regions, values are cds positions
     :param mutations: list, list of mutations formatted as namedtuple
@@ -95,3 +96,46 @@ def smooth(regions, cds_d, mutations, tukey_filter, simulation_window):
             final_smooth_tree.addi(begin, end, interval.data[slicer: -slicer])
 
     return final_smooth_tree, mutations_in
+
+
+def smooth_aminoacid(regions, cds_d, mutations, tukey_filter, simulation_window):
+    """Generate a smoothing curve for a list of element's mutations in the aminoacid sequence
+    :param regions: IntervalTree with genomic positions of an element
+    :param cds_d: dict, keys are start genomic regions, values are cds positions
+    :param mutations: list, list of mutations formatted as namedtuple
+    :param tukey_filter: numpy array. Length equals smoothing window. The elements sum to 1
+    :param simulation_window: int, simulation window
+    :return:
+        final_smooth_tree, IntervalTree. Interval are genomic regions or cds, data np.array of smoothing score
+        by position.
+        mutations_in: list of mutations in regions
+    """
+    cds_aa_tree = IntervalTree()
+    mutations_in = []
+
+    # Merge sorted regions (one interval == cds) and add tukey//2 to both ends
+    cds_nucleotides = 0
+    for interval in sorted(regions):
+        cds_nucleotides += interval.end - interval.begin  # end is +1
+    # Convert to aminoacid and add extra aa for regions in the first and last positions according to tukey_filter
+    cds_aa_array = np.zeros((len(tukey_filter) - 1) + cds_nucleotides // 3)
+
+    # Smooth mutations inside cds (aa sequence)
+    for mutation in mutations:
+        for interval in regions[mutation.position]:
+            # Only mutations inside cds region are considered
+            if interval:
+                index_to_nucleotide = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
+                aa_position = index_to_nucleotide // 3  # triplets
+                cds_aa_array[aa_position: (aa_position + len(tukey_filter))] += tukey_filter
+                aa_mutation = Mutation(aa_position, (0, cds_nucleotides // 3), 1, mutation.sample, mutation.cancertype)
+                mutations_in.append(aa_mutation)
+
+    # Remove extra bp
+    slicer = (len(tukey_filter) - 1) // 2
+    cds_aa_array = cds_aa_array[slicer: -slicer]
+
+    # New aa based tree
+    cds_aa_tree.addi(0, cds_nucleotides // 3, cds_aa_array)
+
+    return cds_aa_tree, mutations_in

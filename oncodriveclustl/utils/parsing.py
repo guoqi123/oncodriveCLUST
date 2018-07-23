@@ -14,11 +14,12 @@ from oncodriveclustl.utils import preprocessing as prep
 Mutation = namedtuple('Mutation', 'position, region, muttype, sample, cancertype')
 Cds = namedtuple('Cds', 'start, end')
 
-def read_regions(input_regions, elements):
+def read_regions(input_regions, elements, protein):
     """
     Parse input genomic regions
     :param input_regions: path to input genomic regions
     :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
+    :param protein: bool, True reads transcripts ID instead of elements id
     :return:
         trees: dictionary of dictionary of intervaltrees (trees) containing intervals of genomic elements by chromosome.
         regions_d: dictionary of IntervalTrees with genomic regions for elements
@@ -32,10 +33,12 @@ def read_regions(input_regions, elements):
     comp = prep.check_compression(input_regions)
 
     if comp == 'gz':
-        with gzip.open(input_regions, 'rb') as fd:
+        with gzip.open(input_regions, 'rt') as fd:
             for line in fd:
-                line = line.decode()
-                chromosome, start, end, strand, ensid, _, symbol = line.strip().split('\t')
+                if not protein:
+                    chromosome, start, end, strand, ensid, _, symbol = line.strip().split('\t')
+                else:
+                    chromosome, start, end, strand, _, ensid, symbol = line.strip().split('\t')
                 if elements and symbol not in elements:
                     continue
                 if int(start) != int(end):
@@ -49,8 +52,8 @@ def read_regions(input_regions, elements):
     else:
         logger.critical('Genomic regions are not compressed, please input GZIP compressed file')
         quit(-1)
-    if len(elements) == 1 and len(regions_d) != 1:
-        logger.warning('{} has more than one Ensembl id'.format(elements))
+    # if len(elements) == 1 and len(regions_d) != 1:
+    #     logger.warning('{} has more than one Ensembl id'.format(elements))
 
     return regions_d, chromosomes_d, strands_d, trees
 
@@ -159,13 +162,14 @@ def read_mutations(input_mutations, trees, conseq):
     return mutations_d, samples_d, cohorts_d
 
 
-def parse(input_regions, elements, input_mutations, cds, conseq):
+def parse(input_regions, elements, input_mutations, cds, conseq, protein):
     """Parse genomic regions and dataset of cancer type mutations
     :param input_regions: path to file containing mutational data
     :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
     :param input_mutations: path tab file
     :param cds: bool, True calculates clustering on cds
     :param conseq: True, use aa consequence type
+    :param protein: bool, True analyzes clustering in translated protein sequences
     :return
         regions_d: dictionary of IntervalTrees with genomic regions for elements
         cds_d: dictionary of dictionaries with relative cds position of genomic regions
@@ -178,7 +182,7 @@ def parse(input_regions, elements, input_mutations, cds, conseq):
     global logger
     logger = daiquiri.getLogger()
 
-    regions_d, chromosomes_d, strands_d, trees = read_regions(input_regions, elements)
+    regions_d, chromosomes_d, strands_d, trees = read_regions(input_regions, elements, protein)
     if cds:
         cds_d = map_regions_cds(regions_d)
     else:
