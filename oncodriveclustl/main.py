@@ -24,8 +24,8 @@ LOGS = {
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
-@click.option('-sign', '--input-signature', default=None, required=False, type=click.Path(exists=True),
-              help='File containing specified input context based mutational probabilities (signature)')
+@click.option('-s', '--input-signature', default=None, required=False, type=click.Path(exists=True),
+              help='File containing input context based mutational probabilities (signature)')
 @click.option('-o', '--output-directory', default=None, required=True,
               help='Output directory to be created')
 @click.option('-r', '--regions-file', default=None, required=True, type=click.Path(exists=True),
@@ -170,8 +170,8 @@ def main(input_file,
         'gzip: {}'.format(gzip),
         'oncohort: {}'.format(oncohort),
         'VEP conseq: {}'.format(conseq),
-        'Protein clustering: {}'.format(protein),
-        'Pancancer: {}'.format(pancancer),
+        'protein clustering: {}'.format(protein),
+        'pancancer: {}'.format(pancancer),
         ''
     ]))
     logger.info('Initializing OncodriveCLUSTL...')
@@ -333,7 +333,8 @@ def main(input_file,
         postp.write_oncohortdrive_results(mutations_file=input_file,
                                           directory=output_directory,
                                           file=clusters_output_file,
-                                          regions_d=regions_d)
+                                          regions_d=regions_d,
+                                          vep=conseq)
         logger.info('Oncohortdrive file generated')
     logger.info('Finished')
 

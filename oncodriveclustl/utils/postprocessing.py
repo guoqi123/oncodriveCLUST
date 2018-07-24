@@ -11,6 +11,8 @@ import numpy as np
 import pandas as pd
 import daiquiri
 from statsmodels.sandbox.stats.multicomp import multipletests as mlpt
+import bgdata as bgd
+import pickle
 
 from oncodriveclustl.utils import preprocessing as prep
 
@@ -178,19 +180,21 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
         df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False)
 
 
-def write_oncohortdrive_results(mutations_file, directory, file, regions_d):
+def write_oncohortdrive_results(mutations_file, directory, file, regions_d, vep):
     """
-    Generate compressed file with input BED + mutations mapped to cluters (score, p-value, significance)
+    Generate compressed file with input BED + mutations mapped to clusters (score, p-value, significance)
     :param mutations_file: input mutations file
     :param directory: str, output directory
     :param file: str, clusters output file to read
     :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
+    :param vep: bool, True considers only non-synonymous mutations
     :return: None
     """
     clusters_tree = IntervalTree()
     Cluster = namedtuple('Cluster', 'sym, ensid, score, p, sig')
     clusters_file = os.path.join(directory, file)
     output_file = os.path.join(directory, 'oncohortdrive_results.out')  # TODO: if elements file, this will overwrite
+    conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
 
     # Read clusters file
     if 'gz' in clusters_file:
@@ -217,31 +221,64 @@ def write_oncohortdrive_results(mutations_file, directory, file, regions_d):
                 clusters_tree.addi(left_coord, right_coord + 1, Cluster(sym, ensid, score, p, sig))
 
     # Generate output file
-    read_function, mode, delimiter = prep.check_tabular_csv(mutations_file)
+    read_function, mode, delimiter, _ = prep.check_tabular_csv(mutations_file)
 
     with open(output_file, 'w') as of:
         header = ['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE', 'SYM', 'SYM_ENSID', 'SCORE', 'PVALUE', 'SIG_0.05']
         of.write('{}\n'.format('\t'.join(header)))
         with read_function(mutations_file, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
-            for line in fd:
-                chro = line['CHROMOSOME']
-                pos = int(line['POSITION'])
-                ref = line['REF']
-                alt = line['ALT']
-                sam = line['SAMPLE']
+            # If not vep, write all mutations inside clusters
+            if not vep:
+                for line in fd:
+                    chro = line['CHROMOSOME']
+                    pos = int(line['POSITION'])
+                    ref = line['REF']
+                    alt = line['ALT']
+                    sam = line['SAMPLE']
 
-                # Check substitutions only
-                if len(ref) == 1 and len(alt) == 1:
-                    if ref != '-' and alt != '-':
-                        if clusters_tree[pos]:
-                            for c in clusters_tree[pos]:
-                                of.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                                    chro, pos, ref, alt, sam,
-                                    c.data.sym, c.data.ensid, c.data.score, c.data.p, c.data.sig))
-                        else:
-                            of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
-                                chro, pos, ref, alt, sam, float('nan')))
+                    # Check substitutions only
+                    if len(ref) == 1 and len(alt) == 1:
+                        if ref != '-' and alt != '-':
+                            if clusters_tree[pos]:
+                                for c in clusters_tree[pos]:
+                                    of.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                                        chro, pos, ref, alt, sam,
+                                        c.data.sym, c.data.ensid, c.data.score, c.data.p, c.data.sig))
+                            else:
+                                of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
+                                    chro, pos, ref, alt, sam, float('nan')))
+            # If vep, write only non-synonymous mutations
+            else:
+                for line in fd:
+                    chro = line['CHROMOSOME']
+                    pos = int(line['POSITION'])
+                    ref = line['REF']
+                    alt = line['ALT']
+                    sam = line['SAMPLE']
+
+                    # Check substitutions only
+                    if len(ref) == 1 and len(alt) == 1:
+                        if ref != '-' and alt != '-':
+                            if clusters_tree[pos]:
+                                for c in clusters_tree[pos]:
+                                    path_to_vep_pickle = conseq_path + '/{}.pickle'.format(c.data.ensid)
+                                    try:
+                                        with open(path_to_vep_pickle, 'rb') as fd:
+                                            conseq_d = pickle.load(fd)
+                                            muttype = 0 if pos in conseq_d.get(alt, []) else 1
+                                    except FileNotFoundError:
+                                        muttype = 1
+                                    if muttype == 1:
+                                        of.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                                            chro, pos, ref, alt, sam,
+                                            c.data.sym, c.data.ensid, c.data.score, c.data.p, c.data.sig))
+                                    else:
+                                        of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
+                                            chro, pos, ref, alt, sam, float('nan')))
+                            else:
+                                of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
+                                    chro, pos, ref, alt, sam, float('nan')))
 
     output_file_gz = output_file + '.gz'
     with open(output_file, 'rb') as of:

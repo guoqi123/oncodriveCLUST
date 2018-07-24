@@ -52,8 +52,6 @@ def read_regions(input_regions, elements, protein):
     else:
         logger.critical('Genomic regions are not compressed, please input GZIP compressed file')
         quit(-1)
-    # if len(elements) == 1 and len(regions_d) != 1:
-    #     logger.warning('{} has more than one Ensembl id'.format(elements))
 
     return regions_d, chromosomes_d, strands_d, trees
 
