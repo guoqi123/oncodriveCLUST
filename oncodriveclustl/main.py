@@ -24,7 +24,7 @@ LOGS = {
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
-@click.option('-s', '--input-signature', default=None, required=False, type=click.Path(exists=True),
+@click.option('-sign', '--input-signature', default=None, required=False, type=click.Path(exists=True),
               help='File containing input context based mutational probabilities (signature)')
 @click.option('-o', '--output-directory', default=None, required=True,
               help='Output directory to be created')
