@@ -275,14 +275,44 @@ class Experiment:
             cds_d = {}  # Next functions performed with cds False
 
         index_tree = clu.find_locals(smooth_tree, cds_d)
+
+        # for i in smooth_tree:
+        #     print(element, i[0], i[1])
+        #     print(len(i.data), i.data[-14:-1])
+        #
+        # for i in index_tree:
+        #     print(element, i[0], i[1])
+        #     for index in i.data:
+        #         print('\t', index)
+
         raw_clusters_tree = clu.raw_clusters(index_tree)
+
+        # for i in raw_clusters_tree:
+        #     print(element, i[0], i[1])
+        #     for c, v in i.data.items():
+        #         print('\t', c, v)
+
         merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
         filter_clusters_tree = clu.clusters_mut(merge_clusters_tree, mutations_in, self.cluster_mutations_cutoff)
+
+        # print('-------------------------------------------------------------------------------------')
+
+        # for i in filter_clusters_tree:
+        #     print(element, i[0], i[1])
+        #     for c, v in i.data.items():
+        #         print('\t', c, v['max'], v['left_m'], v['right_m'], len(v['mutations']))
+        #         # print('\t', 'cluster:', c, 'data:', i[1]-v['left_m'][1], i[1]-v['max'][1], i[1]-v['right_m'][1], len(v['mutations']))
+
         score_clusters_tree = clu.fmutations_score(filter_clusters_tree, self.regions_d[element], len(mutations_in), self.protein)
         logger.debug('Clusters scores calculated')
         element_score = score.element_score(score_clusters_tree, analysis_mode, self.element_score)
         logger.debug('Element score calculated')
 
+        # for i in score_clusters_tree:
+        #     print(element, i[0], i[1])
+        #     for c, v in i.data.items():
+        #         print('\t', c, v['max'], v['left_m'], v['right_m'], len(v['mutations']))
+        #         print('\t', 'cluster:', c, 'data:', i[1]-v['left_m'][1], i[1]-v['max'][1], i[1]-v['right_m'][1], len(v['mutations']), 'score:', v['score'])
         if self.plot:
             logger.info('Generating plot: {}'.format(element))
             return smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score
@@ -392,6 +422,12 @@ class Experiment:
         for item in items:
             element, obs_clusters, obs_score, sim_clusters_scores, sim_element_scores = item
 
+            # Get GCG boolean
+            cgc = element.split('//')[0] in self.cgc_genes
+
+            # Calculate length
+            element_length = self.length(element)
+
             # If analyzed element and element has clusters
             if type(obs_clusters) != float:
                 if type(sim_element_scores) != float:
@@ -413,6 +449,7 @@ class Experiment:
                             for cluster, values in interval.data.items():
                                 interval.data[cluster]['p'] = pseudo_pvalue
                                 n_clusters += 1
+
                         empirical_pvalue = self.empirical_pvalue(obs_score, sim_element_scores)
                         analytical_pvalue = top_cluster_pvalue = obs_pvalue
 
@@ -462,20 +499,17 @@ class Experiment:
                 n_clusters = n_clusters_sim = obs_score = float('nan')
                 empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
-            # Get GCG boolean
-            cgc = element.split('//')[0] in self.cgc_genes
-
-            # Calculate length
-            element_length = self.length(element)
+            # for i in obs_clusters:
+            #     print(i[0], i[1])
+            #     for c, v in i.data.items():
+            #         print('\t', 'cluster:', c, 'data:', v['left_m'], v['max'], v['right_m'], len(v['mutations']), 'score:', v['score'])
+            #         # print('\t', 'cluster:', c, 'data:', i[1]-v['left_m'][1], i[1]-v['max'][1], i[1]-v['right_m'][1], len(v['mutations']), 'score:', v['score'])
 
             results.append((
-
                 element,
-
                 (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),
                  n_clusters, n_clusters_sim, obs_score, empirical_pvalue, analytical_pvalue, top_cluster_pvalue, cgc),
-
-                (obs_clusters, self.chromosomes_d[element], self.strands_d[element], cgc)
+                (obs_clusters, self.chromosomes_d[element], self.strands_d[element], element_length, cgc)
             ))
 
         return results

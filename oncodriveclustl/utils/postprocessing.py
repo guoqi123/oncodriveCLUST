@@ -114,7 +114,7 @@ def write_element_results(genome, results, directory, file, gzip):
     return sorted_list_elements
 
 
-def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d):
+def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d, protein):
     """Save results to the output file
     :param genome: reference genome
     :param results: dict, dictionary of results, keys are element's symbols
@@ -123,6 +123,7 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
     :param sorter: list, element symbols ranked by elements p-value
     :param gzip: bool, True generates gzip compressed output file
     :param cds_d: dictionary of dictionaries with relative cds position of genomic regions if cds is True
+    :param protein: bool, True reverses clusters positions in protein if gene strand is negative
     :return: None
     """
     reverse_cds_d = IntervalTree()
@@ -136,18 +137,22 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
     with open(file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
         for element, values in results.items():
-            if cds_d:
+            if cds_d and not protein:
                 for genomic, cds in cds_d[element].items():
                     reverse_cds_d.addi(cds[0], cds[1] + 1, genomic)   # end + 1
             sym, id = element.split('//')
-            clustersinfo, chr, strand, cgc = values
+            clustersinfo, chr, strand, length, cgc = values
             if genome != 'hg19':
                 cgc = 'Non Available'
             if type(clustersinfo) != float:
                 rank = sorterindex[sym] + 1
                 for interval in clustersinfo:
                     for c, v in interval.data.items():
-                        if cds_d:
+                        left_m = v['left_m'][1]
+                        max_cluster = v['max'][1]
+                        right_m = v['right_m'][1]
+
+                        if cds_d and not protein:
                             for i in reverse_cds_d[v['left_m'][0]]:
                                 start_l = i.data
                                 end_l = i.data + (i[1] - i[0])
@@ -165,9 +170,14 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d)
                             region_start = interval[0]
                             region_end = interval[1]
 
+                        if protein and strand == '-':
+                            left_m = length - left_m
+                            max_cluster = length - max_cluster
+                            right_m = length- right_m
+
                         fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
                             rank, sym, id, cgc, chr, strand, region_start, region_end,
-                            v['left_m'][1], v['max'][1], v['right_m'][1], abs(v['right_m'][0] - v['left_m'][0] + 1),
+                            left_m, max_cluster, right_m, abs(v['right_m'][0] - v['left_m'][0] + 1),
                             len(v['mutations']), len(v['samples']), v['fra_uniq_samples'], v['score'], v['p']))
 
     # Sort

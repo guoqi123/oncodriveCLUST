@@ -325,7 +325,8 @@ def main(input_file,
                                 file=clusters_output_file,
                                 sorter=sorted_list_elements,
                                 gzip=gzip,
-                                cds_d=cds_d)
+                                cds_d=cds_d,
+                                protein=protein)
     logger.info('Clusters results calculated')
 
     # Write Oncohortdrive results

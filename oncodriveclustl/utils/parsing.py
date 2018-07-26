@@ -188,5 +188,25 @@ def parse(input_regions, elements, input_mutations, cds, conseq, protein):
     logger.info('Regions parsed')
     mutations_d, samples_d, cohorts_d = read_mutations(input_mutations, trees, conseq)
     logger.info('Mutations parsed')
+    #
+    # set_of_regions = set()
+    # for k, v in regions_d.items():
+    #     print(k, v)
+    #     for i in v:
+    #         set_of_regions.add(i[0])
+    #         set_of_regions.add(i[1])
+
+    # print(sorted(list(set_of_regions)))
+    #
+    # for k, v in mutations_d.items():
+    #     print(k)
+    #     for m in v:
+    #         check = m.region[1] > m.position >= m.region[0]
+    #         if not check:
+    #             print(v, m)
+
+    # del mutations_d['KRAS//ENST00000557334']
+    # del mutations_d['KRAS//ENST00000256078']
+
 
     return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d

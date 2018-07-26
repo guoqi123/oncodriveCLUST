@@ -28,11 +28,12 @@ def find_locals(smooth_tree, cds_d):
         indexes_info = []
         smooth = interval.data
         # Greater or equal
-        max_eq = argrelextrema(smooth, np.greater_equal, order=1, mode='wrap')[0].tolist()
+        max_eq = argrelextrema(smooth, np.greater_equal, order=1, mode='clip')[0].tolist()
         # Smaller or equal
-        min_eq = argrelextrema(smooth, np.less_equal, order=1, mode='wrap')[0].tolist()
+        min_eq = argrelextrema(smooth, np.less_equal, order=1, mode='clip')[0].tolist()
         # Find maximums and minimums
         indexes = list(set(max_eq).symmetric_difference(set(min_eq)))
+
         # Add information to index
         for index in sorted(indexes):
             score = smooth[index]
