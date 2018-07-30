@@ -216,7 +216,7 @@ def main(input_file,
         read_function, mode, delimiter, cancer_type = prep.check_tabular_csv(input_file)
         path_cache = os.path.join(output_directory, 'cache')
         os.makedirs(path_cache, exist_ok=True)
-        obj = sign.Signature(start_at_0=True, genome='hg19', kmer=int(kmer), log_level='info', pancancer=pancancer)
+        obj = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), log_level='info', pancancer=pancancer)
         cohorts_of_analysis = set()
 
         if pancancer:
