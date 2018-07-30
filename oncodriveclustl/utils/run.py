@@ -200,10 +200,9 @@ class Experiment:
                     position = start + n
                     nu += 1
                     ref_kmer = sequence[n - delta: n + delta + 1]
-                    n_number = ref_kmer.count('N')
-                    if n_number == 0:
-                        prob = defaultdict(list)
-                        conseq = []
+                    prob = defaultdict(list)
+                    conseq = []
+                    if ref_kmer.count('N') == 0:
                         for alt in nucleot.difference({ref_kmer[self.kmer//2]}):  # mutational prob to any other kmer
                             alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
                             for cohort, signature in signatures_d.items():
@@ -213,40 +212,47 @@ class Experiment:
                                 con = 0 if position in conseq_d.get(alt, []) else 1
                                 conseq.append(con)
                             else:
-                                conseq = [1, 1, 1]
+                                conseq.append(1)
                     else:
-                        prob = [0,0,0]
-                        conseq = [1, 1, 1]
-                    # Append
+                        for cohort, signature in signatures_d.items():
+                            prob[cohort].extend([0,0,0])
+                        conseq = [0, 0, 0]  # TODO check, give conseq synonymous to pos where ref_kmer has N
+
+                    # Extend position info
                     for cohort in signatures_d.keys():
                         probabilities[cohort].extend(prob[cohort])
                     consequences.extend(conseq)
+
                 # Add to tree
                 for cohort in signatures_d.keys():
                     probs_tree[cohort].addi(interval[0], interval[1], probabilities[cohort])
                 conseq_tree.addi(interval[0], interval[1], consequences)
 
             # Check
-            check = 0
+            skip = False
             for cohort, tree in probs_tree.items():
                 for interval in tree:
                     probabilities = interval.data
                     if probabilities:
-                        check = 1
                         if sum(probabilities) == 0:
                             logger.critical('All context based mutational probabilities per alternate in {} equal to 0\n'
                                             '{} analysis is skipped'.format(element, element))
                             skip = True
                             break
-                        if len(probabilities) != 3*(interval[1] - interval[0] + simulation_window - correction):
+                        if len(probabilities) != 3 * (interval[1] - interval[0] + simulation_window - correction):
                             logger.warning('{} probabilities list length is different than expected, '
                                            'please review results'.format(element))
                             skip = True
                             break
-                if check == 0:
+
+                        if len(probabilities) != len(list(conseq_tree[interval[0]])[0][-1]):
+                            logger.warning('{} probabilities list length is different than expected, '
+                                           'please review results'.format(element))
+                            skip = True
+                            break
+                if skip:
                     logger.critical('Context based mutational probabilities were not calculated for {}\n'
                                     '{} analysis is skipped'.format(element, element))
-                    skip = True
                     break
 
         return probs_tree, conseq_tree, skip

@@ -271,7 +271,6 @@ def main(input_file,
         if pancancer:
             logger.critical('PanCancer analysis computes signatures from the input file. No input signatures allowed')
             quit(-1)
-
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
     regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
