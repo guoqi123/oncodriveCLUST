@@ -1,18 +1,22 @@
 # Import modules
+import os
 import gzip
 import csv
-import pickle
 from collections import defaultdict
 from collections import namedtuple
+import json
 
 import daiquiri
 from intervaltree import IntervalTree
+import bgreference as bg
 import bgdata as bgd
+import pickle
 
 from oncodriveclustl.utils import preprocessing as prep
 
-Mutation = namedtuple('Mutation', 'position, region, muttype, sample, cancertype')
+Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cancertype')
 Cds = namedtuple('Cds', 'start, end')
+
 
 def read_regions(input_regions, elements, protein):
     """
@@ -129,7 +133,7 @@ def read_mutations(input_mutations, trees, conseq):
                                         '{}\nVep file for element {} could not be read. Analysis will be done without '
                                         'considering mutations consequence type\n'.format(e, res.data))
                                     muttype = 1
-                                m = Mutation(position, (res.begin, res.end), muttype, sample, cancer_type)
+                                m = Mutation(position, (res.begin, res.end), alt, muttype, sample, cancer_type)
                                 mutations_d[res.data].append(m)
                                 cohorts_d[res.data].add(cancer_type)
     else:
@@ -153,14 +157,96 @@ def read_mutations(input_mutations, trees, conseq):
                             results = trees[chromosome][int(position)]
                             for res in results:
                                 muttype = 1
-                                m = Mutation(position, (res.begin, res.end), muttype, sample, cancer_type)
+                                m = Mutation(position, (res.begin, res.end), alt, muttype, sample, cancer_type)
                                 mutations_d[res.data].append(m)
                                 cohorts_d[res.data].add(cancer_type)
 
     return mutations_d, samples_d, cohorts_d
 
 
-def parse(input_regions, elements, input_mutations, cds, conseq, protein):
+    cds = []
+
+    # Iterate through genomic regions to get their sequences
+    for interval in sorted(regions_d[element], reverse=False):
+        start = interval[0]
+        size = interval[1] - interval[0]  # no need +1 because interval end already +1
+        sequence = bgreference.refseq('hg19', chromosomes_d[element], start, size)
+        cds.extend(sequence)
+
+    if strands_d[element] == '-':
+        # Reverse
+        cds.reverse()
+        # Complementary
+        return ''.join([reverse_d.get(i, i) for i in cds])
+    #         return Seq(''.join(cds)).reverse_complement()
+    else:
+        return ''.join(cds)
+
+
+def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
+    """
+    Map transcript to reference protein sequence. Remove transcripts that do not pass control check.
+    :param regions_d: dictionary of IntervalTrees with genomic regions for elements
+    :param chromosomes_d: dict, keys are elements, values are chromosomes
+    :param strands_d: dict, keys are elements, values are strands
+    :param genome: str, genome to use
+    :return:
+    regions_d: dictionary of IntervalTrees with genomic regions for elements updated
+    protein_d: dictionary of reference translated protein sequences per transcript
+    """
+    # TODO remove hardcoded file
+    genetic_code_path = '/home/carnedo/projects/oncodriveclustl/oncodriveclustl/data/genetic_code_ncbi_20180727_v1.json'
+    with open(genetic_code_path, 'rt') as fd:
+        genetic_code = json.load(fd)
+    # protein_d_path = os.path.join(cache, 'protein_sequences.pickle')
+    reverse_d = {
+        'A': 'T',
+        'T': 'A',
+        'C': 'G',
+        'G': 'C'
+    }
+    start_codons = ['ATG']  #, 'TTG', 'CTG']
+    protein_d = {}
+    elements_to_skip = set()
+
+    for element, regions in regions_d.items():
+        cds = []
+        # Get nucleotide sequence
+        for interval in sorted(regions, reverse=False):
+            start = interval[0]
+            size = interval[1] - interval[0]  # no need +1 because interval end already +1
+            sequence = bg.refseq(genome, chromosomes_d[element], start, size)
+            if sequence.count('N') == 0:
+                cds.extend(sequence)
+            else:
+                logger.warning('Found N nucleotide in {}. Element is discarded from analysis\n'.format(element))
+                elements_to_skip.add(element)
+                break
+
+        # Reverse if needed
+        if strands_d[element] == '-':
+            # Reverse
+            cds.reverse()
+            # Complementary
+            cds = ''.join([reverse_d.get(i, i) for i in cds])
+        else:
+            cds = ''.join(cds)
+
+        # Check and translate to protein
+        if len(cds) % 3 == 0 and cds[:3] in start_codons:
+            protein_d[element] = ''.join([genetic_code[cds[i:i + 3]][0] for i in range(0, len(cds), 3)])
+        else:
+            logger.warning('{} cannot be translated to protein. Element is discarded from analysis'.format(element))
+            elements_to_skip.add(element)
+
+    # # Save to pickle
+    # with open(protein_d_path, 'wb') as fd:
+    #     pickle.dump(protein_d, fd, protocol=2)
+
+    return elements_to_skip
+
+
+def parse(input_regions, elements, input_mutations, cds, conseq, protein, genome):
     """Parse genomic regions and dataset of cancer type mutations
     :param input_regions: path to file containing mutational data
     :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
@@ -188,7 +274,16 @@ def parse(input_regions, elements, input_mutations, cds, conseq, protein):
     logger.info('Regions parsed')
     mutations_d, samples_d, cohorts_d = read_mutations(input_mutations, trees, conseq)
     logger.info('Mutations parsed')
-    #
+
+    if protein:
+        elements_to_skip = map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome)
+        logger.info('Protein sequences calculated')
+        # Remove transcripts
+        for element in elements_to_skip:
+            del regions_d[element]
+            del cds_d[element]
+            mutations_d.pop(element, None)
+
     # set_of_regions = set()
     # for k, v in regions_d.items():
     #     print(k, v)
@@ -204,9 +299,5 @@ def parse(input_regions, elements, input_mutations, cds, conseq, protein):
     #         check = m.region[1] > m.position >= m.region[0]
     #         if not check:
     #             print(v, m)
-
-    # del mutations_d['KRAS//ENST00000557334']
-    # del mutations_d['KRAS//ENST00000256078']
-
 
     return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d

@@ -100,13 +100,13 @@ def main(input_file,
     :param regions_file: path input genomic regions, tab file
     :param elements_file: file containing one element per row
     :param elements: element symbol or file containing elements
-    :param genome: genome to use
+    :param genome: str, genome to use
     :param element_mutations: int, cutoff of element mutations
     :param cluster_mutations: int, cutoff of cluster mutations
     :param smooth_window: int, smoothing window
     :param cluster_window: int, clustering window
-    :param cluster_score: cluster score method
-    :param element_score: element score method
+    :param cluster_score: str, cluster score method
+    :param element_score: str, element score method
     :param kmer: int, number of nucleotides of the signature
     :param n_simulations: int, number of simulations
     :param simulation_mode: str, simulation mode
@@ -279,7 +279,8 @@ def main(input_file,
         input_file,
         cds,
         conseq,
-        protein
+        protein,
+        genome
     )
     mut = 0
     elem = 0

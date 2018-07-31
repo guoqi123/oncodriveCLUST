@@ -22,11 +22,7 @@ class Parser:
         self.REF = 'REF'
         self.ALT = 'ALT'
         self.SAMPLE = 'SAMPLE'
-        # self.TYPE = 'TYPE'
         self.CANCER_TYPE = 'CANCER_TYPE'
-        # self.SIGNATURE = 'SIGNATURE'
-        # self.TRANSCRIPT = 'TRANSCRIPT'
-        # self.SYMBOL = 'SYMBOL'
 
 
 class Signature:

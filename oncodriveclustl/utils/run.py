@@ -22,7 +22,7 @@ from oncodriveclustl.utils import plots as plot
 
 # Logger
 logger = daiquiri.getLogger()
-Mutation = namedtuple('Mutation', 'position, region, muttype, sample, cancertype')
+Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cancertype')
 
 
 class Experiment:
@@ -203,7 +203,9 @@ class Experiment:
                     prob = defaultdict(list)
                     conseq = []
                     if ref_kmer.count('N') == 0:
-                        for alt in nucleot.difference({ref_kmer[self.kmer//2]}):  # mutational prob to any other kmer
+                        # calculate mutational prob to any other kmer
+                        # sort alternates to keep track of them
+                        for alt in sorted(list(nucleot.difference({ref_kmer[self.kmer//2]}))):
                             alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
                             for cohort, signature in signatures_d.items():
                                 prob[cohort].append(signature[(ref_kmer, alt_kmer)])
@@ -276,8 +278,16 @@ class Experiment:
             smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
                                                               self.tukey_filter, self.simulation_window)
         else:
-            smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], cds_d, mutations,
-                                                              self.tukey_filter, self.simulation_window)
+            # protein_d_path = '/home/carnedo/projects/oncodriveclustl/oncodriveclustl/outputs/transcript/cache/protein_sequences.pickle'
+            # with open(protein_d_path, 'rb') as fd:
+            #     protein_d = pickle.load(fd)
+            # if self.strands_d[element] == '-':
+            #     protein_seq = protein_d[element][::-1]
+            # else:
+            #     protein_seq = protein_d[element]
+            smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], self.chromosomes_d[element],
+                                                             self.strands_d[element],
+                                                             self.genome, self.tukey_filter, cds_d, mutations)
             cds_d = {}  # Next functions performed with cds False
 
         index_tree = clu.find_locals(smooth_tree, cds_d)
@@ -339,6 +349,7 @@ class Experiment:
         sim_cluster_chunk = []
         df = []
         half_window = (self.simulation_window - 1) // 2
+        nucleot = {'A', 'C', 'G', 'T'}
 
         # Simulate mutations
         for mutation in self.mutations_d[element]:
@@ -368,6 +379,7 @@ class Experiment:
                 hotspot_end = expected_hotspot_end
 
             # Map to index
+            # 3* accounts for alternates in the array of probabilities
             start_index = 3*(hotspot_begin - (mutation.region[0] - half_window))
             end_index = 3*(hotspot_end - (mutation.region[0] - half_window) + 1)  # +1 because it is a range and slice
             for interval in probs_tree[mutation.cancertype][mutation.region[0]]:  # unique iteration
@@ -376,10 +388,24 @@ class Experiment:
                 # Add info per simulated mutation
                 l = []
                 for count, index in enumerate(simulations):
+                    # print(count, index, index / 3)
                     muttype = list(conseq_tree[interval[0]])[0][2][index]
-                    position = mutation.region[0] - half_window + index//3
-                    l.append(Mutation(position, mutation.region, muttype, mutation.sample, mutation.cancertype))
+                    position = mutation.region[0] - half_window + index // 3
+                    ref_nucleotide = bgr.refseq(self.genome, self.chromosomes_d[element], position, 1)
+                    # print(position, ref_nucleotide)
+                    # Calculate sorted alternates and obtain simulated alternated from index
+                    if round(index / 3, 1) == (0.7 + index // 3):
+                        alternate_index = 2
+                    else:
+                        alternate_index = 1 if round(index / 3, 1) == (0.3 + index // 3) else 0
+
+                    alternate = sorted(list(nucleot.difference({ref_nucleotide})))[alternate_index]
+                    # Simulated mutation
+                    l.append(Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype))
+                    # print(Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype))
                 df.append(l)
+        # for a in df:
+        #     print(a)
 
         # Start analysis
         logger.debug('Start analyzing simulations')
@@ -427,6 +453,7 @@ class Experiment:
         results = []
         for item in items:
             element, obs_clusters, obs_score, sim_clusters_scores, sim_element_scores = item
+            mut_in_clusters = 0
 
             # Get GCG boolean
             cgc = element.split('//')[0] in self.cgc_genes
@@ -455,6 +482,7 @@ class Experiment:
                             for cluster, values in interval.data.items():
                                 interval.data[cluster]['p'] = pseudo_pvalue
                                 n_clusters += 1
+                                mut_in_clusters += len(values['mutations'])
 
                         empirical_pvalue = self.empirical_pvalue(obs_score, sim_element_scores)
                         analytical_pvalue = top_cluster_pvalue = obs_pvalue
@@ -477,6 +505,8 @@ class Experiment:
                                 for cluster, values in interval.data.items():
                                     interval.data[cluster]['p'] = pseudo_pvalue
                                     obs_clusters_score.append((values['score'], pseudo_pvalue))
+                                    mut_in_clusters += len(values['mutations'])
+
                         else:
                             if n_clusters_sim > 1000:
                                 # Random choice 1000 simulated cluster scores
@@ -490,6 +520,7 @@ class Experiment:
                                     cluster_p_value = obj.calculate(values['score'])
                                     interval.data[cluster]['p'] = cluster_p_value
                                     obs_clusters_score.append((values['score'], cluster_p_value))
+                                    mut_in_clusters += len(values['mutations'])
 
                         n_clusters = len(obs_clusters_score)
 
@@ -498,11 +529,11 @@ class Experiment:
                         logger.debug('P-values calculated')
 
                 else:
-                    n_clusters = obs_score = 0
+                    n_clusters = obs_score = mut_in_clusters = 0
                     n_clusters_sim = float('nan')
                     empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
             else:
-                n_clusters = n_clusters_sim = obs_score = float('nan')
+                n_clusters = n_clusters_sim = obs_score = mut_in_clusters = float('nan')
                 empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
             # for i in obs_clusters:
@@ -514,7 +545,8 @@ class Experiment:
             results.append((
                 element,
                 (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),
-                 n_clusters, n_clusters_sim, obs_score, empirical_pvalue, analytical_pvalue, top_cluster_pvalue, cgc),
+                 mut_in_clusters, n_clusters, n_clusters_sim, obs_score,
+                 empirical_pvalue, analytical_pvalue, top_cluster_pvalue, cgc),
                 (obs_clusters, self.chromosomes_d[element], self.strands_d[element], element_length, cgc)
             ))
 

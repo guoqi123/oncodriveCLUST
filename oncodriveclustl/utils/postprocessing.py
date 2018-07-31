@@ -51,7 +51,7 @@ def write_element_results(genome, results, directory, file, gzip):
     global logger
     logger = daiquiri.getLogger()
 
-    header = ['SYMBOL', 'ENSID', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS',
+    header = ['SYMBOL', 'ENSID', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_MUT_CLUST', 'N_CLUST', 'SIM_CLUSTS',
               'SCORE',
               'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER',
               'CGC']
@@ -60,12 +60,12 @@ def write_element_results(genome, results, directory, file, gzip):
     i = 0
     for element, values in results.items():
         sym, id = element.split('//')
-        chr, strand, length, muts, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
+        chr, strand, length, muts, muts_in_clu, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
         if genome != 'hg19':
             cgc = 'Non Available'
         df.loc[i] = pd.Series({
             'SYMBOL':sym, 'ENSID':id, 'CHROMOSOME':chr, 'STRAND':strand, 'LENGTH':length,
-            'N_MUT':muts, 'N_CLUST':obs_clu, 'SIM_CLUSTS': sim_clu, 'SCORE':obs_score,
+            'N_MUT':muts, 'N_MUT_CLUST':muts_in_clu, 'N_CLUST':obs_clu, 'SIM_CLUSTS': sim_clu, 'SCORE':obs_score,
             'P_EMPIRICAL':epval, 'P_ANALYTICAL':apval, 'P_TOPCLUSTER':topcpval,'CGC':cgc})
         i += 1
 
@@ -87,7 +87,8 @@ def write_element_results(genome, results, directory, file, gzip):
         df = pd.concat([df_nonempty, df_empty])
 
         # Reorder columns
-        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
+        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_MUT_CLUST',
+                 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
                  'P_EMPIRICAL', 'Q_EMPIRICAL','P_ANALYTICAL', 'Q_ANALYTICAL','P_TOPCLUSTER', 'Q_TOPCLUSTER']]
 
         # Sort by analytical q-value
@@ -100,7 +101,8 @@ def write_element_results(genome, results, directory, file, gzip):
         df['Q_ANALYTICAL'] = np.nan
         df['Q_TOPCLUSTER'] = np.nan
         # Reorder columns
-        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
+        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_MUT_CLUST',
+                 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
                  'P_EMPIRICAL', 'Q_EMPIRICAL', 'P_ANALYTICAL', 'Q_ANALYTICAL', 'P_TOPCLUSTER', 'Q_TOPCLUSTER']]
 
     # Create a sorted list of elements to order the clusters file
@@ -171,9 +173,9 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d,
                             region_end = interval[1]
 
                         if protein and strand == '-':
-                            left_m = length - left_m
+                            left_m = length - left_m   # v['right_m'][1]
                             max_cluster = length - max_cluster
-                            right_m = length- right_m
+                            right_m = length - right_m   # v['left_m'][1]
 
                         fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
                             rank, sym, id, cgc, chr, strand, region_start, region_end,
