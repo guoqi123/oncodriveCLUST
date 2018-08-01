@@ -195,8 +195,7 @@ def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
     protein_d: dictionary of reference translated protein sequences per transcript
     """
     # TODO remove hardcoded file
-    genetic_code_path = '/home/carnedo/projects/oncodriveclustl/oncodriveclustl/data/genetic_code_ncbi_20180727_v1.json'
-    with open(genetic_code_path, 'rt') as fd:
+    with open(os.path.join(os.path.dirname(__file__), '../data/genetic_code_ncbi_20180727_v1.json'), 'rt') as fd:
         genetic_code = json.load(fd)
     # protein_d_path = os.path.join(cache, 'protein_sequences.pickle')
     reverse_d = {
