@@ -164,25 +164,6 @@ def read_mutations(input_mutations, trees, conseq):
     return mutations_d, samples_d, cohorts_d
 
 
-    cds = []
-
-    # Iterate through genomic regions to get their sequences
-    for interval in sorted(regions_d[element], reverse=False):
-        start = interval[0]
-        size = interval[1] - interval[0]  # no need +1 because interval end already +1
-        sequence = bgreference.refseq('hg19', chromosomes_d[element], start, size)
-        cds.extend(sequence)
-
-    if strands_d[element] == '-':
-        # Reverse
-        cds.reverse()
-        # Complementary
-        return ''.join([reverse_d.get(i, i) for i in cds])
-    #         return Seq(''.join(cds)).reverse_complement()
-    else:
-        return ''.join(cds)
-
-
 def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
     """
     Map transcript to reference protein sequence. Remove transcripts that do not pass control check.
@@ -282,21 +263,5 @@ def parse(input_regions, elements, input_mutations, cds, conseq, protein, genome
             del regions_d[element]
             del cds_d[element]
             mutations_d.pop(element, None)
-
-    # set_of_regions = set()
-    # for k, v in regions_d.items():
-    #     print(k, v)
-    #     for i in v:
-    #         set_of_regions.add(i[0])
-    #         set_of_regions.add(i[1])
-
-    # print(sorted(list(set_of_regions)))
-    #
-    # for k, v in mutations_d.items():
-    #     print(k)
-    #     for m in v:
-    #         check = m.region[1] > m.position >= m.region[0]
-    #         if not check:
-    #             print(v, m)
 
     return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d

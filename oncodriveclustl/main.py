@@ -224,12 +224,12 @@ def main(input_file,
             if cancer_type:
                 # Read file and get input cohorts
                 pancancer_pickles = 0
-
                 with read_function(input_file, mode) as read_file:
                     fd = csv.DictReader(read_file, delimiter=delimiter)
                     for line in fd:
                         cohorts_of_analysis.add(line['CANCER_TYPE'])
                 # TODO warning if len == 1?
+                # TODO threshold number of mutations per cohort to compute signature?
                 logger.info('PanCancer analysis for {} cohort{}'.format(len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) >1 else ''))
 
                 # Check if signatures computed
@@ -271,6 +271,7 @@ def main(input_file,
         if pancancer:
             logger.critical('PanCancer analysis computes signatures from the input file. No input signatures allowed')
             quit(-1)
+
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
     regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
