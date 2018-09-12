@@ -467,8 +467,6 @@ class Experiment:
 
                     n_clusters_sim = len(sim_clusters_scores)
 
-                    print(n_clusters_sim)
-
                     # If no simulated clusters, all simulated element scores are 0
                     if sum(sim_element_scores) == 0:
 
