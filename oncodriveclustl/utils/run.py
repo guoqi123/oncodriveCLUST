@@ -461,23 +461,24 @@ class Experiment:
             # Calculate length
             element_length = self.length(element)
 
-            # If analyzed element and element has clusters
+            # If analyzed element and element has observed clusters
             if type(obs_clusters) != float:
                 if type(sim_element_scores) != float:
 
                     n_clusters_sim = len(sim_clusters_scores)
 
+                    print(n_clusters_sim)
+
+                    # If no simulated clusters, all simulated element scores are 0
                     if sum(sim_element_scores) == 0:
-                        logger.warning('No simulated clusters in {}. '
-                                       'Observed cluster p-values calculated with pseudocount'.format(element))
 
                         # Calculate p-value for element
-                        n_clusters = 0
                         obj = ap.AnalyticalPvalue()
                         obj.calculate_bandwidth(sim_element_scores)
                         obs_pvalue = obj.calculate(obs_score)
 
-                        # Add pseudocount p-value for clusters
+                        # Add p-value and number of mutations for each cluster
+                        n_clusters = 0
                         for interval in obs_clusters:
                             for cluster, values in interval.data.items():
                                 interval.data[cluster]['p'] = pseudo_pvalue
@@ -487,6 +488,7 @@ class Experiment:
                         empirical_pvalue = self.empirical_pvalue(obs_score, sim_element_scores)
                         analytical_pvalue = top_cluster_pvalue = obs_pvalue
 
+                    # Simulated clusters
                     else:
                         # Element score empirical p-value
                         empirical_pvalue = self.empirical_pvalue(obs_score, sim_element_scores)
@@ -500,27 +502,23 @@ class Experiment:
                         # Cluster analytical p-values
                         obs_clusters_score = []
 
-                        if n_clusters_sim < 3:  #TODO Check
-                            for interval in obs_clusters:
-                                for cluster, values in interval.data.items():
-                                    interval.data[cluster]['p'] = pseudo_pvalue
-                                    obs_clusters_score.append((values['score'], pseudo_pvalue))
-                                    mut_in_clusters += len(values['mutations'])
+                        # Check how many simulated clusters are and add 0 if this number < number of simulations
+                        # 0 means no simulated cluster
+                        if n_clusters_sim < self.n_simulations:
+                            sim_clusters_scores = sim_clusters_scores + [0] * (self.n_simulations - len(sim_clusters_scores))
 
-                        else:
-                            if n_clusters_sim > 1000:
-                                # Random choice 1000 simulated cluster scores
-                                sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
+                        # Random choice 1000 simulated cluster scores
+                        sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
 
-                            # Fit distribution
-                            obj = ap.AnalyticalPvalue()
-                            obj.calculate_bandwidth(sim_clusters_scores)
-                            for interval in obs_clusters:
-                                for cluster, values in interval.data.items():
-                                    cluster_p_value = obj.calculate(values['score'])
-                                    interval.data[cluster]['p'] = cluster_p_value
-                                    obs_clusters_score.append((values['score'], cluster_p_value))
-                                    mut_in_clusters += len(values['mutations'])
+                        # Fit distribution
+                        obj = ap.AnalyticalPvalue()
+                        obj.calculate_bandwidth(sim_clusters_scores)
+                        for interval in obs_clusters:
+                            for cluster, values in interval.data.items():
+                                cluster_p_value = obj.calculate(values['score'])
+                                interval.data[cluster]['p'] = cluster_p_value
+                                obs_clusters_score.append((values['score'], cluster_p_value))
+                                mut_in_clusters += len(values['mutations'])
 
                         n_clusters = len(obs_clusters_score)
 
