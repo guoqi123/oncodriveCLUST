@@ -3,7 +3,7 @@ def element_score(clusters_tree, mode, method):
     Given the clusters of an element, calculate a global score for it
     :param clusters_tree: IntervalTree, data are dict of dict
     :param mode: str, 'obs' for observed or 'sim' for simulated
-    :param method: str, scoring method. Default 'mean'
+    :param method: str, scoring method. Default 'sum'
     :return: float, element score
     """
     n_clusters = 0

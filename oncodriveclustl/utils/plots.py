@@ -103,6 +103,7 @@ def run_plot(element, mutations, cds_d, strand, chromosome, smooth_window,
     :return: None
     """
 
+    # FIXME smooth tree not trimmed
     smoothing_array = np.array([])
     for interval in sorted(smooth_tree):
         smoothing_array = np.append(smoothing_array, interval.data)

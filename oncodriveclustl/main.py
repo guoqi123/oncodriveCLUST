@@ -45,7 +45,7 @@ LOGS = {
 @click.option('-cw', '--cluster-window', type=click.INT, default=30,
               help='Cluster window. Default is 30')
 @click.option('-cs', '--cluster-score', default='fmutations', help='Cluster score formula',
-              type=click.Choice(['fmutations']))
+              type=click.Choice(['fmutations', 'cmutexp2', 'normgene', 'normcompl']))
 @click.option('-es', '--element-score', default='sum', help='Element score formula',
               type=click.Choice(['sum']))
 @click.option('-kmer', '--kmer', default='3', help='Number of nucleotides of the signature',

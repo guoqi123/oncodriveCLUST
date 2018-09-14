@@ -278,57 +278,32 @@ class Experiment:
             smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
                                                               self.tukey_filter, self.simulation_window)
         else:
-            # protein_d_path = '/home/carnedo/projects/oncodriveclustl/oncodriveclustl/outputs/transcript/cache/protein_sequences.pickle'
-            # with open(protein_d_path, 'rb') as fd:
-            #     protein_d = pickle.load(fd)
-            # if self.strands_d[element] == '-':
-            #     protein_seq = protein_d[element][::-1]
-            # else:
-            #     protein_seq = protein_d[element]
             smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], self.chromosomes_d[element],
                                                              self.strands_d[element],
                                                              self.genome, self.tukey_filter, cds_d, mutations)
             cds_d = {}  # Next functions performed with cds False
 
         index_tree = clu.find_locals(smooth_tree, cds_d)
-
-        # for i in smooth_tree:
-        #     print(element, i[0], i[1])
-        #     print(len(i.data), i.data[-14:-1])
-        #
-        # for i in index_tree:
-        #     print(element, i[0], i[1])
-        #     for index in i.data:
-        #         print('\t', index)
-
-        raw_clusters_tree = clu.raw_clusters(index_tree)
-
-        # for i in raw_clusters_tree:
-        #     print(element, i[0], i[1])
-        #     for c, v in i.data.items():
-        #         print('\t', c, v)
-
-        merge_clusters_tree = clu.merge_clusters(raw_clusters_tree, self.cluster_window)
-        filter_clusters_tree = clu.clusters_mut(merge_clusters_tree, mutations_in, self.cluster_mutations_cutoff)
-
-        # print('-------------------------------------------------------------------------------------')
-
-        # for i in filter_clusters_tree:
-        #     print(element, i[0], i[1])
-        #     for c, v in i.data.items():
-        #         print('\t', c, v['max'], v['left_m'], v['right_m'], len(v['mutations']))
-        #         # print('\t', 'cluster:', c, 'data:', i[1]-v['left_m'][1], i[1]-v['max'][1], i[1]-v['right_m'][1], len(v['mutations']))
-
-        score_clusters_tree = clu.fmutations_score(filter_clusters_tree, self.regions_d[element], len(mutations_in), self.protein)
+        raw_clusters_tree = clu.find_clusters(index_tree)
+        merge_clusters_tree = clu.merge(raw_clusters_tree,
+                                        self.cluster_window)
+        filter_clusters_tree = clu.mapmut_and_filter(merge_clusters_tree,
+                                                     mutations_in,
+                                                     self.cluster_mutations_cutoff)
+        # FIXME trim is not working for protein
+        trim_clusters_tree = clu.trim(filter_clusters_tree, cds_d)
+        score_clusters_tree = clu.score(trim_clusters_tree,
+                                        self.regions_d[element],
+                                        self.length(element),
+                                        len(mutations_in),
+                                        self.protein,
+                                        self.cluster_score)
         logger.debug('Clusters scores calculated')
-        element_score = score.element_score(score_clusters_tree, analysis_mode, self.element_score)
+        element_score = score.element_score(score_clusters_tree,
+                                            analysis_mode,
+                                            self.element_score)
         logger.debug('Element score calculated')
 
-        # for i in score_clusters_tree:
-        #     print(element, i[0], i[1])
-        #     for c, v in i.data.items():
-        #         print('\t', c, v['max'], v['left_m'], v['right_m'], len(v['mutations']))
-        #         print('\t', 'cluster:', c, 'data:', i[1]-v['left_m'][1], i[1]-v['max'][1], i[1]-v['right_m'][1], len(v['mutations']), 'score:', v['score'])
         if self.plot:
             logger.info('Generating plot: {}'.format(element))
             return smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score
@@ -392,7 +367,6 @@ class Experiment:
                     muttype = list(conseq_tree[interval[0]])[0][2][index]
                     position = mutation.region[0] - half_window + index // 3
                     ref_nucleotide = bgr.refseq(self.genome, self.chromosomes_d[element], position, 1)
-                    # print(position, ref_nucleotide)
                     # Calculate sorted alternates and obtain simulated alternated from index
                     if round(index / 3, 1) == (0.7 + index // 3):
                         alternate_index = 2
@@ -402,10 +376,7 @@ class Experiment:
                     alternate = sorted(list(nucleot.difference({ref_nucleotide})))[alternate_index]
                     # Simulated mutation
                     l.append(Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype))
-                    # print(Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype))
                 df.append(l)
-        # for a in df:
-        #     print(a)
 
         # Start analysis
         logger.debug('Start analyzing simulations')
@@ -532,12 +503,6 @@ class Experiment:
                 n_clusters = n_clusters_sim = obs_score = mut_in_clusters = float('nan')
                 empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
-            # for i in obs_clusters:
-            #     print(i[0], i[1])
-            #     for c, v in i.data.items():
-            #         print('\t', 'cluster:', c, 'data:', v['left_m'], v['max'], v['right_m'], len(v['mutations']), 'score:', v['score'])
-            #         # print('\t', 'cluster:', c, 'data:', i[1]-v['left_m'][1], i[1]-v['max'][1], i[1]-v['right_m'][1], len(v['mutations']), 'score:', v['score'])
-
             results.append((
                 element,
                 (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),
@@ -620,7 +585,7 @@ class Experiment:
                         simulations += [(element, probs_tree, conseq_tree, n_sim) for n_sim in partitions_list(
                                         self.n_simulations,
                                         chunk_size
-                        )]
+                                        )]
                         simulated_elements.append(element)
                     # Skip analysis if problems with mutational probabilities
                     else:
