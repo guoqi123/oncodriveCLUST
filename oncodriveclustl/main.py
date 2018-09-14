@@ -177,9 +177,10 @@ def main(input_file,
     logger.info('Initializing OncodriveCLUSTL...')
 
     # Check parameters
-    if n_simulations < 1000:
-        logger.error('Invalid number of simulations: please choose integer greater than 1000')
-        quit(-1)
+    # FIXME number of simulations
+    # if n_simulations < 1000:
+    #     logger.error('Invalid number of simulations: please choose integer greater than 1000')
+    #     quit(-1)
 
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"')

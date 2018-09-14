@@ -263,7 +263,6 @@ def trim(clusters_tree, cds_d):
         return trim_clusters_tree
 
 
-
 def score(clusters_tree, regions, length_element, mutations_element, protein, formula):
     """
     Score clusters with fraction of mutations formula
@@ -279,6 +278,9 @@ def score(clusters_tree, regions, length_element, mutations_element, protein, fo
     score_clusters_tree = IntervalTree()
     root = m.sqrt(2)
 
+    # FIXME Remove
+    is_bug = False
+
     # Update regions if protein
     if protein:
         regions = IntervalTree()
@@ -293,8 +295,15 @@ def score(clusters_tree, regions, length_element, mutations_element, protein, fo
                 length_cluster = abs(values['right_m'][0] - values['left_m'][0] + 1)
                 numerator = mutations_cluster / length_cluster
                 if formula == 'normcompl':
-                    denominator = (mutations_element - mutations_cluster) / (length_element - length_cluster)
+                    mutations_complement = mutations_element - mutations_cluster
+                    length_complement = length_element - length_cluster
+                    if mutations_complement != 0 and length_complement != 0:
+                        denominator = mutations_complement / length_complement
+                    else:
+                        print('ERROR. Density in complement replaced by density in gene')
+                        is_bug = True
                 score_ = numerator / denominator
+
                 # Update
                 clusters[cluster]['score'] = score_
             score_clusters_tree.addi(interval[0], interval[1], clusters)
@@ -346,4 +355,4 @@ def score(clusters_tree, regions, length_element, mutations_element, protein, fo
                 clusters[cluster]['score'] = score_
             score_clusters_tree.addi(interval[0], interval[1], clusters)
 
-    return score_clusters_tree
+    return score_clusters_tree, is_bug
