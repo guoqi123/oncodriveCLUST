@@ -45,7 +45,7 @@ LOGS = {
 @click.option('-cw', '--cluster-window', type=click.INT, default=30,
               help='Cluster window. Default is 30')
 @click.option('-cs', '--cluster-score', default='fmutations', help='Cluster score formula',
-              type=click.Choice(['fmutations', 'cmutexp2', 'normgene', 'normcompl']))
+              type=click.Choice(['fmutations', 'cmutcorrected']))
 @click.option('-es', '--element-score', default='sum', help='Element score formula',
               type=click.Choice(['sum']))
 @click.option('-kmer', '--kmer', default='3', help='Number of nucleotides of the signature',
@@ -177,10 +177,9 @@ def main(input_file,
     logger.info('Initializing OncodriveCLUSTL...')
 
     # Check parameters
-    # FIXME number of simulations
-    # if n_simulations < 1000:
-    #     logger.error('Invalid number of simulations: please choose integer greater than 1000')
-    #     quit(-1)
+    if n_simulations < 1000:
+        logger.error('Invalid number of simulations: please choose integer greater than 1000')
+        quit(-1)
 
     if conseq and cds is False:
         logger.error('Analysis using mutations consequence type requires analysis mode "--cds"')

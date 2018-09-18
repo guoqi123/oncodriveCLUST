@@ -263,7 +263,7 @@ def trim(clusters_tree, cds_d):
         return trim_clusters_tree
 
 
-def score(clusters_tree, regions, length_element, mutations_element, protein, formula):
+def score(clusters_tree, regions, mutations_element, protein, formula):
     """
     Score clusters with fraction of mutations formula
     :param clusters_tree: IntervalTree, data are dict of dict
@@ -271,88 +271,60 @@ def score(clusters_tree, regions, length_element, mutations_element, protein, fo
     :param: int, length of the element under analysis
     :param mutations_element: int, len of list of mutations inside regions
     :param protein: bool, True analyzes clustering in protein sequence
-    :param formula: str, formula to calculate clusters score ['fmutations', 'cmutexp2', 'normgene', 'normcompl']
+    :param formula: str, formula to calculate clusters score ['fmutations', 'cmutcorrected']
     :return:
             score_clusters_tree: IntervalTree, data are dict of dict
     """
     score_clusters_tree = IntervalTree()
     root = m.sqrt(2)
 
-    # FIXME Remove
-    is_bug = False
-
     # Update regions if protein
     if protein:
         regions = IntervalTree()
         regions.addi(clusters_tree.begin(), clusters_tree.end())
 
-    if 'norm' in formula:
-        denominator = mutations_element / length_element
-        for interval in clusters_tree:
-            clusters = interval.data.copy()
-            for cluster, values in clusters.items():
-                mutations_cluster = len(values['mutations'])
-                length_cluster = abs(values['right_m'][0] - values['left_m'][0] + 1)
-                numerator = mutations_cluster / length_cluster
-                if formula == 'normcompl':
-                    mutations_complement = mutations_element - mutations_cluster
-                    length_complement = length_element - length_cluster
-                    if mutations_complement != 0 and length_complement != 0:
-                        denominator = mutations_complement / length_complement
+    for interval in clusters_tree:
+        clusters = interval.data.copy()
+        for cluster, values in clusters.items():
+            score_ = 0
+            mutated_positions_d = defaultdict(int)
+
+            # Get number of mutations on each mutated position
+            for mutation in values['mutations']:
+                mutated_positions_d[mutation.position] += 1
+
+            # Map mutated position and smoothing maximum to region
+            for position, count in mutated_positions_d.items():
+                map_mut_pos = set()
+                map_smo_max = set()
+
+                if regions[position]:
+                    for i in regions[position]:
+                        map_mut_pos = i
+                    for i in regions[values['max'][1]]:
+                        map_smo_max = i
+
+                    # Calculate distance of position to smoothing maximum
+                    if map_mut_pos[0] == map_smo_max[0]:
+                        distance_to_max = abs(position - values['max'][1])
+                    elif map_mut_pos[0] < map_smo_max[0]:
+                        distance_to_max = (map_mut_pos[1] - position) + (values['max'][1] - map_smo_max[0])
                     else:
-                        print('ERROR. Density in complement replaced by density in gene')
-                        is_bug = True
-                score_ = numerator / denominator
+                        distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
 
-                # Update
+                    # Calculate fraction of mutations
+                    numerator = (count / mutations_element) * 100
+
+                    # Calculate cluster score
+                    denominator = m.pow(root, distance_to_max)
+                    score_ += (numerator / denominator)
+
+            # Update
+            if formula == 'cmutcorrected':
+                clusters[cluster]['score'] = score_ * len(values['mutations'])
+            else:
                 clusters[cluster]['score'] = score_
-            score_clusters_tree.addi(interval[0], interval[1], clusters)
 
-    else:
-        if formula == 'cmutexp2':
-            mut_in_cluster_exp = 2
-        else:
-            mut_in_cluster_exp = 1
+        score_clusters_tree.addi(interval[0], interval[1], clusters)
 
-        for interval in clusters_tree:
-            clusters = interval.data.copy()
-            for cluster, values in clusters.items():
-                score_ = 0
-                mutated_positions_d = defaultdict(int)
-
-                # Get number of mutations on each mutated position
-                for mutation in values['mutations']:
-                    mutated_positions_d[mutation.position] += 1
-
-                # Map mutated position and smoothing maximum to region
-                for position, count in mutated_positions_d.items():
-                    map_mut_pos = set()
-                    map_smo_max = set()
-
-                    if regions[position]:
-                        for i in regions[position]:
-                            map_mut_pos = i
-                        for i in regions[values['max'][1]]:
-                            map_smo_max = i
-
-                        # Calculate distance of position to smoothing maximum
-                        if map_mut_pos[0] == map_smo_max[0]:
-                            distance_to_max = abs(position - values['max'][1])
-                        elif map_mut_pos[0] < map_smo_max[0]:
-                            distance_to_max = (map_mut_pos[1] - position) + (values['max'][1] - map_smo_max[0])
-                        else:
-                            distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
-
-                        # Calculate fraction of mutations
-                        count = count ** mut_in_cluster_exp
-                        numerator = (count / mutations_element) * 100
-
-                        # Calculate cluster score
-                        denominator = m.pow(root, distance_to_max)
-                        score_ += (numerator / denominator)
-
-                # Update
-                clusters[cluster]['score'] = score_
-            score_clusters_tree.addi(interval[0], interval[1], clusters)
-
-    return score_clusters_tree, is_bug
+    return score_clusters_tree

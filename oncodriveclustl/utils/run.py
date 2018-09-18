@@ -292,9 +292,8 @@ class Experiment:
                                                      self.cluster_mutations_cutoff)
         # FIXME trim is not working for protein
         trim_clusters_tree = clu.trim(filter_clusters_tree, cds_d)
-        score_clusters_tree, is_bug = clu.score(trim_clusters_tree,
+        score_clusters_tree = clu.score(trim_clusters_tree,
                                         self.regions_d[element],
-                                        self.length(element),
                                         len(mutations_in),
                                         self.protein,
                                         self.cluster_score)
@@ -302,8 +301,6 @@ class Experiment:
         element_score = score.element_score(score_clusters_tree,
                                             analysis_mode,
                                             self.element_score)
-        if is_bug:
-            print(element)
         logger.debug('Element score calculated')
 
         if self.plot:
@@ -465,9 +462,7 @@ class Experiment:
                         empirical_pvalue = self.empirical_pvalue(obs_score, sim_element_scores)
 
                         # Element score analytical p-value
-                        # FIXME replace
-                        # sim_scores_array_1000 = np.random.choice(sim_element_scores, size=1000, replace=False)
-                        sim_scores_array_1000 = sim_element_scores
+                        sim_scores_array_1000 = np.random.choice(sim_element_scores, size=1000, replace=False)
                         obj = ap.AnalyticalPvalue()
                         obj.calculate_bandwidth(sim_scores_array_1000)
                         analytical_pvalue = obj.calculate(obs_score)
@@ -481,9 +476,7 @@ class Experiment:
                             sim_clusters_scores = sim_clusters_scores + [0] * (self.n_simulations - len(sim_clusters_scores))
 
                         # Random choice 1000 simulated cluster scores
-                        # FIXME replace
-                        # sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
-                        sim_clusters_scores = sim_clusters_scores
+                        sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
 
                         # Fit distribution
                         obj = ap.AnalyticalPvalue()
