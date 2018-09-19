@@ -1,4 +1,7 @@
-# Import modules
+"""
+Contains functions to check input files' format
+"""
+
 import os
 import gzip
 import csv
@@ -6,13 +9,19 @@ import csv
 import daiquiri
 import pickle
 
+from oncodriveclustl.utils import exceptions as excep
+
 
 def check_compression(file):
     """
     Check input file compression
-    :param file: path to file
-    :return:
-            comp: str
+
+    Args:
+        file (str): path to file
+
+    Returns:
+        comp (str): compression type
+
     """
 
     global logger
@@ -35,8 +44,7 @@ def check_compression(file):
                 logger.critical('{}. Incorrect file format for {}'.format(e, file))
                 quit(-1)
     else:
-        logger.critical('{} file not found'.format(file))
-        quit(-1)
+        raise FileNotFoundError('{} file not found'.format(file))
 
     return comp
 
@@ -44,13 +52,19 @@ def check_compression(file):
 def check_tabular_csv(file):
     """
     Check input file tabular or csv format
-    :param file: path to file
-    :return:
-            read function
-            read mode
-            file delimiter
+
+    Args:
+        file (str): path to file
+
+    Returns:
+        read_function: function to read file
+        mode (str): reading mode
+        dialect.delimiter (str): file column delimiter
+        cancer_type (bool): True if `CANCER_TYPE` column exists in input file
+
     """
 
+    chrom = pos = ref = alt = sample = False
     comp = check_compression(file)
 
     if comp == 'gz':
@@ -60,42 +74,41 @@ def check_tabular_csv(file):
         read_function = open
         mode = 'r'
 
-    with read_function(file) as fd:
+    with read_function(file, mode) as fd:
         for line in fd:
-            if comp:
-                line = line.decode()
             dialect = csv.Sniffer().sniff(line, delimiters=None)
-            chr = 'CHROMOSOME' in line
+            chrom = 'CHROMOSOME' in line
             pos = 'POSITION' in line
             ref = 'REF' in line
             alt = 'ALT' in line
             sample = 'SAMPLE' in line
             cancer_type = 'CANCER_TYPE' in line
             break
-
-        if chr == pos == ref == alt == sample == True:
+        if chrom and pos and ref and alt and sample:
             return read_function, mode, dialect.delimiter, cancer_type
-
         else:
-            logger.critical('{} does not contain header and/or header is not in correct format'.format(file))
-            quit(-1)
+            raise excep.UserInputError('{} does not contain header and/or header is not in correct format'.format(file))
 
 
 def check_signature(file, kmer):
     """
     Check input signatures format
-    :param file:
-    :param kmer:
-    :return: error: True if file is not in correct format
+
+    Args:
+        file (str): path to signatures file
+        kmer (int): integer indicanting trinucleotide (3) or pentanucleotide (5) signatures
+
+    Returns:
+        error (bool): True if file is not in correct format
+
     """
     error = False
+    signature = None
     try:
         signature = pickle.load(open(file, "rb"))
-        # Input signatures calculated for same kmer
-        if len(list(signature['probabilities'].keys())[0][0]) != int(kmer):
-            error = True
-    except Exception:
-        # Input signatures cannot be read
+    except TypeError:
+        error = True
+    if signature and len(list(signature['probabilities'].keys())[0][0]) != int(kmer):
         error = True
 
     return error

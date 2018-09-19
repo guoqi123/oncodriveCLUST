@@ -1,4 +1,6 @@
-# Oncodriveclustl run
+"""
+Contains the command line parsing
+"""
 import logging
 import os
 import csv
@@ -6,6 +8,7 @@ import csv
 import click
 import daiquiri
 
+from oncodriveclustl.utils import exceptions as excep
 from oncodriveclustl.utils import signature as sign
 from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import run as exp
@@ -20,6 +23,7 @@ LOGS = {
     'error': logging.ERROR,
     'critical': logging.CRITICAL
 }
+
 
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
@@ -93,34 +97,42 @@ def main(input_file,
          plot,
          oncohort,
          pancancer):
-    """OncodriveCLUSTL (MSc version) is a sequence based clustering method to identify cancer drivers across the genome
-    :param input_file: input file
-    :param input_signature: file containing input context based mutational probabilities (signature)
-    :param output_directory: output directory
-    :param regions_file: path input genomic regions, tab file
-    :param elements_file: file containing one element per row
-    :param elements: element symbol or file containing elements
-    :param genome: str, genome to use
-    :param element_mutations: int, cutoff of element mutations
-    :param cluster_mutations: int, cutoff of cluster mutations
-    :param smooth_window: int, smoothing window
-    :param cluster_window: int, clustering window
-    :param cluster_score: str, cluster score method
-    :param element_score: str, element score method
-    :param kmer: int, number of nucleotides of the signature
-    :param n_simulations: int, number of simulations
-    :param simulation_mode: str, simulation mode
-    :param simulation_window: int, window to simulate mutations in hotspot mode
-    :param cores: int, number of CPUs to use
-    :param log_level: verbosity of the logger
-    :param gzip: bool, True generates gzip compressed output file
-    :param cds: bool, True calculates clustering on cds
-    :param conseq: bool, True uses consequence type for cds
-    :param protein: bool, True analyzes clustering in translated protein sequences
-    :param plot: bool, True generates a clustering plot for an element
-    :param oncohort: bool, True generates output file for OncohortDrive
-    :param pancancer: bool, True computes PanCancer cohort analysis
-    :return: None
+    """
+    OncodriveCLUSTL is a sequence based clustering method to identify cancer drivers across the genome
+
+    Args:
+        input_file (str): path to mutations file
+        input_signature (str): path to file containing input context based mutational probabilities (optional).
+            By default (when no input signatures), OncodriveCLUSTL will calculate them from the mutations input file.
+        output_directory(str): path to output directory. Output files will be generated in it.
+        regions_file (str): path to input genomic coordinates file
+        elements_file (str): path to file containing one element per row (optional) to analyzed the listed elements.
+            By default, OncodriveCLUSTL analyzes all genomic elements contained in `regions_file`.
+        elements (str): genomic element symbol (optional). The analysis will be performed only on the specified element.
+        genome (str): genome to use: 'hg19', 'mm10', 'c3h', 'car', 'cast' and 'f344'
+        element_mutations (int): minimum number of mutations per genomic element to undertake analysis
+        cluster_mutations (int): minimum number of mutations to define a cluster
+        smooth_window (int): Tukey kernel smoothing window length
+        cluster_window (int): clustering window length
+        cluster_score (str): cluster score method
+        element_score (str): element score method
+        kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or pentanucleotides)
+        n_simulations (int): number of simulations
+        simulation_mode (str): simulation mode
+        simulation_window (int): window length to simulate mutations
+        cores (int): number of CPUs to use
+        log_level (str): verbosity of the logger
+        gzip (bool): flag to generate GZIP compressed output files
+        cds (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
+        conseq (bool): flag to use only non-synonymous mutations for clustering analysis
+        protein (bool): flag to analyze clustering in translated protein sequences
+        plot (bool): flag to generate a clustering plot for an element
+        oncohort (bool): flag to generate an output file for OncohortDrive
+        pancancer (bool): flag to compute PanCancer cohort analysis
+
+    Returns:
+        None
+
     """
 
     # Get output directory
@@ -138,7 +150,6 @@ def main(input_file,
     else:
         elements_output_file = 'elements_{}.txt'.format(output_file)
         clusters_output_file = 'clusters_{}.tsv'.format(output_file)
-
 
     daiquiri.setup(level=LOGS[log_level], outputs=(
         daiquiri.output.STDERR,
@@ -178,25 +189,20 @@ def main(input_file,
 
     # Check parameters
     if n_simulations < 1000:
-        logger.error('Invalid number of simulations: please choose integer greater than 1000')
-        quit(-1)
+        raise excep.UserInputError('Invalid number of simulations: please choose integer greater than 1000')
 
     if conseq and cds is False:
-        logger.error('Analysis using mutations consequence type requires analysis mode "--cds"')
-        quit(-1)
+        raise excep.UserInputError('Analysis using mutations consequence type requires analysis mode "--cds"')
 
     if protein and cds is False:
-        logger.error('Analysis in translated protein sequences requires analysis mode "--cds"')
-        quit(-1)
+        raise excep.UserInputError('Analysis in translated protein sequences requires analysis mode "--cds"')
 
     # If --plot, only one element is analyzed
     if plot:
         if len(elements) != 1:
-            logger.critical('Plot can only be calculated for one element')
-            quit(-1)
+            raise excep.UserInputError('Plot can only be calculated for one element')
         if not cds:
-            logger.critical('Plots are only available for cds')
-            quit(-1)
+            raise excep.UserInputError('Plots are only available for analysis mode "--cds"')
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -230,8 +236,11 @@ def main(input_file,
                         cohorts_of_analysis.add(line['CANCER_TYPE'])
                 # TODO warning if len == 1?
                 # TODO threshold number of mutations per cohort to compute signature?
-                logger.info('PanCancer analysis for {} cohort{}'.format(len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) >1 else ''))
-
+                logger.info(
+                    'PanCancer analysis for {} cohort{}'.format(
+                        len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) > 1 else ''
+                    )
+                )
                 # Check if signatures computed
                 for cohort in cohorts_of_analysis:
                     path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer))
@@ -246,14 +255,13 @@ def main(input_file,
                     obj.save(path_cache, prefix=None)
                     logger.info('Signatures computed')
             else:
-                logger.critical('PanCancer analysis requires "CANCER_TYPE" column in input file')
-                quit(-1)
+                raise excep.UserInputError('PanCancer analysis requires "CANCER_TYPE" column in input file')
         else:
             # Check if signatures computed
             file_prefix = input_file.split('/')[-1].split('.')[0]
             path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
             if os.path.isfile(path_pickle):
-                logger.info('Signatures computed')
+                logger.info('Signatures computed')  # TODO check format
             # Calculate signatures
             else:
                 logger.info('Computing signatures...')
@@ -266,11 +274,11 @@ def main(input_file,
         path_cache = input_signature
         error = prep.check_signature(input_signature, kmer)
         if error:
-            logger.critical('Signatures file could not be read. Please check {}'.format(input_signature))
-            quit(-1)
+            raise excep.UserInputError('Signatures file could not be read. Please check {}'.format(input_signature))
         if pancancer:
-            logger.critical('PanCancer analysis computes signatures from the input file. No input signatures allowed')
-            quit(-1)
+            raise excep.UserInputError('PanCancer analysis computes one signature file for each cancer type present '
+                                       'in the mutations input file, according to "CANCER_TYPE" column.')
+        logger.info('Input signatures loaded')
 
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
@@ -292,24 +300,40 @@ def main(input_file,
         if not element_mutations_cutoff:
             if len(v) >= element_mutations:
                 element_mutations_cutoff = True
-    logger.info('Validated {} in genomic regions: {}'.format('elements' if not protein else 'transcripts', len(regions_d.keys())))
+    logger.info('Validated {} in genomic regions: {}'.format(
+        'elements' if not protein else 'transcripts', len(regions_d.keys())
+    ))
     logger.info('Validated {} with mutations: {}'.format('elements' if not protein else 'transcripts', elem))
     logger.info('Total substitution mutations: {}'.format(mut))
     if not element_mutations_cutoff:
-        logger.critical('No element with enough mutations to perform analysis')
-        quit(-1)
+        raise excep.UserInputError('No element found with enough mutations to perform analysis')
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
-                                regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome,
-                                path_cache, cohorts_d,
-                                element_mutations, cluster_mutations,
-                                smooth_window, cluster_window,
-                                cluster_score, element_score,
-                                int(kmer),
-                                n_simulations, simulation_mode, simulation_window,
-                                cores, conseq, protein, plot
-                                ).run()
+        regions_d,
+        cds_d,
+        chromosomes_d,
+        strands_d,
+        mutations_d,
+        samples_d,
+        genome,
+        cohorts_d,
+        path_cache,
+        element_mutations,
+        cluster_mutations,
+        smooth_window,
+        cluster_window,
+        cluster_score,
+        element_score,
+        int(kmer),
+        n_simulations,
+        simulation_mode,
+        simulation_window,
+        cores,
+        conseq,
+        protein,
+        plot
+    ).run()
 
     # Write elements results (returns list of ranked elements)
     sorted_list_elements = postp.write_element_results(genome=genome,
@@ -339,6 +363,7 @@ def main(input_file,
                                           vep=conseq)
         logger.info('Oncohortdrive file generated')
     logger.info('Finished')
+
 
 if __name__ == '__main__':
     main()

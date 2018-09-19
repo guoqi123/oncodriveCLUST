@@ -1,4 +1,6 @@
-# Import modules
+"""
+Contains the main class of the method
+"""
 import os.path
 from concurrent.futures import ProcessPoolExecutor as Pool
 import math
@@ -23,46 +25,68 @@ from oncodriveclustl.utils import plots as plot
 # Logger
 logger = daiquiri.getLogger()
 Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cancertype')
+Cds = namedtuple('Cds', 'start, end')
 
 
 class Experiment:
-    """Class to analyze elements of a cancer dataset"""
+    """Class to analyze genomic elements of a cancer dataset"""
 
     def __init__(self,
-                 regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, genome,
-                 path_cache, cohorts_d,
-                 element_mutations_cutoff, cluster_mutations_cutoff,
-                 smooth_window, cluster_window,
-                 cluster_score, element_score,
-                 kmer, n_simulations, simulation_mode, simulation_window,
+                 regions_d,
+                 cds_d,
+                 chromosomes_d,
+                 strands_d,
+                 mutations_d,
+                 samples_d,
+                 genome,
+                 cohorts_d,
+                 path_cache,
+                 element_mutations_cutoff,
+                 cluster_mutations_cutoff,
+                 smooth_window,
+                 cluster_window,
+                 cluster_score,
+                 element_score,
+                 kmer,
+                 n_simulations,
+                 simulation_mode,
+                 simulation_window,
                  cores,
-                 conseq, protein,
-                 plot):
+                 conseq,
+                 protein,
+                 is_plot):
+
         """Initialize the Experiment class
-        :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
-        :param cds_d: dictionary of dictionaries with relative cds position of genomic regions if cds is True
-        :param chromosomes_d: dict, dictionary containing chromosomes from all analyzed elements
-        :param strands_d: dic, dictionary containing strands from all analyzed elements
-        :param mutations_d: dictionary, key = element, value = list of mutations as namedtuple(position, sample)
-        :param samples_d: dictionary, key = sample, value = number of mutations
-        :param genome: str, genome to use
-        :param path_cache: str, path to pickles directory (cache)
-        :param cohorts_d: dictionary, key = element, value = set of cohorts with element mutations
-        :param element_mutations_cutoff: int, cutoff of element mutations
-        :param cluster_mutations_cutoff: int, cutoff of cluster mutations
-        :param smooth_window: int, smoothing window
-        :param cluster_window: int, clustering window
-        :param cluster_score: str, cluster score method
-        :param element_score: str, element score method
-        :param kmer: int, number of nucleotides of the signature
-        :param n_simulations: int, number of simulations
-        :param simulation_mode: str, simulation mode
-        :param simulation_window: int, window to simulate mutations in hotspot mode
-        :param cores: int, number of CPUs to use
-        :param conseq: True, use aa consequence type
-        :param protein: bool, True analyzes clustering in translated protein sequences
-        :param plot: bool, True generates a clustering plot for an element
-        :return: None
+
+        Args:
+            regions_d (dict): dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
+            cds_d (dict): dictionary of dictionaries with relative cds position of genomic regions if cds is True
+            chromosomes_d (dict): dictionary of elements (keys) and chromosomes (values)
+            strands_d (dict): dictionary of elements (keys) and strands (values)
+            mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
+            samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
+            genome (str): genome to use
+            cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
+            path_cache (str): path to pickles directory (cache)
+            element_mutations_cutoff (int): minimum number of mutations per genomic element to undertake analysis
+            cluster_mutations_cutoff (int): minimum number of mutations to define a cluster
+            smooth_window (int): Tukey kernel smoothing window length
+            cluster_window (int): clustering window length
+            cluster_score (str): cluster score method
+            element_score (str): element score method
+            kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or
+                pentanucleotides)
+            n_simulations (int): number of simulations
+            simulation_mode (str): simulation mode
+            simulation_window (int): window length to simulate mutations
+            cores (int): number of CPUs to use
+            conseq (bool): True, use only non-synonymous mutations for clustering analysis
+            protein (bool): True analyzes clustering in translated protein sequences
+            is_plot (bool): True generates a clustering plot for an element
+
+        Returns:
+            None
+
         """
 
         global Mutation
@@ -90,10 +114,9 @@ class Experiment:
         self.simulation_mode = simulation_mode
         self.simulation_window = simulation_window + (1 - simulation_window % 2)
         self.cores = cores
-        self.plot = plot
+        self.is_plot = is_plot
         self.conseq = conseq
         self.protein = protein
-
 
         # Read CGC
         if self.genome == 'hg19':
@@ -111,8 +134,13 @@ class Experiment:
     @staticmethod
     def tukey(window):
         """Tukey smoothing function generates tukey_filter for smoothing
-        :param window: smoothing window
-        :return: numpy array. The elements sum to 1
+
+        Args:
+            window (int): smoothing window
+
+        Returns:
+            filter_ (np.array): tukey filter. Positions sum to 1
+
         """
         half_window = window // 2
         tukey = lambda x: np.maximum(1 - x ** 2, 0) ** 2
@@ -124,30 +152,40 @@ class Experiment:
     def normalize(element, probs):
         """
         Given an array of probabilities, normalize them to 1
-        :param element: genomic element of analysis
-        :param probs: array of probabilities
-        :return: array of normalized probabilities
+
+        Args:
+            element (str): genomic element of analysis
+            probs (list): list of probabilities
+
+        Returns:
+            normalized_probabilities (list): normalized probabilities
+
         """
 
-        try:
+        if sum(probs) != 0:
             prob_factor = 1 / sum(probs)
-            return [prob_factor * p for p in probs]
+            normalized_probabilities = [prob_factor * p for p in probs]
+        else:
+            logger.error('No mutational probabilities derived from signatures in element {}'.format(element))
+            normalized_probabilities = False
 
-        except ZeroDivisionError as e:
-            logger.error('{}. No mutational probabilities derived from signatures in element {}'.format(e, element))
-            return False
+        return normalized_probabilities
 
     def mut_probabilities(self, element):
         """
         Generate mutational probabilities per position of an element using the sequence context observed mutational
         probabilities calculated from the input cohort/s.
-        :param element: element to calculate pre-smoothing
-        :return:
-            probs_tree: IntervalTree of genomic regions. Length == 3*(genomic + simulation window)
-            conseq_tree: IntervalTree of genomic regions, interval.data are boolean arrays representing synonymous or
-            non-synonymous changes of each alternate per position. Length == 3*(genomic + simulation window). Tree empty
-            if self.conseq is False.
-            skip: bool, if True skip further analysis
+
+        Args:
+            element (str): element to calculate pre-smoothing
+
+        Returns:
+            probs_tree (IntervalTree): IntervalTree of genomic regions. Length == 3*(genomic + simulation window)
+            conseq_tree (IntervalTree): IntervalTree of genomic regions, interval.data are boolean arrays representing
+                synonymous or non-synonymous changes of each alternate per position.
+                Length == 3*(genomic + simulation window). Tree empty if self.conseq is False.
+            skip (bool): if True skip further analysis
+
         """
         skip = False
         nu = 0
@@ -156,8 +194,9 @@ class Experiment:
         probs_tree = defaultdict(IntervalTree)
         conseq_tree = IntervalTree()
         simulation_window = self.simulation_window
-        correction = 1   # (simw // 2 ) * 2 == simw - 1
+        correction = 1
 
+        conseq_d = {}
         if self.conseq:
             ensid = element.split('//')[1]
             path_to_vep_pickle = self.conseq_path + '/{}.pickle'.format(ensid)
@@ -167,8 +206,7 @@ class Experiment:
             except FileNotFoundError:
                 skip = True
 
-        # Check signatures pickles exist and read
-        # TODO to much memory?
+        # Check signatures pickles exist and read          # TODO to much memory?
         signatures_d = defaultdict()
         for cohort in self.cohorts_d[element]:
             if os.path.isfile(self.path_cache):
@@ -204,20 +242,17 @@ class Experiment:
                     conseq = []
                     if ref_kmer.count('N') == 0:
                         # calculate mutational prob to any other kmer
-                        # sort alternates to keep track of them
+                        # sort alternates to keep track
                         for alt in sorted(list(nucleot.difference({ref_kmer[self.kmer//2]}))):
                             alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
                             for cohort, signature in signatures_d.items():
                                 prob[cohort].append(signature[(ref_kmer, alt_kmer)])
-                            if self.conseq:
-                                # Get consequence
-                                con = 0 if position in conseq_d.get(alt, []) else 1
-                                conseq.append(con)
-                            else:
-                                conseq.append(1)
+                            # Get consequence
+                            con = 0 if position in conseq_d.get(alt, []) else 1
+                            conseq.append(con)
                     else:
                         for cohort, signature in signatures_d.items():
-                            prob[cohort].extend([0,0,0])
+                            prob[cohort].extend([0, 0, 0])
                         conseq = [0, 0, 0]  # TODO check, give conseq synonymous to pos where ref_kmer has N
 
                     # Extend position info
@@ -237,8 +272,8 @@ class Experiment:
                     probabilities = interval.data
                     if probabilities:
                         if sum(probabilities) == 0:
-                            logger.critical('All context based mutational probabilities per alternate in {} equal to 0\n'
-                                            '{} analysis is skipped'.format(element, element))
+                            logger.critical('All context based mutational probabilities per alternate in {} '
+                                            'equal to 0\n {} analysis is skipped'.format(element, element))
                             skip = True
                             break
                         if len(probabilities) != 3 * (interval[1] - interval[0] + simulation_window - correction):
@@ -262,12 +297,16 @@ class Experiment:
     def analysis(self, element, mutations, analysis_mode='sim'):
         """
         Calculate smoothing, clustering and element score for observed or simulated mutations
+
+        Args:
         :param element: element of analysis.
         :param mutations: list, list of mutations of an element
         :param analysis_mode: str, observed or simulated; default simulated
-        :return:
+
+        Returns:
             dict of dicts: cutoff clusters
             int, gene score
+
         """
         if self.cds_d:
             cds_d = self.cds_d[element]
@@ -303,7 +342,7 @@ class Experiment:
                                             self.element_score)
         logger.debug('Element score calculated')
 
-        if self.plot:
+        if self.is_plot:
             logger.info('Generating plot: {}'.format(element))
             return smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score
         else:
@@ -360,7 +399,7 @@ class Experiment:
                 simulations = np.random.choice(range(start_index, end_index), size=n_sim,
                                                p=self.normalize(element, interval.data[start_index:end_index]))
                 # Add info per simulated mutation
-                l = []
+                list_simulations_per_mutation = []
                 for count, index in enumerate(simulations):
                     # print(count, index, index / 3)
                     muttype = list(conseq_tree[interval[0]])[0][2][index]
@@ -374,8 +413,10 @@ class Experiment:
 
                     alternate = sorted(list(nucleot.difference({ref_nucleotide})))[alternate_index]
                     # Simulated mutation
-                    l.append(Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype))
-                df.append(l)
+                    list_simulations_per_mutation.append(
+                        Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype)
+                    )
+                df.append(list_simulations_per_mutation)
 
         # Start analysis
         logger.debug('Start analyzing simulations')
@@ -416,7 +457,7 @@ class Experiment:
     def post_process(self, items):
         """
         Post processing of results
-        :param item: tuple, elements results
+        :param items: tuple, elements results
         :return:
         """
         pseudo_pvalue = 1.1102230246251566e-19
@@ -473,7 +514,8 @@ class Experiment:
                         # Check how many simulated clusters are and add 0 if this number < number of simulations
                         # 0 means no simulated cluster
                         if n_clusters_sim < self.n_simulations:
-                            sim_clusters_scores = sim_clusters_scores + [0] * (self.n_simulations - len(sim_clusters_scores))
+                            missing_clusters = self.n_simulations - len(sim_clusters_scores)
+                            sim_clusters_scores = sim_clusters_scores + [0] * missing_clusters
 
                         # Random choice 1000 simulated cluster scores
                         sim_clusters_scores = np.random.choice(sim_clusters_scores, size=1000, replace=False)
@@ -533,7 +575,7 @@ class Experiment:
         logger.info('Calculating results {} element{}...'.format(len(analyzed_elements),
                     's' if len(analyzed_elements) > 1 else ''))
         # Plot
-        if self.plot:
+        if self.is_plot:
             for element in analyzed_elements:
                 smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score = \
                     self.analysis(element, self.mutations_d[element], analysis_mode='obs')
@@ -604,8 +646,6 @@ class Experiment:
                     sim_scores_list[element] += sim_scores_chunk
                     sim_clusters_list[element] += sim_cluster_chunk
 
-                    # TODO increase simulations for elements without simulated clusters
-
                 # Add information of elements without clusters
                 for element in nocluster_elements:
                     sim_scores_list[element] = sim_clusters_list[element] = float('nan')
@@ -615,11 +655,12 @@ class Experiment:
                                         sim_scores_list[e]) for e in simulated_elements + nocluster_elements]
                 post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan')) for
                                  e in noprobabilities_elements + belowcutoff_elements]
-
-                total_items_split = list(chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / (self.cores-1)))))
+                total_items_split = list(
+                    chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / (self.cores-1))))
+                )
                 total_items_split.append(post_item_nan)
-                for results in tqdm(executor.map(self.post_process, total_items_split), total=self.cores,
-                                      desc="post processing".rjust(30)):
+                for results in tqdm(executor.map(
+                        self.post_process, total_items_split), total=self.cores, desc="post processing".rjust(30)):
                     for e, er, cr in results:
                         elements_results[e] = er
                         clusters_results[e] = cr
@@ -630,9 +671,14 @@ class Experiment:
 def partitions_list(total_size, chunk_size):
     """
     Create a list of values less or equal to chunk_size that sum total_size
-    :param total_size: Total size
-    :param chunk_size: Chunk size
-    :return: list of integers
+
+    Args:
+        total_size (int): total size
+        chunk_size (int): chunk size
+
+    Returns:
+        partitions (list): list of integers
+
     """
     partitions = [chunk_size for _ in range(total_size // chunk_size)]
 
@@ -646,9 +692,14 @@ def partitions_list(total_size, chunk_size):
 def chunkizator(iterable, size=1000):
     """
     Creates chunks from an iterable
-    :param iterable:
-    :param size: int, elements in the chunk
-    :return: list. Chunk
+
+    Args:
+        iterable (list): total list of elements
+        size (int): number of elements in the chunk
+
+    Returns:
+        chunk (list): list of elements
+
     """
     s = 0
     chunk = []

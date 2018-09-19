@@ -1,10 +1,11 @@
-# Import modules
-import os
+"""
+Contains functions to parse input mutations and genomic regions files
+"""
+
 import gzip
 import csv
 from collections import defaultdict
 from collections import namedtuple
-import json
 
 import daiquiri
 from intervaltree import IntervalTree
@@ -12,6 +13,7 @@ import bgreference as bg
 import bgdata as bgd
 import pickle
 
+from oncodriveclustl.utils import exceptions as excep
 from oncodriveclustl.utils import preprocessing as prep
 
 Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cancertype')
@@ -21,14 +23,18 @@ Cds = namedtuple('Cds', 'start, end')
 def read_regions(input_regions, elements, protein):
     """
     Parse input genomic regions
-    :param input_regions: path to input genomic regions
-    :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
-    :param protein: bool, True reads transcripts ID instead of elements id
-    :return:
-        trees: dictionary of dictionary of intervaltrees (trees) containing intervals of genomic elements by chromosome.
-        regions_d: dictionary of IntervalTrees with genomic regions for elements
-        chromosomes_d: dict, keys are elements, values are chromosomes
-        strands_d: dict, keys are elements, values are strands
+
+    Args:
+        input_regions (str): path to input genomic regions
+        elements (set): elements to analyze. If the set is empty all the elements in genomic regions will be analyzed
+        protein (bool): True reads transcripts id instead of elements id
+
+    Returns:
+        trees (dict): dictionary of dictionary of intervaltrees containing intervals of genomic elements by chromosome.
+        regions_d (dict): dictionary of IntervalTrees with genomic regions for elements
+        chromosomes_d (dict): dictionary of elements (keys) and chromosomes (values)
+        strands_d (dict): dictionary of elements (keys) and strands (values)
+
     """
     trees = defaultdict(IntervalTree)
     regions_d = defaultdict(IntervalTree)
@@ -51,11 +57,9 @@ def read_regions(input_regions, elements, protein):
                     chromosomes_d[symbol + '//' + ensid] = chromosome
                     strands_d[symbol + '//' + ensid] = strand
         if not regions_d.keys():
-            logger.critical('No elements found in genomic regions. Please, check input data')
-            quit(-1)
+            raise excep.UserInputError('No elements found in genomic regions. Please, check input data')
     else:
-        logger.critical('Genomic regions are not compressed, please input GZIP compressed file')
-        quit(-1)
+        raise excep.UserInputError('Genomic regions are not compressed, please input GZIP compressed file')
 
     return regions_d, chromosomes_d, strands_d, trees
 
@@ -63,9 +67,13 @@ def read_regions(input_regions, elements, protein):
 def map_regions_cds(regions_d):
     """
     Calculate cds position of every region relative to genomic element start
-    :param regions_d: dictionary of IntervalTrees with genomic regions for elements
-    :return:
-            cds_d: dictionary of dictionaries with relative cds index of genomic regions
+
+    Args:
+        regions_d (dict): dictionary of IntervalTrees with genomic regions for elements
+
+    Returns:
+        cds_d (dict): dictionary of dictionaries with relative cds index of genomic regions
+
     """
     global Cds
     cds_d = defaultdict(dict)
@@ -83,14 +91,18 @@ def map_regions_cds(regions_d):
 
 def read_mutations(input_mutations, trees, conseq):
     """
-    Read mutations file and intersect with regions. Only substitutions.
-    :param input_mutations: path to file containing mutations
-    :param trees: dictionary of dictionary of IntervalTrees containing intervals of genomic elements per chromosome
-    :param conseq: True, use aa consequence type
-    :return:
-        mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple
-        samples_d: dictionary, key = sample, value = number of mutations
-        cohorts_d: dictionary, key = element, value = set of cohorts with element mutations
+    Read mutations file (only substitutions) and map to elements' genomic regions
+
+    Args:
+        input_mutations (str): path to file containing mutations
+        trees (dict): dictionary of dictionary of IntervalTrees containing intervals of genomic elements per chromosome
+        conseq (bool): True, use AA consequence type
+
+    Returns:
+        mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
+        samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
+        cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
+
     """
     global Mutation
     mutations_d = defaultdict(list)
@@ -98,10 +110,9 @@ def read_mutations(input_mutations, trees, conseq):
     cohorts_d = defaultdict(set)
     read_function, mode, delimiter, cancer_type_header = prep.check_tabular_csv(input_mutations)
     file_prefix = input_mutations.split('/')[-1].split('.')[0]
-    conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
 
     if conseq:
-        # Read mutations
+        conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
         with read_function(input_mutations, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
             for line in fd:
@@ -115,7 +126,6 @@ def read_mutations(input_mutations, trees, conseq):
                 else:
                     cancer_type = file_prefix
                 samples_d[sample] += 1
-
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
                     if ref != '-' and alt != '-':
@@ -167,26 +177,24 @@ def read_mutations(input_mutations, trees, conseq):
 def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
     """
     Map transcript to reference protein sequence. Remove transcripts that do not pass control check.
-    :param regions_d: dictionary of IntervalTrees with genomic regions for elements
-    :param chromosomes_d: dict, keys are elements, values are chromosomes
-    :param strands_d: dict, keys are elements, values are strands
-    :param genome: str, genome to use
-    :return:
-    regions_d: dictionary of IntervalTrees with genomic regions for elements updated
-    protein_d: dictionary of reference translated protein sequences per transcript
+
+    Args:
+    regions_d (dict): dictionary of IntervalTrees with genomic regions for elements
+    chromosomes_d (dict): dictionary of elements (keys) and chromosomes (values)
+    strands_d (dict): dictionary of elements (keys) and strands (values)
+    genome (str): genome to use
+
+    Returns:
+    regions_d (dict): dictionary of IntervalTrees with genomic regions for elements updated
+
     """
-    # TODO remove hardcoded file
-    with open(os.path.join(os.path.dirname(__file__), '../data/genetic_code_ncbi_20180727_v1.json'), 'rt') as fd:
-        genetic_code = json.load(fd)
-    # protein_d_path = os.path.join(cache, 'protein_sequences.pickle')
     reverse_d = {
         'A': 'T',
         'T': 'A',
         'C': 'G',
         'G': 'C'
     }
-    start_codons = ['ATG']  #, 'TTG', 'CTG']
-    protein_d = {}
+    start_codons = ['ATG']  # TODO consider 'TTG', 'CTG'
     elements_to_skip = set()
 
     for element, regions in regions_d.items():
@@ -194,7 +202,7 @@ def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
         # Get nucleotide sequence
         for interval in sorted(regions, reverse=False):
             start = interval[0]
-            size = interval[1] - interval[0]  # no need +1 because interval end already +1
+            size = interval[1] - interval[0]  # no need + 1 because interval end already + 1
             sequence = bg.refseq(genome, chromosomes_d[element], start, size)
             if sequence.count('N') == 0:
                 cds.extend(sequence)
@@ -202,46 +210,43 @@ def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
                 logger.warning('Found N nucleotide in {}. Element is discarded from analysis\n'.format(element))
                 elements_to_skip.add(element)
                 break
-
-        # Reverse if needed
+        # Reverse complementary if needed
         if strands_d[element] == '-':
-            # Reverse
             cds.reverse()
-            # Complementary
             cds = ''.join([reverse_d.get(i, i) for i in cds])
         else:
             cds = ''.join(cds)
-
-        # Check and translate to protein
+        # Check
         if len(cds) % 3 == 0 and cds[:3] in start_codons:
-            protein_d[element] = ''.join([genetic_code[cds[i:i + 3]][0] for i in range(0, len(cds), 3)])
+            pass
         else:
             logger.warning('{} cannot be translated to protein. Element is discarded from analysis'.format(element))
             elements_to_skip.add(element)
-
-    # # Save to pickle
-    # with open(protein_d_path, 'wb') as fd:
-    #     pickle.dump(protein_d, fd, protocol=2)
 
     return elements_to_skip
 
 
 def parse(input_regions, elements, input_mutations, cds, conseq, protein, genome):
     """Parse genomic regions and dataset of cancer type mutations
-    :param input_regions: path to file containing mutational data
-    :param elements: set, list of elements to analyze. If the set is empty all the elements will be analyzed
-    :param input_mutations: path tab file
-    :param cds: bool, True calculates clustering on cds
-    :param conseq: True, use aa consequence type
-    :param protein: bool, True analyzes clustering in translated protein sequences
-    :return
-        regions_d: dictionary of IntervalTrees with genomic regions for elements
-        cds_d: dictionary of dictionaries with relative cds position of genomic regions
-        chromosomes_d: dict, keys are elements, values are chromosomes
-        strands_d: dict, keys are elements, values are strands
-        mutations_d: dictionary, key = element, value = list of mutations formatted as namedtuple
-        samples_d: dictionary, key = sample, value = number of mutations
-        cohorts_d: dictionary, key = element, value = set of cohorts with element mutations
+
+    Args:
+        input_regions (str): path to input genomic regions
+        elements (set): elements to analyze. If the set is empty all the elements in genomic regions will be analyzed
+        input_mutations (str): path to file containing mutations
+        cds (bool): True calculates clustering on collapsed genomic regions (e.g., coding regions in a gene)
+        conseq (bool): True, use AA consequence type
+        protein (bool): True analyzes clustering in translated protein sequences
+        genome (str): genome to use
+
+    Returns:
+        regions_d (dict): dictionary of IntervalTrees containing genomic regions from all analyzed elements
+        cds_d (dict): dictionary of dictionaries with relative cds index of genomic regions
+        chromosomes_d (dict): dictionary of elements (keys) and chromosomes (values)
+        strands_d (dict): dictionary of elements (keys) and strands (values)
+        mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
+        samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
+        cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
+
     """
     global logger
     logger = daiquiri.getLogger()
@@ -258,7 +263,7 @@ def parse(input_regions, elements, input_mutations, cds, conseq, protein, genome
     if protein:
         elements_to_skip = map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome)
         logger.info('Protein sequences calculated')
-        # Remove transcripts
+        # Remove invalid transcripts
         for element in elements_to_skip:
             del regions_d[element]
             del cds_d[element]
