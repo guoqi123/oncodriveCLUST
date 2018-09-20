@@ -1,4 +1,6 @@
-# Import modules
+"""
+Contains functions to write OncodriveCLUSTL's results
+"""
 import os
 import logging
 import csv
@@ -26,24 +28,36 @@ logs = {
 }
 
 
-def mtc(p_value):
+def mtc(p_value, alpha=0.05):
     """
-    Calculate q-value
-    :param p_value: array
-    :return: q_value
+    Adjust p-valus by multiple test correction using false discovery rate (FDR) Benjamini–Hochberg method
+
+    Args:
+        p_value (array): list of p-values
+        alpha (float): error rate
+
+    Returns:
+        (array): list of p-values corrected by multiple test
+
     """
 
-    return mlpt(p_value, alpha=0.05, method='fdr_bh')[1]
+    return mlpt(p_value, alpha=alpha, method='fdr_bh')[1]
 
 
-def write_element_results(genome, results, directory, file, gzip):
-    """Save results to the output file
-    :param genome: reference genome
-    :param results: dict, dictionary of results, keys are element's symbols
-    :param directory: str, output directory
-    :param file: str, output file
-    :param gzip: bool, True generates gzip compressed output file
-    :return: None
+def write_element_results(genome, results, directory, file, is_gzip):
+    """
+    Save elements results to the output file
+
+    Args:
+        genome (str): reference genome
+        results (dict): dictionary of results, keys are element's symbols
+        directory (str): path to output directory
+        file (str): output file name
+        is_gzip (bool): True generates gzip compressed output file
+
+    Returns:
+        None
+
     """
 
     file = os.path.join(directory, file)
@@ -51,64 +65,90 @@ def write_element_results(genome, results, directory, file, gzip):
     global logger
     logger = daiquiri.getLogger()
 
-    header = ['SYMBOL', 'ENSID', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_MUT_CLUST', 'N_CLUST', 'SIM_CLUSTS',
+    header = ['SYMBOL',
+              'ENSID',
+              'CHROMOSOME',
+              'STRAND',
+              'LENGTH',
+              'TOTAL_MUT',
+              'CLUSTERED_MUT',
+              'CLUSTERS',
+              'SIM_CLUSTERS',
               'SCORE',
-              'P_EMPIRICAL', 'P_ANALYTICAL', 'P_TOPCLUSTER',
+              'P_EMPIRICAL',
+              'P_ANALYTICAL',
+              'P_TOPCLUSTER',
               'CGC']
+
     df = pd.DataFrame(columns=header, index=[i for i in range(len(results))])
 
     i = 0
     for element, values in results.items():
-        sym, id = element.split('//')
-        chr, strand, length, muts, muts_in_clu, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
+        sym, identif = element.split('//')
+        chrom, strand, length, muts, muts_in_clu, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
         if genome != 'hg19':
             cgc = 'Non Available'
         df.loc[i] = pd.Series({
-            'SYMBOL':sym, 'ENSID':id, 'CHROMOSOME':chr, 'STRAND':strand, 'LENGTH':length,
-            'N_MUT':muts, 'N_MUT_CLUST':muts_in_clu, 'N_CLUST':obs_clu, 'SIM_CLUSTS': sim_clu, 'SCORE':obs_score,
-            'P_EMPIRICAL':epval, 'P_ANALYTICAL':apval, 'P_TOPCLUSTER':topcpval,'CGC':cgc})
+            'SYMBOL': sym,
+            'ENSID': identif,
+            'CHROMOSOME': chrom,
+            'STRAND': strand,
+            'LENGTH': length,
+            'TOTAL_MUT': muts,
+            'CLUSTERED_MUT': muts_in_clu,
+            'CLUSTERS': obs_clu,
+            'SIM_CLUSTERS': sim_clu,
+            'SCORE': obs_score,
+            'P_EMPIRICAL': epval,
+            'P_ANALYTICAL': apval,
+            'P_TOPCLUSTER': topcpval,
+            'CGC': cgc})
         i += 1
 
     try:
         # Makes sure the data are float
-        df['P_ANALYTICAL'] = df['P_ANALYTICAL'].astype(float)
-        df['P_EMPIRICAL'] = df['P_EMPIRICAL'].astype(float)
-        df['P_TOPCLUSTER'] = df['P_TOPCLUSTER'].astype(float)
-
+        for p_value in ['P_ANALYTICAL', 'P_EMPIRICAL', 'P_TOPCLUSTER']:
+            df[p_value] = df[p_value].astype(float)
         # Calculate q-values
         df_nonempty = df[np.isfinite(df['P_ANALYTICAL'])].copy()
         df_empty = df[~np.isfinite(df['P_ANALYTICAL'])].copy()
-        df_nonempty['Q_EMPIRICAL'] = mtc(df_nonempty['P_EMPIRICAL'])
-        df_nonempty['Q_ANALYTICAL'] = mtc(df_nonempty['P_ANALYTICAL'])
-        df_nonempty['Q_TOPCLUSTER'] = mtc(df_nonempty['P_TOPCLUSTER'])
-        df_empty['Q_EMPIRICAL'] = np.nan
-        df_empty['Q_ANALYTICAL'] = np.nan
-        df_empty['Q_TOPCLUSTER'] = np.nan
+        # Add to df
+        for p_value in ['ANALYTICAL', 'EMPIRICAL', 'TOPCLUSTER']:
+            df_nonempty['Q_' + p_value] = mtc(df_nonempty['P_' + p_value])
+            df_empty['Q_' + p_value] = np.nan
         df = pd.concat([df_nonempty, df_empty])
-
-        # Reorder columns
-        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_MUT_CLUST',
-                 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
-                 'P_EMPIRICAL', 'Q_EMPIRICAL','P_ANALYTICAL', 'Q_ANALYTICAL','P_TOPCLUSTER', 'Q_TOPCLUSTER']]
-
         # Sort by analytical q-value
         df.sort_values(by=['Q_ANALYTICAL', 'P_ANALYTICAL', 'SCORE', 'CGC'],
                        ascending=[True, True, False, False], inplace=True)
 
     except Exception as e:
         logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
-        df['Q_EMPIRICAL'] = np.nan
-        df['Q_ANALYTICAL'] = np.nan
-        df['Q_TOPCLUSTER'] = np.nan
-        # Reorder columns
-        df = df[['SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'LENGTH', 'N_MUT', 'N_MUT_CLUST',
-                 'N_CLUST', 'SIM_CLUSTS', 'SCORE',
-                 'P_EMPIRICAL', 'Q_EMPIRICAL', 'P_ANALYTICAL', 'Q_ANALYTICAL', 'P_TOPCLUSTER', 'Q_TOPCLUSTER']]
+        for q_value in ['Q_ANALYTICAL', 'Q_EMPIRICAL', 'Q_TOPCLUSTER']:
+            df[q_value] = np.nan
+
+    # Reorder columns
+    df = df[['SYMBOL',
+             'ENSID',
+             'CGC',
+             'CHROMOSOME',
+             'STRAND',
+             'LENGTH',
+             'TOTAL_MUT',
+             'CLUSTERED_MUT',
+             'CLUSTERS',
+             'SIM_CLUSTERS',
+             'SCORE',
+             'P_EMPIRICAL',
+             'Q_EMPIRICAL',
+             'P_ANALYTICAL',
+             'Q_ANALYTICAL',
+             'P_TOPCLUSTER',
+             'Q_TOPCLUSTER']]
 
     # Create a sorted list of elements to order the clusters file
     sorted_list_elements = df['SYMBOL'].tolist()
 
-    if gzip is True:
+    if is_gzip is True:
         df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False, compression='gzip')
     else:
         df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False)
@@ -116,25 +156,37 @@ def write_element_results(genome, results, directory, file, gzip):
     return sorted_list_elements
 
 
-def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d, protein):
-    """Save results to the output file
+def write_cluster_results(genome, results, directory, file, sorter, is_gzip, cds_d, protein):
+    """Save clusters results to the output file
     :param genome: reference genome
     :param results: dict, dictionary of results, keys are element's symbols
     :param directory: str, output directory
     :param file: str, output file, if elements in elements file
     :param sorter: list, element symbols ranked by elements p-value
-    :param gzip: bool, True generates gzip compressed output file
+    :param is_gzip: bool, True generates gzip compressed output file
     :param cds_d: dictionary of dictionaries with relative cds position of genomic regions if cds is True
     :param protein: bool, True reverses clusters positions in protein if gene strand is negative
     :return: None
     """
     reverse_cds_d = IntervalTree()
-    sorterindex = dict(zip(sorter, range(len(sorter))))
+    sorter_index = dict(zip(sorter, range(len(sorter))))
     file = os.path.join(directory, file)
 
-    header = ['RANK', 'SYMBOL', 'ENSID', 'CGC', 'CHROMOSOME', 'STRAND', 'REGION',
-              '5_COORD', 'MAX_COORD', '3_COORD',
-              'WIDTH', 'N_MUT', 'N_SAMPLES', 'FRA_UNIQ_SAMPLES', 'SCORE', 'P']
+    header = ['RANK',
+              'SYMBOL',
+              'ENSID',
+              'CGC',
+              'CHROMOSOME',
+              'STRAND',
+              '5_COORD',
+              'MAX_COORD',
+              '3_COORD',
+              'WIDTH',
+              'N_MUT',
+              'N_SAMPLES',
+              'FRA_UNIQ_SAMPLES',
+              'SCORE',
+              'P']
 
     with open(file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
@@ -142,51 +194,64 @@ def write_cluster_results(genome, results, directory, file, sorter, gzip, cds_d,
             if cds_d and not protein:
                 for genomic, cds in cds_d[element].items():
                     reverse_cds_d.addi(cds[0], cds[1] + 1, genomic)   # end + 1
-            sym, id = element.split('//')
-            clustersinfo, chr, strand, length, cgc = values
+            sym, identif = element.split('//')
+            clustersinfo, chrom, strand, length, cgc = values
             if genome != 'hg19':
                 cgc = 'Non Available'
             if type(clustersinfo) != float:
-                rank = sorterindex[sym] + 1
+                rank = sorter_index[sym] + 1
                 for interval in clustersinfo:
                     for c, v in interval.data.items():
                         left_m = v['left_m'][1]
                         max_cluster = v['max'][1]
                         right_m = v['right_m'][1]
 
-                        if cds_d and not protein:
-                            for i in reverse_cds_d[v['left_m'][0]]:
-                                start_l = i.data
-                                end_l = i.data + (i[1] - i[0])
-                            for i in reverse_cds_d[v['right_m'][0]]:
-                                start_r = i.data
-                                end_r = i.data + (i[1] - i[0])
-
-                            if start_l != start_r:
-                                region_start = (start_l, end_l)
-                                region_end = (start_r, end_r)
-                            else:
-                                region_start = start_l
-                                region_end = end_l
-                        else:
-                            region_start = interval[0]
-                            region_end = interval[1]
+                        # # FIXME problems here!
+                        # if cds_d and not protein:
+                        #     for i in reverse_cds_d[v['left_m'][0]]:
+                        #         start_l = i.data
+                        #         end_l = i.data + (i[1] - i[0])
+                        #     for i in reverse_cds_d[v['right_m'][0]]:
+                        #         start_r = i.data
+                        #         end_r = i.data + (i[1] - i[0])
+                        #
+                        #     if start_l != start_r:
+                        #         region_start = (start_l, end_l)
+                        #         region_end = (start_r, end_r)
+                        #     else:
+                        #         region_start = start_l
+                        #         region_end = end_l
+                        # else:
+                        #     region_start = interval[0]
+                        #     region_end = interval[1]
 
                         if protein and strand == '-':
-                            left_m = length - left_m   # v['right_m'][1]
+                            left_m = length - left_m
                             max_cluster = length - max_cluster
-                            right_m = length - right_m   # v['left_m'][1]
+                            right_m = length - right_m
 
-                        fd.write('{}\t{}\t{}\t{}\t{}\t{}\t[{},{}]\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                            rank, sym, id, cgc, chr, strand, region_start, region_end,
-                            left_m, max_cluster, right_m, abs(v['right_m'][0] - v['left_m'][0] + 1),
-                            len(v['mutations']), len(v['samples']), v['fra_uniq_samples'], v['score'], v['p']))
-
+                        fd.write('{}\n'.format('\t'.join([
+                                    rank,
+                                    sym,
+                                    identif,
+                                    cgc,
+                                    chrom,
+                                    strand,
+                                    left_m,
+                                    max_cluster,
+                                    right_m,
+                                    abs(v['right_m'][0] - v['left_m'][0] + 1),
+                                    len(v['mutations']),
+                                    len(v['samples']),
+                                    v['fra_uniq_samples'],
+                                    v['score'],
+                                    v['p']]
+                        )))
     # Sort
     df = pd.read_csv(file, sep='\t', header=0, compression=None)
     df.sort_values(by=['RANK', 'P', 'SCORE'], ascending=[True, True, False], inplace=True)
 
-    if gzip is True:
+    if is_gzip is True:
         df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False, compression='gzip')
     else:
         df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False)

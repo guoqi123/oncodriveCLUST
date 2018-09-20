@@ -340,7 +340,7 @@ def main(input_file,
                                                        results=elements_results,
                                                        directory=output_directory,
                                                        file=elements_output_file,
-                                                       gzip=gzip)
+                                                       is_gzip=gzip)
     logger.info('Elements results calculated')
 
     # Write clusters results
@@ -349,7 +349,7 @@ def main(input_file,
                                 directory=output_directory,
                                 file=clusters_output_file,
                                 sorter=sorted_list_elements,
-                                gzip=gzip,
+                                is_gzip=gzip,
                                 cds_d=cds_d,
                                 protein=protein)
     logger.info('Clusters results calculated')
