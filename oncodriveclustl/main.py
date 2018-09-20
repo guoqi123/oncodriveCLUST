@@ -345,6 +345,7 @@ def main(input_file,
                                 directory=output_directory,
                                 file=clusters_output_file,
                                 sorter=sorted_list_elements,
+                                regions_d = regions_d,
                                 is_gzip=gzip,
                                 is_protein=protein)
     logger.info('Clusters results calculated')

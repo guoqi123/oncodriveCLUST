@@ -3,20 +3,12 @@ Contains functions to write OncodriveCLUSTL's results
 """
 import os
 import logging
-import csv
-import gzip
-import shutil
 from intervaltree import IntervalTree
-from collections import namedtuple
 
 import numpy as np
 import pandas as pd
 import daiquiri
 from statsmodels.sandbox.stats.multicomp import multipletests as mlpt
-import bgdata as bgd
-import pickle
-
-from oncodriveclustl.utils import preprocessing as prep
 
 # Global variables
 logs = {
@@ -86,6 +78,7 @@ def write_element_results(genome, results, directory, file, is_gzip):
     for element, values in results.items():
         sym, identif = element.split('//')
         chrom, strand, length, muts, muts_in_clu, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
+        obs_score = round(obs_score, 4)
         if genome != 'hg19':
             cgc = 'Non Available'
         df.loc[i] = pd.Series({
@@ -105,26 +98,25 @@ def write_element_results(genome, results, directory, file, is_gzip):
             'CGC': cgc})
         i += 1
 
-    try:
-        # Makes sure the data are float
-        for p_value in ['P_ANALYTICAL', 'P_EMPIRICAL', 'P_TOPCLUSTER']:
-            df[p_value] = df[p_value].astype(float)
-        # Calculate q-values
-        df_nonempty = df[np.isfinite(df['P_ANALYTICAL'])].copy()
-        df_empty = df[~np.isfinite(df['P_ANALYTICAL'])].copy()
-        # Add to df
+    # Makes sure the data are float
+    for p_value in ['P_ANALYTICAL', 'P_EMPIRICAL', 'P_TOPCLUSTER']:
+        df[p_value] = df[p_value].astype(float)
+
+    # Calculate q-values
+    df_nonempty = df[np.isfinite(df['P_ANALYTICAL'])].copy()
+    df_empty = df[~np.isfinite(df['P_ANALYTICAL'])].copy()
+
+    if len(df_nonempty) != 0:
         for p_value in ['ANALYTICAL', 'EMPIRICAL', 'TOPCLUSTER']:
             df_nonempty['Q_' + p_value] = mtc(df_nonempty['P_' + p_value])
             df_empty['Q_' + p_value] = np.nan
-        df = pd.concat([df_nonempty, df_empty])
-        # Sort by analytical q-value
-        df.sort_values(by=['Q_ANALYTICAL', 'P_ANALYTICAL', 'SCORE', 'CGC'],
-                       ascending=[True, True, False, False], inplace=True)
-
-    except Exception as e:
-        logger.error('{} in {}. Impossible to calculate q-values'.format(e, file))
+    else:
+        logger.critical('No clusters found in the analysis. No p-values are retrieved')
         for q_value in ['Q_ANALYTICAL', 'Q_EMPIRICAL', 'Q_TOPCLUSTER']:
-            df[q_value] = np.nan
+            df_nonempty[q_value] = np.nan
+            df_empty[q_value] = np.nan
+
+    df = pd.concat([df_nonempty, df_empty])
 
     # Reorder columns
     df = df[['SYMBOL',
@@ -156,7 +148,7 @@ def write_element_results(genome, results, directory, file, is_gzip):
     return sorted_list_elements
 
 
-def write_cluster_results(genome, results, directory, file, sorter, is_gzip, is_protein):
+def write_cluster_results(genome, results, directory, file, sorter, regions_d, is_gzip, is_protein):
     """Save clusters results to the output file. Order according to elements' ranking
 
     Args:
@@ -165,6 +157,7 @@ def write_cluster_results(genome, results, directory, file, sorter, is_gzip, is_
         directory (str): path to output directory
         file (str): output file name
         sorter (list): element symbols ranked by elements p-value to rank clusters
+        regions_d (dict): dictionary of IntervalTrees containing genomic regions from all analyzed elements
         is_gzip (bool): True generates gzip compressed output file
         is_protein (bool): True reverses clusters positions in protein if element's strand is negative
 
@@ -172,6 +165,7 @@ def write_cluster_results(genome, results, directory, file, sorter, is_gzip, is_
         None
 
     """
+    reverse_cds_d = IntervalTree()
     sorter_index = dict(zip(sorter, range(len(sorter))))
     file = os.path.join(directory, file)
 
@@ -181,6 +175,7 @@ def write_cluster_results(genome, results, directory, file, sorter, is_gzip, is_
               'CGC',
               'CHROMOSOME',
               'STRAND',
+              'COORDINATES'
               '5_COORD',
               'MAX_COORD',
               '3_COORD',
@@ -196,35 +191,48 @@ def write_cluster_results(genome, results, directory, file, sorter, is_gzip, is_
         for element, values in results.items():
             sym, identif = element.split('//')
             clustersinfo, chrom, strand, length, cgc = values
+            regions = regions_d[element]
             if genome != 'hg19':
                 cgc = 'Non Available'
             if type(clustersinfo) != float:
                 rank = sorter_index[sym] + 1
                 for interval in clustersinfo:
                     for c, v in interval.data.items():
-                        left_m = v['left_m'][1]
-                        max_cluster = v['max'][1]
-                        right_m = v['right_m'][1]
-                        if is_protein and strand == '-':
-                            left_m = length - left_m
-                            max_cluster = length - max_cluster
-                            right_m = length - right_m
-                        fd.write('{}\n'.format('\t'.join([
+                        left_coord = v['left_m'][1]
+                        max_coord = v['max'][1]
+                        right_coord = v['right_m'][1]
+                        if not is_protein:
+                            if regions[left_coord] == regions[right_coord]:
+                                coordinates = '{},{}'.format(left_coord, right_coord)
+                            else:
+                                coordinates = '{},{};{},{}'.format(left_coord,
+                                                                   list(regions[left_coord])[0][1] - 1,  # end tree + 1
+                                                                   list(regions[right_coord])[0][0],
+                                                                   right_coord)
+                        else:
+                            if strand == '-':
+                                left_coord = length - left_coord
+                                max_coord = length - max_coord
+                                right_coord = length - right_coord
+                            coordinates = '{},{}'.format(left_coord, right_coord)
+
+                        fd.write('{}\n'.format('\t'.join(map(str, [
                                     rank,
                                     sym,
                                     identif,
                                     cgc,
                                     chrom,
                                     strand,
-                                    left_m,
-                                    max_cluster,
-                                    right_m,
+                                    coordinates,
+                                    left_coord,
+                                    max_coord,
+                                    right_coord,
                                     abs(v['right_m'][0] - v['left_m'][0] + 1),
                                     len(v['mutations']),
                                     len(v['samples']),
                                     v['fra_uniq_samples'],
-                                    v['score'],
-                                    v['p']]
+                                    round(v['score'], 4),
+                                    v['p']])
                         )))
     # Sort
     df = pd.read_csv(file, sep='\t', header=0, compression=None)
