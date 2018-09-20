@@ -56,7 +56,7 @@ def write_element_results(genome, results, directory, file, is_gzip):
         is_gzip (bool): True generates gzip compressed output file
 
     Returns:
-        None
+        sorted_list_elements (list): sorted elements to rank clusters file
 
     """
 
@@ -156,19 +156,22 @@ def write_element_results(genome, results, directory, file, is_gzip):
     return sorted_list_elements
 
 
-def write_cluster_results(genome, results, directory, file, sorter, is_gzip, cds_d, protein):
-    """Save clusters results to the output file
-    :param genome: reference genome
-    :param results: dict, dictionary of results, keys are element's symbols
-    :param directory: str, output directory
-    :param file: str, output file, if elements in elements file
-    :param sorter: list, element symbols ranked by elements p-value
-    :param is_gzip: bool, True generates gzip compressed output file
-    :param cds_d: dictionary of dictionaries with relative cds position of genomic regions if cds is True
-    :param protein: bool, True reverses clusters positions in protein if gene strand is negative
-    :return: None
+def write_cluster_results(genome, results, directory, file, sorter, is_gzip, is_protein):
+    """Save clusters results to the output file. Order according to elements' ranking
+
+    Args:
+        genome (str): reference genome
+        results (dict): dictionary of results, keys are element's symbols
+        directory (str): path to output directory
+        file (str): output file name
+        sorter (list): element symbols ranked by elements p-value to rank clusters
+        is_gzip (bool): True generates gzip compressed output file
+        is_protein (bool): True reverses clusters positions in protein if element's strand is negative
+
+    Returns:
+        None
+
     """
-    reverse_cds_d = IntervalTree()
     sorter_index = dict(zip(sorter, range(len(sorter))))
     file = os.path.join(directory, file)
 
@@ -191,9 +194,6 @@ def write_cluster_results(genome, results, directory, file, sorter, is_gzip, cds
     with open(file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
         for element, values in results.items():
-            if cds_d and not protein:
-                for genomic, cds in cds_d[element].items():
-                    reverse_cds_d.addi(cds[0], cds[1] + 1, genomic)   # end + 1
             sym, identif = element.split('//')
             clustersinfo, chrom, strand, length, cgc = values
             if genome != 'hg19':
@@ -205,31 +205,10 @@ def write_cluster_results(genome, results, directory, file, sorter, is_gzip, cds
                         left_m = v['left_m'][1]
                         max_cluster = v['max'][1]
                         right_m = v['right_m'][1]
-
-                        # # FIXME problems here!
-                        # if cds_d and not protein:
-                        #     for i in reverse_cds_d[v['left_m'][0]]:
-                        #         start_l = i.data
-                        #         end_l = i.data + (i[1] - i[0])
-                        #     for i in reverse_cds_d[v['right_m'][0]]:
-                        #         start_r = i.data
-                        #         end_r = i.data + (i[1] - i[0])
-                        #
-                        #     if start_l != start_r:
-                        #         region_start = (start_l, end_l)
-                        #         region_end = (start_r, end_r)
-                        #     else:
-                        #         region_start = start_l
-                        #         region_end = end_l
-                        # else:
-                        #     region_start = interval[0]
-                        #     region_end = interval[1]
-
-                        if protein and strand == '-':
+                        if is_protein and strand == '-':
                             left_m = length - left_m
                             max_cluster = length - max_cluster
                             right_m = length - right_m
-
                         fd.write('{}\n'.format('\t'.join([
                                     rank,
                                     sym,
@@ -255,111 +234,3 @@ def write_cluster_results(genome, results, directory, file, sorter, is_gzip, cds
         df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False, compression='gzip')
     else:
         df.to_csv(path_or_buf=file, sep='\t', na_rep='', index=False)
-
-
-def write_oncohortdrive_results(mutations_file, directory, file, regions_d, vep):
-    """
-    Generate compressed file with input BED + mutations mapped to clusters (score, p-value, significance)
-    :param mutations_file: input mutations file
-    :param directory: str, output directory
-    :param file: str, clusters output file to read
-    :param regions_d: dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
-    :param vep: bool, True considers only non-synonymous mutations
-    :return: None
-    """
-    clusters_tree = IntervalTree()
-    Cluster = namedtuple('Cluster', 'sym, ensid, score, p, sig')
-    clusters_file = os.path.join(directory, file)
-    output_file = os.path.join(directory, 'oncohortdrive_results.out')  # TODO: if elements file, this will overwrite
-    conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
-
-    # Read clusters file
-    if 'gz' in clusters_file:
-        read_function = gzip.open
-        mode = 'rt'
-    else:
-        read_function = open
-        mode = 'r'
-
-    with read_function(clusters_file, mode) as cf:
-        next(cf)
-        for line in cf:
-            _, sym, ensid, _, _, _, _, clust_l, _, clust_r, _, _, _, _, score, p = line.strip().split('\t')
-            element = sym + '_' + ensid
-            left_coord = int(clust_l)
-            right_coord = int(clust_r)
-            sig = 1 if float(p) < 0.05 else 0
-            if set(regions_d[element][left_coord]) != set(regions_d[element][right_coord]):
-                for interval in regions_d[element][left_coord]:
-                    clusters_tree.addi(left_coord, interval[1] + 1, Cluster(sym, ensid, score, p, sig))
-                for interval in regions_d[element][right_coord]:
-                    clusters_tree.addi(interval[0], right_coord + 1, Cluster(sym, ensid, score, p, sig))
-            else:
-                clusters_tree.addi(left_coord, right_coord + 1, Cluster(sym, ensid, score, p, sig))
-
-    # Generate output file
-    read_function, mode, delimiter, _ = prep.check_tabular_csv(mutations_file)
-
-    with open(output_file, 'w') as of:
-        header = ['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE', 'SYM', 'SYM_ENSID', 'SCORE', 'PVALUE', 'SIG_0.05']
-        of.write('{}\n'.format('\t'.join(header)))
-        with read_function(mutations_file, mode) as read_file:
-            fd = csv.DictReader(read_file, delimiter=delimiter)
-            # If not vep, write all mutations inside clusters
-            if not vep:
-                for line in fd:
-                    chro = line['CHROMOSOME']
-                    pos = int(line['POSITION'])
-                    ref = line['REF']
-                    alt = line['ALT']
-                    sam = line['SAMPLE']
-
-                    # Check substitutions only
-                    if len(ref) == 1 and len(alt) == 1:
-                        if ref != '-' and alt != '-':
-                            if clusters_tree[pos]:
-                                for c in clusters_tree[pos]:
-                                    of.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                                        chro, pos, ref, alt, sam,
-                                        c.data.sym, c.data.ensid, c.data.score, c.data.p, c.data.sig))
-                            else:
-                                of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
-                                    chro, pos, ref, alt, sam, float('nan')))
-            # If vep, write only non-synonymous mutations
-            else:
-                for line in fd:
-                    chro = line['CHROMOSOME']
-                    pos = int(line['POSITION'])
-                    ref = line['REF']
-                    alt = line['ALT']
-                    sam = line['SAMPLE']
-
-                    # Check substitutions only
-                    if len(ref) == 1 and len(alt) == 1:
-                        if ref != '-' and alt != '-':
-                            if clusters_tree[pos]:
-                                for c in clusters_tree[pos]:
-                                    path_to_vep_pickle = conseq_path + '/{}.pickle'.format(c.data.ensid)
-                                    try:
-                                        with open(path_to_vep_pickle, 'rb') as fd:
-                                            conseq_d = pickle.load(fd)
-                                            muttype = 0 if pos in conseq_d.get(alt, []) else 1
-                                    except FileNotFoundError:
-                                        muttype = 1
-                                    if muttype == 1:
-                                        of.write('{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
-                                            chro, pos, ref, alt, sam,
-                                            c.data.sym, c.data.ensid, c.data.score, c.data.p, c.data.sig))
-                                    else:
-                                        of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
-                                            chro, pos, ref, alt, sam, float('nan')))
-                            else:
-                                of.write('{0}\t{1}\t{2}\t{3}\t{4}\t{5}\t{5}\t{5}\t{5}\t{5}\n'.format(
-                                    chro, pos, ref, alt, sam, float('nan')))
-
-    output_file_gz = output_file + '.gz'
-    with open(output_file, 'rb') as of:
-        with gzip.open(output_file_gz, 'wb') as ofgz:
-            shutil.copyfileobj(of, ofgz)
-    # Remove not compressed file
-    os.remove(output_file)

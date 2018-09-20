@@ -69,7 +69,6 @@ LOGS = {
 @click.option('--conseq', is_flag=True, help='Use mutations consequence type from VEP (CODING)')
 @click.option('--protein', is_flag=True, help='Analyze clustering in translated protein sequences (CODING)')
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element')
-@click.option('--oncohort', is_flag=True, help='Generate output file for OnCohortDrive')
 @click.option('--pancancer', is_flag=True, help='PanCancer cohort analysis')
 def main(input_file,
          input_signature,
@@ -95,7 +94,6 @@ def main(input_file,
          conseq,
          protein,
          plot,
-         oncohort,
          pancancer):
     """
     OncodriveCLUSTL is a sequence based clustering method to identify cancer drivers across the genome
@@ -127,7 +125,6 @@ def main(input_file,
         conseq (bool): flag to use only non-synonymous mutations for clustering analysis
         protein (bool): flag to analyze clustering in translated protein sequences
         plot (bool): flag to generate a clustering plot for an element
-        oncohort (bool): flag to generate an output file for OncohortDrive
         pancancer (bool): flag to compute PanCancer cohort analysis
 
     Returns:
@@ -179,7 +176,6 @@ def main(input_file,
         'n_simulations: {}'.format(n_simulations),
         'cores: {}'.format(cores),
         'gzip: {}'.format(gzip),
-        'oncohort: {}'.format(oncohort),
         'VEP conseq: {}'.format(conseq),
         'protein clustering: {}'.format(protein),
         'pancancer: {}'.format(pancancer),
@@ -350,18 +346,8 @@ def main(input_file,
                                 file=clusters_output_file,
                                 sorter=sorted_list_elements,
                                 is_gzip=gzip,
-                                cds_d=cds_d,
-                                protein=protein)
+                                is_protein=protein)
     logger.info('Clusters results calculated')
-
-    # Write Oncohortdrive results
-    if oncohort:
-        postp.write_oncohortdrive_results(mutations_file=input_file,
-                                          directory=output_directory,
-                                          file=clusters_output_file,
-                                          regions_d=regions_d,
-                                          vep=conseq)
-        logger.info('Oncohortdrive file generated')
     logger.info('Finished')
 
 
