@@ -1,4 +1,6 @@
-# Analytical p_value calculation
+"""
+Contains class AnalyticalPvalue for analytical p_value calculation
+"""
 
 # Import modules
 import numpy as np
@@ -12,7 +14,12 @@ class AnalyticalPvalue:
 
     def __init__(self, jobs=1):
         """Initialize the AnalyticalPvalue class
-        :param jobs: int, cores to use in the computation
+
+        Args:
+            jobs (int): cores to use in the computation
+
+        Returns:
+            None
         """
         self.jobs = jobs
         self.gkde = None
@@ -20,8 +27,12 @@ class AnalyticalPvalue:
 
     def _get_best_estimator(self, expected):
         """Calculate the best bandwidth estimator.
-        :param expected: list of floats, list of expected values
-        :return: float, best bandwidth estimator
+
+        Args:
+            expected: list of floats, list of expected values
+
+        Returns:
+            float, best bandwidth estimator
         """
         # parameters of the fitting
         params = {
@@ -35,11 +46,15 @@ class AnalyticalPvalue:
 
     def _get_min_analytical_pvalue(self, up, down, calls=0, pvals=None):
         """Get the best pvalue with a resolution > 0.
-        :param up: numeric, higher score
-        :param down: numeric, lower score
-        :param calls: int, number of times the function has been called
-        :param pvals: list of pvalues
-        :return: float, pvalue > 0
+
+        Args:
+            up (numeric): higher score
+            down (numeric): lower score
+            calls (int): number of times the function has been called
+            pvals (list): list of pvalues
+
+        Returns:
+            float, pvalue > 0
         """
         if pvals is None:
             pvals = []
@@ -57,9 +72,13 @@ class AnalyticalPvalue:
 
     def calculate_bandwidth(self, expected, pseudocount=1):
         """Calculate the best estimator
-        :param expected: array of simulated mutations
-        :param pseudocount: value to add when expected are zeroes
-        :return: None
+        Args:
+            expected (iterable): array of simulated mutations
+            pseudocount (int): value to add when expected are zeroes
+
+        Returns:
+            None
+
         """
         # Add a pseudocount to get rid of LinAlgError("singular matrix")
         if sum(expected) == 0:
@@ -76,7 +95,13 @@ class AnalyticalPvalue:
 
     def _calculate_analytical_pvalue(self, observed):
         """Calculate the analytical pvalue of an element
-        :return: float, analytical pvalue
+
+        Args:
+           observed (float): observed value
+
+        Returns:
+            float, analytical pvalue
+
         """
         analytical_pvalue = self.gkde.integrate_box_1d(observed, float('inf'))
         if analytical_pvalue == 0:
@@ -85,8 +110,12 @@ class AnalyticalPvalue:
 
     def calculate(self, observed):
         """Calculate the analytical pvalue
-        :param observed: float, observed value
-        :return: float, analytical pvalue
+
+        Args:
+           observed (float): observed value
+
+        Returns:
+            analytical_pvalue (float): analytical pvalue
         """
         analytical_pvalue = self._calculate_analytical_pvalue(observed)
         return analytical_pvalue

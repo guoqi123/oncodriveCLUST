@@ -40,6 +40,7 @@ class Experiment:
                  samples_d,
                  genome,
                  cohorts_d,
+                 kmers_d,
                  path_cache,
                  element_mutations_cutoff,
                  cluster_mutations_cutoff,
@@ -47,7 +48,6 @@ class Experiment:
                  cluster_window,
                  cluster_score,
                  element_score,
-                 kmer,
                  n_simulations,
                  simulation_mode,
                  simulation_window,
@@ -67,6 +67,9 @@ class Experiment:
             samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
             genome (str): genome to use
             cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
+            kmers_d (dict): dictionary of cohorts and kmers for context nucleotide signature.
+                kmer (int) == context nucleotides to calculate the mutational probabilities (trinucleotides or
+                pentanucleotides)
             path_cache (str): path to pickles directory (cache)
             element_mutations_cutoff (int): minimum number of mutations per genomic element to undertake analysis
             cluster_mutations_cutoff (int): minimum number of mutations to define a cluster
@@ -74,8 +77,6 @@ class Experiment:
             cluster_window (int): clustering window length
             cluster_score (str): cluster score method
             element_score (str): element score method
-            kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or
-                pentanucleotides)
             n_simulations (int): number of simulations
             simulation_mode (str): simulation mode
             simulation_window (int): window length to simulate mutations
@@ -99,8 +100,9 @@ class Experiment:
         self.mutations_d = mutations_d
         self.samples_d = samples_d
         self.genome = genome
-        self.path_cache = path_cache
         self.cohorts_d = cohorts_d
+        self.kmers_d = kmers_d
+        self.path_cache = path_cache
         self.element_mutations_cutoff = element_mutations_cutoff
         self.cluster_mutations_cutoff = cluster_mutations_cutoff
         self.smooth_window = smooth_window + (1 - smooth_window % 2)
@@ -109,7 +111,6 @@ class Experiment:
         self.cluster_window = cluster_window
         self.cluster_score = cluster_score
         self.element_score = element_score
-        self.kmer = kmer
         self.n_simulations = n_simulations
         self.simulation_mode = simulation_mode
         self.simulation_window = simulation_window + (1 - simulation_window % 2)
@@ -296,16 +297,16 @@ class Experiment:
 
     def analysis(self, element, mutations, analysis_mode='sim'):
         """
-        Calculate smoothing, clustering and element score for observed or simulated mutations
+        Run clustering analysis for observed or simulated mutations of an element
 
         Args:
-        :param element: element of analysis.
-        :param mutations: list, list of mutations of an element
-        :param analysis_mode: str, observed or simulated; default simulated
+            element (str): element of analysis.
+            mutations (list): list of mutations of an element
+            analysis_mode (str): observed or simulated; default simulated
 
         Returns:
-            dict of dicts: cutoff clusters
-            int, gene score
+            score_clusters_tree (IntervalTree): IntervalTree with scored clusters
+            element_score (float): element score
 
         """
         if self.cds_d:
@@ -314,8 +315,12 @@ class Experiment:
             cds_d = {}
 
         if not self.protein:
-            smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
+            try:
+                smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
                                                               self.tukey_filter, self.simulation_window)
+            except ValueError as e:
+                print(element)
+                quit(-1)
         else:
             smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], self.chromosomes_d[element],
                                                              self.strands_d[element],
@@ -338,8 +343,7 @@ class Experiment:
                                         self.cluster_score)
         logger.debug('Clusters scores calculated')
         element_score = score.element_score(score_clusters_tree,
-                                            analysis_mode,
-                                            self.element_score)
+                                            analysis_mode)
         logger.debug('Element score calculated')
 
         if self.is_plot:
@@ -351,11 +355,14 @@ class Experiment:
     def simulate_and_analysis(self, item):
         """
         Simulate mutations and analyze simulations
-        :param item: tuple, element of analysis data
-        :return:
-            element: str, element of analysis
-            sim_scores_chunk: list, simulated element's results
-            sim_cluster_chunk: list, simulated cluster's results
+
+        Args:
+            item (tuple): element of analysis data containing element (str), probs_tree (IntervalTree),
+                conseq_tree (IntervalTree), n_sim (int)
+        Returns:
+            element (str): element of analysis
+            sim_scores_chunk (list): simulated element's results
+            sim_cluster_chunk (list): simulated cluster's results
         """
         element, probs_tree, conseq_tree, n_sim = item
         sim_scores_chunk = []
@@ -421,7 +428,7 @@ class Experiment:
         # Start analysis
         logger.debug('Start analyzing simulations')
         for simulated_mutations in zip(*df):
-            cutoff_clusters, element_score = self.analysis(element, simulated_mutations)
+            cutoff_clusters, element_score = self.analysis(element, list(simulated_mutations))
             sim_scores_chunk.append(element_score)
             for interval in cutoff_clusters:
                 clusters = interval.data.copy()
@@ -434,9 +441,13 @@ class Experiment:
     def empirical_pvalue(observed, simulations):
         """
         Calculate empirical p-value using pseudocount (1)
-        :param observed: int, observed score
-        :param simulations: list, simulated score
-        :return: float, p-value
+
+        Args:
+            observed (float): observed score
+            simulations (list): simulated score
+
+        Returns:
+            float, p-value
         """
         return (len([x for x in simulations if x >= observed]) + 1) / len(simulations)
 
@@ -457,8 +468,12 @@ class Experiment:
     def post_process(self, items):
         """
         Post processing of results
-        :param items: tuple, elements results
-        :return:
+
+        Args:
+            items (list): list of tuples containing results for a chunk of elements
+
+        Returns:
+            results (list): list of results for a chunk of elements
         """
         pseudo_pvalue = 1.1102230246251566e-19
         results = []
@@ -556,10 +571,11 @@ class Experiment:
 
     def run(self):
         """
-        Analyze elements
-        :return:
-            elements_results: dict of dict, results of elements analysis
-            clusters_results dict of dict, results of clusters analysis
+        Run clustering analysis of genomic elements
+
+        Returns:
+            elements_results (dict): dict of dict, results of elements analysis
+            clusters_results (dict): dict of dict, results of clusters analysis
         """
         elements_results = defaultdict()
         clusters_results = defaultdict()
@@ -603,6 +619,7 @@ class Experiment:
 
             for element in elements:
                 # Calculate observed results
+                print(element)
                 observed_clusters_d[element], observed_scores_d[element] = self.analysis(element,
                                                                                          self.mutations_d[element],
                                                                                          analysis_mode='obs')
@@ -614,7 +631,7 @@ class Experiment:
                         check = 1
                     if check == 1:
                         break
-                # If there is at least a region with clusters
+                # If there is at least one region containing clusters
                 if check != 0:
                     # Check if probabilities can be calculated
                     logger.debug('Calculating context based mutational '

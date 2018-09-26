@@ -170,7 +170,7 @@ def main(input_file,
         'cluster_window: {}'.format(cluster_window),
         'cluster_score: {}'.format(cluster_score),
         'element_score: {}'.format(element_score),
-        'kmer: {}'.format(kmer),
+        'kmer (command line): {}'.format(kmer),
         'simulation_mode: {}'.format(simulation_mode),
         'simulation_window: {}'.format(simulation_window),
         'n_simulations: {}'.format(n_simulations),
@@ -214,44 +214,49 @@ def main(input_file,
         logger.info(', '.join(elements))
 
     # Check format input file and calculate signature
+    kmer_of_analysis = {}
     if not input_signature:
-        read_function, mode, delimiter, cancer_type = prep.check_tabular_csv(input_file)
         path_cache = os.path.join(output_directory, 'cache')
         os.makedirs(path_cache, exist_ok=True)
-        obj = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), log_level='info', pancancer=pancancer)
-        cohorts_of_analysis = set()
+        read_function, mode, delimiter, is_cancer_type, is_kmer = prep.check_tabular_csv(input_file)
 
         if pancancer:
+            signature_object_kmer3 = sign.Signature(start_at_0=True, genome=genome, kmer=3, pancancer=pancancer)
+            signature_object_kmer5 = sign.Signature(start_at_0=True, genome=genome, kmer=5, pancancer=pancancer)
+
             # Check header
-            if cancer_type:
+            if is_cancer_type and is_kmer:
                 # Read file and get input cohorts
-                pancancer_pickles = 0
                 with read_function(input_file, mode) as read_file:
                     fd = csv.DictReader(read_file, delimiter=delimiter)
                     for line in fd:
-                        cohorts_of_analysis.add(line['CANCER_TYPE'])
-                # TODO warning if len == 1?
-                # TODO threshold number of mutations per cohort to compute signature?
+                        kmer_of_analysis[line['CANCER_TYPE']] = int(line['KMER'])
+
                 logger.info(
                     'PanCancer analysis for {} cohort{}'.format(
-                        len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) > 1 else ''
+                        len(kmer_of_analysis), 's' if len(kmer_of_analysis) > 1 else ''
                     )
                 )
+
                 # Check if signatures computed
-                for cohort in cohorts_of_analysis:
-                    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer))
-                    if os.path.isfile(path_pickle):
-                        pancancer_pickles += 1
-                if len(cohorts_of_analysis) == pancancer_pickles:
-                    logger.info('Signatures computed')
-                # Calculate signatures
-                else:
-                    logger.info('Computing signatures...')
-                    obj.calculate(input_file)
-                    obj.save(path_cache, prefix=None)
-                    logger.info('Signatures computed')
+                for cohort, kmer_of_cohort in kmer_of_analysis.items():
+                    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer_of_cohort))
+                    if not os.path.isfile(path_pickle):
+                        logger.info('Computing signatures kmer {}...'.format(str(kmer_of_cohort)))
+                        if kmer_of_cohort == 3:
+                            signature_object = signature_object_kmer3
+                        elif kmer_of_cohort == 5:
+                            signature_object = signature_object_kmer5
+                        else:
+                            raise excep.UserInputError('Error in {} cohort: {}-kmer not found. '
+                                                       'Signatures are only computed for trinucleotides or '
+                                                       'pentanucleotides'.format(cohort, str(kmer_of_cohort)))
+                        signature_object.calculate(input_file)
+                        signature_object.save(path_cache, prefix=cohort)
+                logger.info('Signatures computed')
             else:
-                raise excep.UserInputError('PanCancer analysis requires "CANCER_TYPE" column in input file')
+                raise excep.UserInputError('"CANCER_TYPE" and/or "KMER" columns not found in input file. '
+                                           'PanCancer analysis requires "CANCER_TYPE" and "KMER" columns')
         else:
             # Check if signatures computed
             file_prefix = input_file.split('/')[-1].split('.')[0]
@@ -261,10 +266,11 @@ def main(input_file,
             # Calculate signatures
             else:
                 logger.info('Computing signatures...')
-                obj.calculate(input_file)
-                obj.save(path_cache, prefix=file_prefix)
+                signature_object = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), pancancer=pancancer)
+                signature_object.calculate(input_file)
+                signature_object.save(path_cache, prefix=file_prefix)
                 logger.info('Signatures computed')
-            cohorts_of_analysis.add(file_prefix)
+            kmer_of_analysis[file_prefix] = kmer
     else:
         # Check format
         path_cache = input_signature
@@ -274,6 +280,8 @@ def main(input_file,
         if pancancer:
             raise excep.UserInputError('PanCancer analysis computes one signature file for each cancer type present '
                                        'in the mutations input file, according to "CANCER_TYPE" column.')
+        file_prefix = input_signature.split('/')[-1].split('.')[0]
+        kmer_of_analysis[file_prefix] = kmer
         logger.info('Input signatures loaded')
 
     # Parse regions and dataset mutations
@@ -314,6 +322,7 @@ def main(input_file,
         samples_d,
         genome,
         cohorts_d,
+        kmer_of_analysis,
         path_cache,
         element_mutations,
         cluster_mutations,
@@ -321,7 +330,6 @@ def main(input_file,
         cluster_window,
         cluster_score,
         element_score,
-        int(kmer),
         n_simulations,
         simulation_mode,
         simulation_window,

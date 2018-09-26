@@ -9,6 +9,7 @@ import json
 
 Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cancertype')
 
+
 def smooth_nucleotide(regions, cds_d, mutations, tukey_filter, simulation_window):
     """Generate a smoothing curve for a list of element's mutations in the nucleotide sequence
     :param regions: IntervalTree with genomic positions of an element
