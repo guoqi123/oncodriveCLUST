@@ -108,7 +108,7 @@ def read_mutations(input_mutations, trees, conseq):
     mutations_d = defaultdict(list)
     samples_d = defaultdict(int)
     cohorts_d = defaultdict(set)
-    read_function, mode, delimiter, cancer_type_header, _ = prep.check_tabular_csv(input_mutations)
+    read_function, mode, delimiter, cancer_type_header = prep.check_tabular_csv(input_mutations)
     file_prefix = input_mutations.split('/')[-1].split('.')[0]
 
     if conseq:

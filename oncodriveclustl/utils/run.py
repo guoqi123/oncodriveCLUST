@@ -40,7 +40,6 @@ class Experiment:
                  samples_d,
                  genome,
                  cohorts_d,
-                 kmers_d,
                  path_cache,
                  element_mutations_cutoff,
                  cluster_mutations_cutoff,
@@ -48,6 +47,7 @@ class Experiment:
                  cluster_window,
                  cluster_score,
                  element_score,
+                 kmer,
                  n_simulations,
                  simulation_mode,
                  simulation_window,
@@ -67,9 +67,6 @@ class Experiment:
             samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
             genome (str): genome to use
             cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
-            kmers_d (dict): dictionary of cohorts and kmers for context nucleotide signature.
-                kmer (int) == context nucleotides to calculate the mutational probabilities (trinucleotides or
-                pentanucleotides)
             path_cache (str): path to pickles directory (cache)
             element_mutations_cutoff (int): minimum number of mutations per genomic element to undertake analysis
             cluster_mutations_cutoff (int): minimum number of mutations to define a cluster
@@ -77,6 +74,8 @@ class Experiment:
             cluster_window (int): clustering window length
             cluster_score (str): cluster score method
             element_score (str): element score method
+            kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or
+                pentanucleotides)
             n_simulations (int): number of simulations
             simulation_mode (str): simulation mode
             simulation_window (int): window length to simulate mutations
@@ -100,9 +99,8 @@ class Experiment:
         self.mutations_d = mutations_d
         self.samples_d = samples_d
         self.genome = genome
-        self.cohorts_d = cohorts_d
-        self.kmers_d = kmers_d
         self.path_cache = path_cache
+        self.cohorts_d = cohorts_d
         self.element_mutations_cutoff = element_mutations_cutoff
         self.cluster_mutations_cutoff = cluster_mutations_cutoff
         self.smooth_window = smooth_window + (1 - smooth_window % 2)
@@ -111,6 +109,7 @@ class Experiment:
         self.cluster_window = cluster_window
         self.cluster_score = cluster_score
         self.element_score = element_score
+        self.kmer = kmer
         self.n_simulations = n_simulations
         self.simulation_mode = simulation_mode
         self.simulation_window = simulation_window + (1 - simulation_window % 2)
@@ -315,12 +314,8 @@ class Experiment:
             cds_d = {}
 
         if not self.protein:
-            try:
-                smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
+            smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
                                                               self.tukey_filter, self.simulation_window)
-            except ValueError as e:
-                print(element)
-                quit(-1)
         else:
             smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], self.chromosomes_d[element],
                                                              self.strands_d[element],
@@ -619,7 +614,6 @@ class Experiment:
 
             for element in elements:
                 # Calculate observed results
-                print(element)
                 observed_clusters_d[element], observed_scores_d[element] = self.analysis(element,
                                                                                          self.mutations_d[element],
                                                                                          analysis_mode='obs')

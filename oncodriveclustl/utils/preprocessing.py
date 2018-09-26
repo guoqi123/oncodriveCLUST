@@ -83,10 +83,9 @@ def check_tabular_csv(file):
             alt = 'ALT' in line
             sample = 'SAMPLE' in line
             cancer_type = 'CANCER_TYPE' in line
-            kmer = 'KMER' in line
             break
         if chrom and pos and ref and alt and sample:
-            return read_function, mode, dialect.delimiter, cancer_type, kmer
+            return read_function, mode, dialect.delimiter, cancer_type
         else:
             raise excep.UserInputError('{} does not contain header and/or header is not in correct format'.format(file))
 
