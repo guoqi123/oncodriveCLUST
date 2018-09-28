@@ -228,6 +228,8 @@ class Experiment:
                 start = interval[0] - (simulation_window // 2) - delta
                 size = interval[1] - interval[0] + (simulation_window - correction) + delta*2
                 # genomic start -d -sw//2, genomic end +d +sw//2
+
+                # FIXME
                 try:
                     sequence = bgr.refseq(self.genome, self.chromosomes_d[element], start, size)
                 except ValueError as e:
@@ -362,48 +364,73 @@ class Experiment:
         element, probs_tree, conseq_tree, n_sim = item
         sim_scores_chunk = []
         sim_cluster_chunk = []
-        df = []
+        df_simulated_mutations = []
         half_window = (self.simulation_window - 1) // 2
         nucleot = {'A', 'C', 'G', 'T'}
 
         # Simulate mutations
         for mutation in self.mutations_d[element]:
+
             # Get hotspot for simulations
             expected_hotspot_begin = mutation.position - half_window
             expected_hotspot_end = mutation.position + half_window
 
             if self.simulation_mode == 'region_restricted':
-                # Check if hospot outside region
-                check_5 = expected_hotspot_begin < mutation.region[0]
-                check_3 = expected_hotspot_end > (mutation.region[1] - 1)
+                """
+                Region restricted mode samples simulated mutations in a window of length l that fits in the genomic 
+                element. 
+                
+                First, it checks that the genomic region where the mutation is going to be simulated is longer or equal
+                than l.            
+                
+                If this is true, it calculates the expected start and end positions of the 
+                simulation window. If one of them falls outside the genomic element, the window of length l is displaced 
+                to fit in the genomic element. If both expected start and end positions fall outside the genomic region, 
+                the simulation window is trimmed and simulations are performed inside the genomic region. 
+                
+                If the genomic region is smaller than l, the simulation window becomes the genomic region, 
+                in other words, the simulation window is trimmed and simulations are performed between the end and the 
+                start of the genomic region. 
+                """
 
-                if check_5 and check_3:
-                    hotspot_begin = mutation.region[0]
-                    hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
-                elif check_5:
-                    hotspot_begin = mutation.region[0]
-                    hotspot_end = mutation.region[0] + self.simulation_window - 1  # window //2 per side
-                elif check_3:
-                    hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
-                    hotspot_begin = hotspot_end - self.simulation_window + 1  # window //2 per side
+                if (mutation.region[1] - mutation.region[0] + 1) >= self.simulation_window:
+                    # Check if hospot outside region
+                    check_5 = expected_hotspot_begin < mutation.region[0]
+                    check_3 = expected_hotspot_end > (mutation.region[1] - 1)
+
+                    if check_5 and check_3:
+                        hotspot_begin = mutation.region[0]
+                        hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
+                    elif check_5:
+                        hotspot_begin = mutation.region[0]
+                        hotspot_end = mutation.region[0] + self.simulation_window - 1  # window //2 per side
+                    elif check_3:
+                        hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
+                        hotspot_begin = hotspot_end - self.simulation_window + 1  # window //2 per side
+                    else:
+                        hotspot_begin = expected_hotspot_begin
+                        hotspot_end = expected_hotspot_end
                 else:
-                    hotspot_begin = expected_hotspot_begin
-                    hotspot_end = expected_hotspot_end
+                    hotspot_begin = mutation.region[0]
+                    hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
             else:
+                """
+                Simulations are `mutation centered`, they can fall outside the genomic region. 
+                """
                 hotspot_begin = expected_hotspot_begin
                 hotspot_end = expected_hotspot_end
 
             # Map to index
             # 3* accounts for alternates in the array of probabilities
+            # half_window added in probabilities array
             start_index = 3*(hotspot_begin - (mutation.region[0] - half_window))
-            end_index = 3*(hotspot_end - (mutation.region[0] - half_window) + 1)  # +1 because it is a range and slice
+            end_index = 3*(hotspot_end - (mutation.region[0] - half_window) + 1)  # +1, range and slice
             for interval in probs_tree[mutation.cancertype][mutation.region[0]]:  # unique iteration
                 simulations = np.random.choice(range(start_index, end_index), size=n_sim,
                                                p=self.normalize(element, interval.data[start_index:end_index]))
                 # Add info per simulated mutation
                 list_simulations_per_mutation = []
                 for count, index in enumerate(simulations):
-                    # print(count, index, index / 3)
                     muttype = list(conseq_tree[interval[0]])[0][2][index]
                     position = mutation.region[0] - half_window + index // 3
                     ref_nucleotide = bgr.refseq(self.genome, self.chromosomes_d[element], position, 1)
@@ -418,11 +445,14 @@ class Experiment:
                     list_simulations_per_mutation.append(
                         Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype)
                     )
-                df.append(list_simulations_per_mutation)
+                    if not mutation.region[0] <= position < (mutation.region[1] + 1):
+                        print(mutation, 'simulated: ', position)
+
+                df_simulated_mutations.append(list_simulations_per_mutation)
 
         # Start analysis
         logger.debug('Start analyzing simulations')
-        for simulated_mutations in zip(*df):
+        for simulated_mutations in zip(*df_simulated_mutations):
             cutoff_clusters, element_score = self.analysis(element, list(simulated_mutations))
             sim_scores_chunk.append(element_score)
             for interval in cutoff_clusters:

@@ -12,15 +12,18 @@ Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cance
 
 def smooth_nucleotide(regions, cds_d, mutations, tukey_filter, simulation_window):
     """Generate a smoothing curve for a list of element's mutations in the nucleotide sequence
-    :param regions: IntervalTree with genomic positions of an element
-    :param cds_d: dict, keys are start genomic regions, values are cds positions
-    :param mutations: list, list of mutations formatted as namedtuple
-    :param tukey_filter: numpy array. Length equals smoothing window. The elements sum to 1
-    :param simulation_window: int, simulation window
-    :return:
-        final_smooth_tree, IntervalTree. Interval are genomic regions or cds, data np.array of smoothing score
-        by position.
-        mutations_in: list of mutations in regions
+
+    Args:
+        regions (IntervalTree): IntervalTree with genomic positions of an element
+        cds_d (dict): keys are start genomic regions, values are cds positions
+        mutations (list): list of mutations formatted as namedtuple
+        tukey_filter (numpy.ndarray): kde array, length equals smoothing window.
+        simulation_window (int): simulation window
+
+    Returns:
+        final_smooth_tree (IntervalTree): interval are genomic regions or cds, data np.array of smoothing score
+            by position
+        mutations_in (list): list of mutations in regions
     """
     first_smooth_tree = IntervalTree()
     final_smooth_tree = IntervalTree()
