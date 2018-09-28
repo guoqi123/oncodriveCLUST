@@ -1,8 +1,12 @@
-# Import modules
+"""
+Contains the classes and functions to calculate the context based mutational probabilities of a cohort
+"""
+
 import os
 from collections import defaultdict
 import pickle
 import csv
+import itertools
 import gzip  # TODO check conditional import
 
 import daiquiri
@@ -33,46 +37,41 @@ class Signature:
         self.start_at_0 = start_at_0
         self.mutation_type = mutation_type
         self.pancancer = pancancer
-        fx = self.triplets if kmer == 3 else self.pentamers
-        self.signatures = defaultdict(lambda: {'counts': fx(), 'probabilities': fx()})
+        self.signatures = defaultdict(lambda: {'counts': self.generate_kmers(kmer),
+                                               'probabilities': self.generate_kmers(kmer)})
 
     @staticmethod
-    def triplets():
-        """Create a dictionary with all the possible triplets
-        :return: dict
-        """
-        nucleotides = {'A', 'C', 'T', 'G'}
-        results = set()
-        for nuc_1 in nucleotides:
-            for nuc_2 in nucleotides:
-                for nuc_3 in nucleotides:
-                    for alt in nucleotides - {nuc_2, }:
-                        results.add((''.join([nuc_1, nuc_2, nuc_3]),
-                                     ''.join([nuc_1, alt, nuc_3])))
-        return {key: 0 for key in results}
+    def generate_kmers(kmer):
+        """Create a dictionary with all the possible kmers (trinucleotides or pentanucleotides) and alternates
 
-    @staticmethod
-    def pentamers():
-        """Create a dictionary with all the possible pentamers
-        :return: dict
+        Args:
+            kmer (int): kmer nucleotides to calculate the signature (3 or 5)
+
+        Returns:
+            dict: keys are 'ref kmer --> alt kmer', values are 0
         """
-        nucleotides = {'A', 'C', 'T', 'G'}
+        half_kmer = kmer // 2
+        nucleotides = 'ACTG'
         results = set()
-        for nuc_1 in nucleotides:
-            for nuc_2 in nucleotides:
-                for nuc_3 in nucleotides:
-                    for nuc_4 in nucleotides:
-                        for nuc_5 in nucleotides:
-                            for alt in nucleotides - {nuc_3, }:
-                                results.add((''.join([nuc_1, nuc_2, nuc_3, nuc_4, nuc_5]),
-                                             ''.join([nuc_1, nuc_2, alt, nuc_4, nuc_5])))
+
+        for permutation in itertools.product(nucleotides, repeat=kmer):
+            kmer_nucleotide = ''.join(permutation)
+            for alt in set(nucleotides).difference(kmer_nucleotide[half_kmer]):
+                results.add(
+                    (kmer_nucleotide, ''.join([kmer_nucleotide[0:half_kmer], alt, kmer_nucleotide[half_kmer + 1: ]]))
+                )
+
         return {key: 0 for key in results}
 
     def save(self, directory, prefix):
         """Save the signature to an output file
-        :param directory: path to output directory
-        :param prefix: str, prefix for output file
-        :return None
+
+        Args:
+            directory (str): path to output directory
+            prefix (str): prefix for output file
+
+        Returns:
+            None
         """
         for cohort, values in self.signatures.items():
             if cohort == 'COHORT':
@@ -82,17 +81,13 @@ class Signature:
             with open(output_file, 'wb') as fd:
                 pickle.dump(values, fd, protocol=2)
 
-    @staticmethod
-    def load(signature_file):
-        """Load precalculated signatures"""
-        with open(signature_file, 'rb') as fd:
-            signatures = pickle.load(fd)
-        return signatures
-
     def calculate(self, mutations_file):
         """Calculate the signature of a dataset
-        :param mutations_file: path to file containing mutations
-        :return: None
+
+        Args:
+            mutations_file (str): path to file containing mutations
+        Returns:
+            None
         """
         parser = Parser()
 
@@ -134,6 +129,9 @@ class Signature:
                                 self.signatures[cancer_type]['counts'][(signature_ref, signature_alt)] += 1
                                 count += 1
                             except KeyError as e:
+                                print(signature_ref, signature_alt)
+                                print(self.signatures[cancer_type]['counts'][('TCA', 'TGC')])
+                                quit()
                                 logger.error('{} not found in dictionary of mutations. Mutation is not taken '
                                              'into account for signatures calculation'.format(
                                                 e, signature_ref, signature_alt))

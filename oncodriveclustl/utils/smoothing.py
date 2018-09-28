@@ -1,4 +1,6 @@
-# Import modules
+"""
+Contains function to apply kde smooth of mutations
+"""
 import os
 from intervaltree import IntervalTree
 from collections import namedtuple
@@ -107,14 +109,17 @@ def smooth_nucleotide(regions, cds_d, mutations, tukey_filter, simulation_window
 
 def smooth_aminoacid(regions, chromosome, strand, genome, tukey_filter, cds_d, mutations):
     """Generate a smoothing curve for a list of element's mutations in the aminoacid sequence (non-synonymous)
-    :param regions: IntervalTree with genomic positions of an element
-    :param chromosome: str, chromosome
-    :param strand: str, strand
-    :param genome: str, genome
-    :param cds_d: dict, keys are start genomic regions, values are cds positions
-    :param mutations: list, list of mutations formatted as namedtuple
-    :param tukey_filter: numpy array. Length equals smoothing window. The elements sum to 1
-    :return:
+
+    Args:
+        regions: IntervalTree with genomic positions of an element
+        chromosome: str, chromosome
+        strand: str, strand
+        genome: str, genome
+        cds_d: dict, keys are start genomic regions, values are cds positions
+        mutations: list, list of mutations formatted as namedtuple
+        tukey_filter: numpy array. Length equals smoothing window. The elements sum to 1
+
+    Returns:
         final_smooth_tree, IntervalTree. Interval are genomic regions or cds, data np.array of smoothing score
         by position.
         mutations_in: list of mutations in regions
@@ -133,7 +138,6 @@ def smooth_aminoacid(regions, chromosome, strand, genome, tukey_filter, cds_d, m
         'C': 'G',
         'G': 'C'
     }
-
     # Merge sorted regions (one interval == cds) and add tukey//2 to both ends
     cds_nucleotides = 0
     for interval in sorted(regions):
@@ -174,7 +178,6 @@ def smooth_aminoacid(regions, chromosome, strand, genome, tukey_filter, cds_d, m
                     ref_triplet = [reverse_d.get(i, i) for i in ref_triplet]
                     alternate = reverse_d.get(mutation.alt)
                 else:
-                    # TODO ask: alternate, is mapped to + strand?
                     alternate = mutation.alt
 
                 # Get alternate triplet

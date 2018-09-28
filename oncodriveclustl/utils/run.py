@@ -478,8 +478,11 @@ class Experiment:
 
     def length(self, element):
         """Calculate length of an element (sum of input regions). If clustering in protein sequence, length in aa
-        :param element: element to analyze
-        :return length: int, length of an element (bp or aa)
+
+        Args:
+            element (str): element to analyze
+        Returns:
+            length (int): length of an element (bp or aa)
         """
         length_ele = 0
 

@@ -1,4 +1,6 @@
-# Import modules
+"""
+Contains functions to perform the clustering analysis
+"""
 import math as m
 from collections import defaultdict
 
@@ -10,10 +12,13 @@ from intervaltree import IntervalTree
 def find_locals(smooth_tree, cds_d):
     """
     Find local maximum and minimum of a smoothing curve
-    :param smooth_tree: IntervalTree. Interval are genomic regions or cds, data np.array of smoothing score by position.
-    :param cds_d: dict, keys are start genomic regions, values are cds positions
-    :return:
-    index_tree, IntervalTree, data are lists of tuples containing information from local maximum and minimum
+
+    Args:
+        smooth_tree (IntervalTree): Interval are genomic regions or cds, data np.array of smoothing score by position.
+        cds_d (dict): dict, keys are start genomic regions, values are cds positions
+
+    Returns:
+        index_tree (IntervalTree): data are lists of tuples containing information from local maximum and minimum
     """
     index_tree = IntervalTree()
     reverse_cds_d = IntervalTree()
@@ -35,14 +40,14 @@ def find_locals(smooth_tree, cds_d):
 
         # Add information to index
         for index in sorted(indexes):
-            score = smooth[index]
+            score_index = smooth[index]
             local = 0 if index in min_eq else 1  # 0 if minimum, 1 if maximum
             if not cds_d:
                 genomic = interval.begin + index
             else:
                 for info in reverse_cds_d[index]:
                     genomic = info.data + index - info[0]
-            indexes_info.append((local, index, genomic, score))
+            indexes_info.append((local, index, genomic, score_index))
 
         # Add to new interval tree
         index_tree.addi(interval[0], interval[1], indexes_info)
@@ -52,10 +57,14 @@ def find_locals(smooth_tree, cds_d):
 
 def find_clusters(index_tree):
     """
-    Define a cluster per maximum found
-    :param index_tree: IntervalTree, data are lists of tuples of 4 elements (min or max, cds region, genomic position,
+    Define a root cluster for each smoothing maximum
+
+    Args:
+        index_tree (IntervalTree): data are lists of tuples of 4 elements (min or max, cds region, genomic position,
                        smoothing score).
-    :return: clusters_tree, IntervalTree, data are dict of dict
+
+    Returns:
+        clusters_tree (IntervalTree): data are dict of dict
     """
 
     clusters_tree = IntervalTree()
@@ -101,11 +110,14 @@ def find_clusters(index_tree):
 
 def merge(clusters_tree, window):
     """
-    Given clusters, iterate through them to merge them if their maximums are closer than a given length.
-    :param clusters_tree, IntervalTree, data are dict of dict
-    :param window: clustering window
-    :return:
-        clusters: dict of dict
+    Iterate through clusters and merge them if their maximums are closer than a given length.
+
+    Args:
+        clusters_tree (IntervalTree): genomic regions are intervals, data are clusters (dict of dict)
+        window (int): clustering window
+
+    Returns:
+        merged_clusters_tree (IntervalTree): genomic regions are intervals, data are merged clusters (dict of dict)
     """
     merged_clusters_tree = IntervalTree()
     missed_clusters = defaultdict(dict)
@@ -189,11 +201,14 @@ def merge(clusters_tree, window):
 def mapmut_and_filter(clusters_tree, mutations_in, cluster_mutations_cutoff):
     """
     Get the number of mutations within a cluster, remove those clusters below cutoff mutations
-    :param clusters_tree, IntervalTree, data are dict of dict
-    :param mutations_in: list of mutations in regions
-    :param cluster_mutations_cutoff: int, n cluster mutations cutoff
-    :return:
-        filter_clusters_tree: IntervalTree, data are dict of dict
+
+    Args:
+        clusters_tree (IntervalTree): genomic regions are intervals, data are merged clusters (dict of dict)
+        mutations_in (list): list of mutations fitting in regions
+        cluster_mutations_cutoff (int): number of cluster mutations cutoff
+
+    Returns:
+        filter_clusters_tree (IntervalTree): genomic regions are intervals, data are filtered clusters (dict of dict)
     """
     filter_clusters_tree = IntervalTree()
 
@@ -226,11 +241,11 @@ def trim(clusters_tree, cds_d):
     right margins are updated.
 
     Args:
-        clusters_tree: IntervalTree, data are dict of dict
+        clusters_tree: genomic regions are intervals, data are filtered clusters (dict of dict)
         cds_d: dict, keys are start genomic regions, values are cds positions
 
     Returns:
-        trim_clusters_tree: IntervalTree, data are dict of dict
+        trim_clusters_tree (IntervalTree): genomic regions are intervals, data are trimmed clusters (dict of dict)
 
     """
     trim_clusters_tree = IntervalTree()
@@ -266,15 +281,17 @@ def trim(clusters_tree, cds_d):
 
 def score(clusters_tree, regions, mutations_element, protein, formula):
     """
-    Score clusters with fraction of mutations formula
-    :param clusters_tree: IntervalTree, data are dict of dict
-    :param regions: IntervalTree with genomic positions of an element
-    :param: int, length of the element under analysis
-    :param mutations_element: int, len of list of mutations inside regions
-    :param protein: bool, True analyzes clustering in protein sequence
-    :param formula: str, formula to calculate clusters score ['fmutations', 'cmutcorrected']
-    :return:
-            score_clusters_tree: IntervalTree, data are dict of dict
+    Score clusters with fraction of mutations formula and number of cluster's mutations
+
+    Args:
+        clusters_tree( IntervalTree): genomic regions are intervals, data are trimmed clusters (dict of dict)
+        regions (IntervalTree): IntervalTree where intervals are genomic positions of an element
+        mutations_element (int): number of mutations in the element
+        protein (bool): if True analyzes clustering in protein sequence
+        formula (str): formula to calculate clusters score ['fmutations', 'cmutcorrected']
+
+    Returns:
+        score_clusters_tree (IntervalTree): genomic regions are intervals, data are scored clusters (dict of dict)
     """
     score_clusters_tree = IntervalTree()
     root = m.sqrt(2)
