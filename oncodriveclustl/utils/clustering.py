@@ -75,7 +75,6 @@ def find_clusters(index_tree):
         indexes = interval.data
 
         # Iterate through all maximum and generate a cluster per maximum
-        # TODO remove third component of max/left/right, score is not needed
         generator_maxs = (i for i in indexes if i[0] == 1)
         for maximum in generator_maxs:
             i = indexes.index(maximum)
@@ -270,16 +269,15 @@ def trim(clusters_tree, concat_regions_d):
             mutation_right_index = (mutation_right.position - mutation_right.region[0]) + right_correction
 
             # Update clusters coordinates
-            # FIXME score is wrong
-            values['left_m'] = (mutation_left_index, mutation_left.position, 0.0)
-            values['right_m'] = (mutation_right_index, mutation_right.position, 0.0)
+            values['left_m'] = (mutation_left_index, mutation_left.position, np.nan)
+            values['right_m'] = (mutation_right_index, mutation_right.position, np.nan)
 
         trim_clusters_tree.addi(interval[0], interval[1], clusters)
 
         return trim_clusters_tree
 
 
-def score(clusters_tree, regions, mutations_element, protein, formula):
+def score(clusters_tree, regions, mutations_element):
     """
     Score clusters with fraction of mutations formula and number of cluster's mutations
 
@@ -287,19 +285,12 @@ def score(clusters_tree, regions, mutations_element, protein, formula):
         clusters_tree( IntervalTree): genomic regions are intervals, data are trimmed clusters (dict of dict)
         regions (IntervalTree): IntervalTree where intervals are genomic positions of an element
         mutations_element (int): number of mutations in the element
-        protein (bool): if True analyzes clustering in protein sequence
-        formula (str): formula to calculate clusters score ['fmutations', 'cmutcorrected']
 
     Returns:
         score_clusters_tree (IntervalTree): genomic regions are intervals, data are scored clusters (dict of dict)
     """
     score_clusters_tree = IntervalTree()
     root = m.sqrt(2)
-
-    # Update regions if protein
-    if protein:
-        regions = IntervalTree()
-        regions.addi(clusters_tree.begin(), clusters_tree.end())
 
     for interval in clusters_tree:
         clusters = interval.data.copy()
@@ -338,10 +329,7 @@ def score(clusters_tree, regions, mutations_element, protein, formula):
                     score_ += (numerator / denominator)
 
             # Update
-            if formula == 'cmutcorrected':
-                clusters[cluster]['score'] = score_ * len(values['mutations'])
-            else:
-                clusters[cluster]['score'] = score_
+            clusters[cluster]['score'] = score_ * len(values['mutations'])
 
         score_clusters_tree.addi(interval[0], interval[1], clusters)
 

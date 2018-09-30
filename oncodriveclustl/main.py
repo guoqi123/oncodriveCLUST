@@ -28,12 +28,12 @@ LOGS = {
 @click.command()
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
-@click.option('-sign', '--input-signature', default=None, required=False, type=click.Path(exists=True),
-              help='File containing input context based mutational probabilities (signature)')
-@click.option('-o', '--output-directory', default=None, required=True,
-              help='Output directory to be created')
 @click.option('-r', '--regions-file', default=None, required=True, type=click.Path(exists=True),
               help='GZIP compressed file with the genomic regions to analyze')
+@click.option('-o', '--output-directory', default=None, required=True,
+              help='Output directory to be created')
+@click.option('-sign', '--input-signature', default=None, required=False, type=click.Path(exists=True),
+              help='File containing input context based mutational probabilities (signature)')
 @click.option('-ef', '--elements-file', default=None, type=click.Path(exists=True),
               help='File with the symbol of the elements to analyze')
 @click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
@@ -48,13 +48,13 @@ LOGS = {
               help='Smoothing window. Default is 30')
 @click.option('-cw', '--cluster-window', type=click.INT, default=30,
               help='Cluster window. Default is 30')
-@click.option('-cs', '--cluster-score', default='fmutations', help='Cluster score formula',
-              type=click.Choice(['fmutations', 'cmutcorrected']))
+@click.option('-cs', '--cluster-score', default='cmutcorrected', help='Cluster score formula',
+              type=click.Choice(['cmutcorrected']))
 @click.option('-es', '--element-score', default='sum', help='Element score formula',
               type=click.Choice(['sum']))
 @click.option('-kmer', '--kmer', default='3', help='Number of nucleotides of the signature',
               type=click.Choice(['3', '5']))
-@click.option('-n', '--n-simulations', type=click.INT, default=10000,
+@click.option('-n', '--n-simulations', type=click.INT, default=1000,
               help='number of simulations. Default is 10000')
 @click.option('-sim', '--simulation-mode', default='mutation_centered', help='Simulation mode',
               type=click.Choice(['mutation_centered', 'region_restricted']))
@@ -64,17 +64,15 @@ LOGS = {
               help='Number of cores to use in the computation. By default it uses all the available cores.')
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
-@click.option('--gzip', is_flag=True, help='Gzip compress files')
 @click.option('--concatenate', is_flag=True, help='Calculate clustering on concatenated genomic regions (e.g., exons '
                                                   'in coding sequences)')
-@click.option('--conseq', is_flag=True, help='Use mutations consequence type from VEP (CODING)')
-@click.option('--protein', is_flag=True, help='Analyze clustering in translated protein sequences (CODING)')
-@click.option('--plot', is_flag=True, help='Generate a clustering plot for an element')
 @click.option('--pancancer', is_flag=True, help='PanCancer cohort analysis')
+@click.option('--gzip', is_flag=True, help='Gzip compress files')
+@click.option('--plot', is_flag=True, help='Generate a clustering plot for an element')
 def main(input_file,
-         input_signature,
-         output_directory,
          regions_file,
+         output_directory,
+         input_signature,
          elements_file,
          elements,
          genome,
@@ -90,21 +88,20 @@ def main(input_file,
          simulation_window,
          cores,
          log_level,
-         gzip,
          concatenate,
-         conseq,
-         protein,
+         pancancer,
          plot,
-         pancancer):
+         gzip
+     ):
     """
     OncodriveCLUSTL is a sequence based clustering method to identify cancer drivers across the genome
 
     Args:
         input_file (str): path to mutations file
+        regions_file (str): path to input genomic coordinates file
+        output_directory(str): path to output directory. Output files will be generated in it.
         input_signature (str): path to file containing input context based mutational probabilities (optional).
             By default (when no input signatures), OncodriveCLUSTL will calculate them from the mutations input file.
-        output_directory(str): path to output directory. Output files will be generated in it.
-        regions_file (str): path to input genomic coordinates file
         elements_file (str): path to file containing one element per row (optional) to analyzed the listed elements.
             By default, OncodriveCLUSTL analyzes all genomic elements contained in `regions_file`.
         elements (str): genomic element symbol (optional). The analysis will be performed only on the specified element.
@@ -121,12 +118,10 @@ def main(input_file,
         simulation_window (int): window length to simulate mutations
         cores (int): number of CPUs to use
         log_level (str): verbosity of the logger
-        gzip (bool): flag to generate GZIP compressed output files
         concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
-        conseq (bool): flag to use only non-synonymous mutations for clustering analysis
-        protein (bool): flag to analyze clustering in translated protein sequences
-        plot (bool): flag to generate a clustering plot for an element
         pancancer (bool): flag to compute PanCancer cohort analysis
+        plot (bool): flag to generate a clustering plot for an element
+        gzip (bool): flag to generate GZIP compressed output files
 
     Returns:
         None
@@ -177,8 +172,6 @@ def main(input_file,
         'n_simulations: {}'.format(n_simulations),
         'cores: {}'.format(cores),
         'gzip: {}'.format(gzip),
-        'VEP conseq: {}'.format(conseq),
-        'protein clustering: {}'.format(protein),
         'pancancer: {}'.format(pancancer),
         ''
     ]))
@@ -187,12 +180,6 @@ def main(input_file,
     # Check parameters
     if n_simulations < 1000:
         raise excep.UserInputError('Invalid number of simulations: please choose integer greater than 1000')
-
-    if conseq and concatenate is False:
-        raise excep.UserInputError('Analysis using mutations consequence type requires analysis mode "--concatenate"')
-
-    if protein and concatenate is False:
-        raise excep.UserInputError('Analysis in translated protein sequences requires analysis mode "--concatenate"')
 
     # If --plot, only one element is analyzed
     if plot:
@@ -283,9 +270,6 @@ def main(input_file,
         input_file,
         concatenate,
         pancancer,
-        conseq,
-        protein,
-        genome
     )
     mut = 0
     elem = 0
@@ -296,10 +280,9 @@ def main(input_file,
         if not element_mutations_cutoff:
             if len(v) >= element_mutations:
                 element_mutations_cutoff = True
-    logger.info('Validated {} in genomic regions: {}'.format(
-        'elements' if not protein else 'transcripts', len(regions_d.keys())
+    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())
     ))
-    logger.info('Validated {} with mutations: {}'.format('elements' if not protein else 'transcripts', elem))
+    logger.info('Validated elements with mutations: {}'.format(elem))
     logger.info('Total substitution mutations: {}'.format(mut))
     if not element_mutations_cutoff:
         raise excep.UserInputError('No element found with enough mutations to perform analysis')
@@ -326,8 +309,6 @@ def main(input_file,
         simulation_mode,
         simulation_window,
         cores,
-        conseq,
-        protein,
         plot
     ).run()
 
@@ -346,8 +327,8 @@ def main(input_file,
                                 file=clusters_output_file,
                                 sorter=sorted_list_elements,
                                 regions_d = regions_d,
-                                is_gzip=gzip,
-                                is_protein=protein)
+                                is_gzip=gzip)
+
     logger.info('Clusters results calculated')
     logger.info('Finished')
 

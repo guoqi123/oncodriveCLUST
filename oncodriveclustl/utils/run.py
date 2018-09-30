@@ -24,7 +24,7 @@ from oncodriveclustl.utils import plots as plot
 
 # Logger
 logger = daiquiri.getLogger()
-Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cancertype')
+Mutation = namedtuple('Mutation', 'position, region, alt, sample, cancertype')
 Cds = namedtuple('Cds', 'start, end')
 
 
@@ -52,8 +52,6 @@ class Experiment:
                  simulation_mode,
                  simulation_window,
                  cores,
-                 conseq,
-                 protein,
                  is_plot):
 
         """Initialize the Experiment class
@@ -81,8 +79,6 @@ class Experiment:
             simulation_mode (str): simulation mode
             simulation_window (int): window length to simulate mutations
             cores (int): number of CPUs to use
-            conseq (bool): True, use only non-synonymous mutations for clustering analysis
-            protein (bool): True analyzes clustering in translated protein sequences
             is_plot (bool): True generates a clustering plot for an element
 
         Returns:
@@ -116,8 +112,6 @@ class Experiment:
         self.simulation_window = simulation_window + (1 - simulation_window % 2)
         self.cores = cores
         self.is_plot = is_plot
-        self.conseq = conseq
-        self.protein = protein
 
         # Read CGC
         if self.genome == 'hg19':
@@ -126,11 +120,6 @@ class Experiment:
                 self.cgc_genes = set([line.split('\t')[0] for line in fd])
         else:
             self.cgc_genes = set()
-
-        if self.conseq:
-            self.conseq_path = bgd.get_path('oncodriveclustl', 'vep88', 'hg19_canonical_conseq')
-        else:
-            self.conseq_path = None
 
     @staticmethod
     def tukey(window):
@@ -182,32 +171,17 @@ class Experiment:
 
         Returns:
             probs_tree (IntervalTree): IntervalTree of genomic regions. Length == 3*(genomic + simulation window)
-            conseq_tree (IntervalTree): IntervalTree of genomic regions, interval.data are boolean arrays representing
-                synonymous or non-synonymous changes of each alternate per position.
-                Length == 3*(genomic + simulation window). Tree empty if self.conseq is False.
             skip (bool): if True skip further analysis
 
         """
-        skip = False
-        nu = 0
-        delta = 1 if self.kmer == 3 else 2
         nucleot = {'A', 'C', 'G', 'T'}
         probs_tree = defaultdict(IntervalTree)
-        conseq_tree = IntervalTree()
-        simulation_window = self.simulation_window
+        nu = 0
+        delta = 1 if self.kmer == 3 else 2
         correction = 1
+        skip = False
 
-        conseq_d = {}
-        if self.conseq:
-            ensid = element.split('//')[1]
-            path_to_vep_pickle = self.conseq_path + '/{}.pickle'.format(ensid)
-            try:
-                with open(path_to_vep_pickle, 'rb') as fd:
-                    conseq_d = pickle.load(fd)
-            except FileNotFoundError:
-                skip = True
-
-        # Check signatures pickles exist and read          # TODO to much memory?
+        # Check signatures pickles exist and read          # TODO memory?
         signatures_d = defaultdict()
         for cohort in self.cohorts_d[element]:
             if os.path.isfile(self.path_cache):
@@ -223,79 +197,60 @@ class Experiment:
 
         if not skip:
             # Iterate through genomic regions to get their sequences
+            sequence = ''
             for interval in self.regions_d[element]:
                 probabilities = defaultdict(list)
-                consequences = []
-                start = interval[0] - (simulation_window // 2) - delta
-                size = interval[1] - interval[0] + (simulation_window - correction) + delta*2
-                # genomic start -d -sw//2, genomic end +d +sw//2
-
-                # FIXME
+                expected_length = (interval[1] - interval[0] + self.simulation_window - correction)
+                start = interval[0] - (self.simulation_window // 2) - delta
+                size = interval[1] - interval[0] + (self.simulation_window - correction) + delta*2
                 try:
                     sequence = bgr.refseq(self.genome, self.chromosomes_d[element], start, size)
                 except ValueError as e:
                     logger.error(e, element, start, size, interval[0], interval[1])
 
-                # Search kmer probabilities
-                for n in range(delta, len(sequence)-delta):  # start to end
-                    position = start + n
-                    nu += 1
-                    ref_kmer = sequence[n - delta: n + delta + 1]
-                    prob = defaultdict(list)
-                    conseq = []
-                    if ref_kmer.count('N') == 0:
-                        # calculate mutational prob to any other kmer
-                        # sort alternates to keep track
-                        for alt in sorted(list(nucleot.difference({ref_kmer[self.kmer//2]}))):
-                            alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
+                if sequence:
+                    # Search kmer probabilities
+                    for n in range(delta, len(sequence)-delta):  # start to end
+                        nu += 1
+                        ref_kmer = sequence[n - delta: n + delta + 1]
+                        prob = defaultdict(list)
+                        if ref_kmer.count('N') == 0:
+                            # calculate mutational prob to any other kmer
+                            # sort alternates to keep track
+                            for alt in sorted(list(nucleot.difference({ref_kmer[self.kmer//2]}))):
+                                alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
+                                for cohort, signature in signatures_d.items():
+                                    prob[cohort].append(signature[(ref_kmer, alt_kmer)])
+                        else:
                             for cohort, signature in signatures_d.items():
-                                prob[cohort].append(signature[(ref_kmer, alt_kmer)])
-                            # Get consequence
-                            con = 0 if position in conseq_d.get(alt, []) else 1
-                            conseq.append(con)
-                    else:
-                        for cohort, signature in signatures_d.items():
-                            prob[cohort].extend([0, 0, 0])
-                        conseq = [0, 0, 0]  # TODO check, give conseq synonymous to pos where ref_kmer has N
+                                prob[cohort].extend([0, 0, 0])
+                        # Extend position info
+                        for cohort in signatures_d.keys():
+                            probabilities[cohort].extend(prob[cohort])
 
-                    # Extend position info
+                    # Check and add
                     for cohort in signatures_d.keys():
-                        probabilities[cohort].extend(prob[cohort])
-                    consequences.extend(conseq)
-
-                # Add to tree
-                for cohort in signatures_d.keys():
-                    probs_tree[cohort].addi(interval[0], interval[1], probabilities[cohort])
-                conseq_tree.addi(interval[0], interval[1], consequences)
-
-            # Check
-            skip = False
-            for cohort, tree in probs_tree.items():
-                for interval in tree:
-                    probabilities = interval.data
-                    if probabilities:
-                        if sum(probabilities) == 0:
-                            logger.critical('All context based mutational probabilities per alternate in {} '
-                                            'equal to 0\n {} analysis is skipped'.format(element, element))
+                        if sum(probabilities[cohort]) != 0 and len(probabilities[cohort]) == 3 * expected_length:
+                            probs_tree[cohort].addi(interval[0], interval[1], probabilities[cohort])
+                        elif sum(probabilities[cohort]) == 0:
+                            logger.critical('Context based mutational probabilities in {0} '
+                                            'region {1}-{2} equal to 0\n'.format(element, interval[0], interval[1]))
                             skip = True
                             break
-                        if len(probabilities) != 3 * (interval[1] - interval[0] + simulation_window - correction):
-                            logger.warning('{} probabilities list length is different than expected, '
-                                           'please review results'.format(element))
+                        elif len(probabilities[cohort]) != 3 * expected_length:
+                            logger.warning('{0} probabilities list length is different than expected'.format(element))
                             skip = True
                             break
-
-                        if len(probabilities) != len(list(conseq_tree[interval[0]])[0][-1]):
-                            logger.warning('{} probabilities list length is different than expected, '
-                                           'please review results'.format(element))
-                            skip = True
-                            break
-                if skip:
-                    logger.critical('Context based mutational probabilities were not calculated for {}\n'
-                                    '{} analysis is skipped'.format(element, element))
+                    if skip:
+                        break
+                else:
+                    skip = True
                     break
+        if skip:
+            logger.critical('Context based mutational probabilities could not be calculated for {0}\n'
+                            '{0} analysis is skipped'.format(element))
 
-        return probs_tree, conseq_tree, skip
+        return probs_tree, skip
 
     def analysis(self, element, mutations, analysis_mode='sim'):
         """
@@ -316,32 +271,16 @@ class Experiment:
         else:
             concat_regions_d = {}
 
-        if not self.protein:
-            smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], concat_regions_d, mutations,
+        smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], concat_regions_d, mutations,
                                                               self.tukey_filter, self.simulation_window)
-        else:
-            smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], self.chromosomes_d[element],
-                                                             self.strands_d[element],
-                                                             self.genome, self.tukey_filter, concat_regions_d, mutations)
-            concat_regions_d = {}  # Next functions performed with concatenate False
-
         index_tree = clu.find_locals(smooth_tree, concat_regions_d)
         raw_clusters_tree = clu.find_clusters(index_tree)
-        merge_clusters_tree = clu.merge(raw_clusters_tree,
-                                        self.cluster_window)
-        filter_clusters_tree = clu.mapmut_and_filter(merge_clusters_tree,
-                                                     mutations_in,
-                                                     self.cluster_mutations_cutoff)
-        # FIXME trim is not working for protein
+        merge_clusters_tree = clu.merge(raw_clusters_tree, self.cluster_window)
+        filter_clusters_tree = clu.mapmut_and_filter(merge_clusters_tree, mutations_in, self.cluster_mutations_cutoff)
         trim_clusters_tree = clu.trim(filter_clusters_tree, concat_regions_d)
-        score_clusters_tree = clu.score(trim_clusters_tree,
-                                        self.regions_d[element],
-                                        len(mutations_in),
-                                        self.protein,
-                                        self.cluster_score)
+        score_clusters_tree = clu.score(trim_clusters_tree, self.regions_d[element], len(mutations_in))
         logger.debug('Clusters scores calculated')
-        element_score = score.element_score(score_clusters_tree,
-                                            analysis_mode)
+        element_score = score.element_score(score_clusters_tree, analysis_mode)
         logger.debug('Element score calculated')
 
         if self.is_plot:
@@ -362,7 +301,7 @@ class Experiment:
             sim_scores_chunk (list): simulated element's results
             sim_cluster_chunk (list): simulated cluster's results
         """
-        element, probs_tree, conseq_tree, n_sim = item
+        element, probs_tree, n_sim = item
         sim_scores_chunk = []
         sim_cluster_chunk = []
         df_simulated_mutations = []
@@ -432,7 +371,6 @@ class Experiment:
                 # Add info per simulated mutation
                 list_simulations_per_mutation = []
                 for count, index in enumerate(simulations):
-                    muttype = list(conseq_tree[interval[0]])[0][2][index]
                     position = mutation.region[0] - half_window + index // 3
                     ref_nucleotide = bgr.refseq(self.genome, self.chromosomes_d[element], position, 1)
                     # Calculate sorted alternates and obtain simulated alternated from index
@@ -444,9 +382,8 @@ class Experiment:
                     alternate = sorted(list(nucleot.difference({ref_nucleotide})))[alternate_index]
                     # Simulated mutation
                     list_simulations_per_mutation.append(
-                        Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype)
+                        Mutation(position, mutation.region, alternate, mutation.sample, mutation.cancertype)
                     )
-
                 df_simulated_mutations.append(list_simulations_per_mutation)
 
         # Start analysis
@@ -487,10 +424,6 @@ class Experiment:
 
         for interval in self.regions_d[element]:
             length_ele += (interval[1] - interval[0])
-        if self.protein:
-            return length_ele//3
-        else:
-            return length_ele
 
     def post_process(self, items):
         """
@@ -660,13 +593,11 @@ class Experiment:
                 # If there is at least one region containing clusters
                 if check != 0:
                     # Check if probabilities can be calculated
-                    logger.debug('Calculating context based mutational '
-                                 'probabilities for region {} {}...'.format(interval[0], interval[1]))
-                    probs_tree, conseq_tree, skip = self.mut_probabilities(element)
+                    probs_tree, skip = self.mut_probabilities(element)
                     if not skip:
                         element_size = ((len(self.mutations_d[element]) * self.n_simulations) // pf_num_simulations) + 1
                         chunk_size = (self.n_simulations // element_size) + 1
-                        simulations += [(element, probs_tree, conseq_tree, n_sim) for n_sim in partitions_list(
+                        simulations += [(element, probs_tree, n_sim) for n_sim in partitions_list(
                                         self.n_simulations,
                                         chunk_size
                                         )]

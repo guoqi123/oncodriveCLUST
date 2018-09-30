@@ -148,7 +148,7 @@ def write_element_results(genome, results, directory, file, is_gzip):
     return sorted_list_elements
 
 
-def write_cluster_results(genome, results, directory, file, sorter, regions_d, is_gzip, is_protein):
+def write_cluster_results(genome, results, directory, file, sorter, regions_d, is_gzip):
     """Save clusters results to the output file. Order according to elements' ranking
 
     Args:
@@ -159,7 +159,6 @@ def write_cluster_results(genome, results, directory, file, sorter, regions_d, i
         sorter (list): element symbols ranked by elements p-value to rank clusters
         regions_d (dict): dictionary of IntervalTrees containing genomic regions from all analyzed elements
         is_gzip (bool): True generates gzip compressed output file
-        is_protein (bool): True reverses clusters positions in protein if element's strand is negative
 
     Returns:
         None
@@ -198,21 +197,13 @@ def write_cluster_results(genome, results, directory, file, sorter, regions_d, i
                         left_coord = v['left_m'][1]
                         max_coord = v['max'][1]
                         right_coord = v['right_m'][1]
-                        if not is_protein:
-                            if regions[left_coord] == regions[right_coord]:
-                                coordinates = '{},{}'.format(left_coord, right_coord)
-                            else:
-                                coordinates = '{},{};{},{}'.format(left_coord,
-                                                                   list(regions[left_coord])[0][1] - 1,  # end tree + 1
-                                                                   list(regions[right_coord])[0][0],
-                                                                   right_coord)
-                        else:
-                            if strand == '-':
-                                left_coord = length - left_coord
-                                max_coord = length - max_coord
-                                right_coord = length - right_coord
+                        if regions[left_coord] == regions[right_coord]:
                             coordinates = '{},{}'.format(left_coord, right_coord)
-
+                        else:
+                            coordinates = '{},{};{},{}'.format(left_coord,
+                                                               list(regions[left_coord])[0][1] - 1,  # end tree + 1
+                                                               list(regions[right_coord])[0][0],
+                                                               right_coord)
                         fd.write('{}\n'.format('\t'.join(map(str, [
                                     rank,
                                     sym,
