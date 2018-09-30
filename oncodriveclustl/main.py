@@ -247,7 +247,7 @@ def main(input_file,
                 else:
                     logger.info('Computing signatures...')
                     signature_object.calculate(input_file)
-                    signature_object.save(path_cache, prefix=None)
+                    signature_object.save(path_cache, prefix='')
                     logger.info('Signatures computed')
             else:
                 raise excep.UserInputError('PanCancer analysis requires "CANCER_TYPE" column in input file')
@@ -263,7 +263,6 @@ def main(input_file,
                 signature_object.calculate(input_file)
                 signature_object.save(path_cache, prefix=file_prefix)
                 logger.info('Signatures computed')
-            cohorts_of_analysis.add(file_prefix)
     else:
         # Check format
         path_cache = input_signature
@@ -282,6 +281,7 @@ def main(input_file,
         elements,
         input_file,
         cds,
+        pancancer,
         conseq,
         protein,
         genome

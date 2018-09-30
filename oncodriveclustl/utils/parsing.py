@@ -89,13 +89,14 @@ def map_regions_cds(regions_d):
     return cds_d
 
 
-def read_mutations(input_mutations, trees, conseq):
+def read_mutations(input_mutations, trees, is_pancancer, conseq):
     """
     Read mutations file (only substitutions) and map to elements' genomic regions
 
     Args:
-        input_mutations (str): path to file containing mutations
+        input_mutations (str): path to input file containing mutations
         trees (dict): dictionary of dictionary of IntervalTrees containing intervals of genomic elements per chromosome
+        is_pancancer (bool): True, analysis carried out using cohorts available in the input mutations file
         conseq (bool): True, use AA consequence type
 
     Returns:
@@ -155,7 +156,7 @@ def read_mutations(input_mutations, trees, conseq):
                 ref = line['REF']
                 alt = line['ALT']
                 sample = line['SAMPLE']
-                if cancer_type_header:
+                if cancer_type_header and is_pancancer:
                     cancer_type = line['CANCER_TYPE']
                 else:
                     cancer_type = file_prefix
@@ -226,7 +227,7 @@ def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
     return elements_to_skip
 
 
-def parse(input_regions, elements, input_mutations, cds, conseq, protein, genome):
+def parse(input_regions, elements, input_mutations, cds, is_pancancer, conseq, protein, genome):
     """Parse genomic regions and dataset of cancer type mutations
 
     Args:
@@ -234,6 +235,7 @@ def parse(input_regions, elements, input_mutations, cds, conseq, protein, genome
         elements (set): elements to analyze. If the set is empty all the elements in genomic regions will be analyzed
         input_mutations (str): path to file containing mutations
         cds (bool): True calculates clustering on collapsed genomic regions (e.g., coding regions in a gene)
+        is_pancancer (bool): True, analysis carried out using cohorts available in the input mutations file
         conseq (bool): True, use AA consequence type
         protein (bool): True analyzes clustering in translated protein sequences
         genome (str): genome to use
@@ -257,7 +259,7 @@ def parse(input_regions, elements, input_mutations, cds, conseq, protein, genome
     else:
         cds_d = {}
     logger.info('Regions parsed')
-    mutations_d, samples_d, cohorts_d = read_mutations(input_mutations, trees, conseq)
+    mutations_d, samples_d, cohorts_d = read_mutations(input_mutations, trees, is_pancancer, conseq)
     logger.info('Mutations parsed')
 
     if protein:

@@ -445,8 +445,6 @@ class Experiment:
                     list_simulations_per_mutation.append(
                         Mutation(position, mutation.region, alternate, muttype, mutation.sample, mutation.cancertype)
                     )
-                    if not mutation.region[0] <= position < (mutation.region[1] + 1):
-                        print(mutation, 'simulated: ', position)
 
                 df_simulated_mutations.append(list_simulations_per_mutation)
 

@@ -7,7 +7,8 @@ from collections import defaultdict
 import pickle
 import csv
 import itertools
-import gzip  # TODO check conditional import
+import gzip
+# TODO check conditional import
 
 import daiquiri
 from tqdm import tqdm
