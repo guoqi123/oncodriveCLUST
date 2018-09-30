@@ -65,7 +65,8 @@ LOGS = {
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
-@click.option('--cds', is_flag=True, help='Calculate clustering on coding DNA sequence (cds)')
+@click.option('--concatenate', is_flag=True, help='Calculate clustering on concatenated genomic regions (e.g., exons '
+                                                  'in coding sequences)')
 @click.option('--conseq', is_flag=True, help='Use mutations consequence type from VEP (CODING)')
 @click.option('--protein', is_flag=True, help='Analyze clustering in translated protein sequences (CODING)')
 @click.option('--plot', is_flag=True, help='Generate a clustering plot for an element')
@@ -90,7 +91,7 @@ def main(input_file,
          cores,
          log_level,
          gzip,
-         cds,
+         concatenate,
          conseq,
          protein,
          plot,
@@ -121,7 +122,7 @@ def main(input_file,
         cores (int): number of CPUs to use
         log_level (str): verbosity of the logger
         gzip (bool): flag to generate GZIP compressed output files
-        cds (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
+        concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
         conseq (bool): flag to use only non-synonymous mutations for clustering analysis
         protein (bool): flag to analyze clustering in translated protein sequences
         plot (bool): flag to generate a clustering plot for an element
@@ -165,7 +166,7 @@ def main(input_file,
         'genome: {}'.format(genome),
         'element_mutations: {}'.format(element_mutations),
         'cluster_mutations: {}'.format(cluster_mutations),
-        'cds: {}'.format(cds),
+        'concatenate: {}'.format(concatenate),
         'smooth_window: {}'.format(smooth_window),
         'cluster_window: {}'.format(cluster_window),
         'cluster_score: {}'.format(cluster_score),
@@ -187,18 +188,18 @@ def main(input_file,
     if n_simulations < 1000:
         raise excep.UserInputError('Invalid number of simulations: please choose integer greater than 1000')
 
-    if conseq and cds is False:
-        raise excep.UserInputError('Analysis using mutations consequence type requires analysis mode "--cds"')
+    if conseq and concatenate is False:
+        raise excep.UserInputError('Analysis using mutations consequence type requires analysis mode "--concatenate"')
 
-    if protein and cds is False:
-        raise excep.UserInputError('Analysis in translated protein sequences requires analysis mode "--cds"')
+    if protein and concatenate is False:
+        raise excep.UserInputError('Analysis in translated protein sequences requires analysis mode "--concatenate"')
 
     # If --plot, only one element is analyzed
     if plot:
         if len(elements) != 1:
             raise excep.UserInputError('Plot can only be calculated for one element')
-        if not cds:
-            raise excep.UserInputError('Plots are only available for analysis mode "--cds"')
+        if not concatenate:
+            raise excep.UserInputError('Plots are only available for analysis mode "--concatenate"')
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -276,11 +277,11 @@ def main(input_file,
 
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
-    regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
+    regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
         regions_file,
         elements,
         input_file,
-        cds,
+        concatenate,
         pancancer,
         conseq,
         protein,
@@ -306,7 +307,7 @@ def main(input_file,
     # Initialize Experiment class variables and run
     elements_results, clusters_results = exp.Experiment(
         regions_d,
-        cds_d,
+        concat_regions_d,
         chromosomes_d,
         strands_d,
         mutations_d,

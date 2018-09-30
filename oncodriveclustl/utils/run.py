@@ -33,7 +33,7 @@ class Experiment:
 
     def __init__(self,
                  regions_d,
-                 cds_d,
+                 concat_regions_d,
                  chromosomes_d,
                  strands_d,
                  mutations_d,
@@ -60,7 +60,8 @@ class Experiment:
 
         Args:
             regions_d (dict): dict, dictionary of IntervalTrees containing genomic regions from all analyzed elements
-            cds_d (dict): dictionary of dictionaries with relative cds position of genomic regions if cds is True
+            concat_regions_d (dict): dictionary of dictionaries with positions of genomic regions relative to their
+                start if analysis in concatenate mode
             chromosomes_d (dict): dictionary of elements (keys) and chromosomes (values)
             strands_d (dict): dictionary of elements (keys) and strands (values)
             mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
@@ -93,7 +94,7 @@ class Experiment:
         global Cds
 
         self.regions_d = regions_d
-        self.cds_d = cds_d
+        self.concat_regions_d = concat_regions_d
         self.chromosomes_d = chromosomes_d
         self.strands_d = strands_d
         self.mutations_d = mutations_d
@@ -310,21 +311,21 @@ class Experiment:
             element_score (float): element score
 
         """
-        if self.cds_d:
-            cds_d = self.cds_d[element]
+        if self.concat_regions_d:
+            concat_regions_d = self.concat_regions_d[element]
         else:
-            cds_d = {}
+            concat_regions_d = {}
 
         if not self.protein:
-            smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], cds_d, mutations,
+            smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], concat_regions_d, mutations,
                                                               self.tukey_filter, self.simulation_window)
         else:
             smooth_tree, mutations_in = smo.smooth_aminoacid(self.regions_d[element], self.chromosomes_d[element],
                                                              self.strands_d[element],
-                                                             self.genome, self.tukey_filter, cds_d, mutations)
-            cds_d = {}  # Next functions performed with cds False
+                                                             self.genome, self.tukey_filter, concat_regions_d, mutations)
+            concat_regions_d = {}  # Next functions performed with concatenate False
 
-        index_tree = clu.find_locals(smooth_tree, cds_d)
+        index_tree = clu.find_locals(smooth_tree, concat_regions_d)
         raw_clusters_tree = clu.find_clusters(index_tree)
         merge_clusters_tree = clu.merge(raw_clusters_tree,
                                         self.cluster_window)
@@ -332,7 +333,7 @@ class Experiment:
                                                      mutations_in,
                                                      self.cluster_mutations_cutoff)
         # FIXME trim is not working for protein
-        trim_clusters_tree = clu.trim(filter_clusters_tree, cds_d)
+        trim_clusters_tree = clu.trim(filter_clusters_tree, concat_regions_d)
         score_clusters_tree = clu.score(trim_clusters_tree,
                                         self.regions_d[element],
                                         len(mutations_in),
@@ -621,7 +622,7 @@ class Experiment:
             for element in analyzed_elements:
                 smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score = \
                     self.analysis(element, self.mutations_d[element], analysis_mode='obs')
-                plot.run_plot(element, self.mutations_d[element], self.cds_d[element],
+                plot.run_plot(element, self.mutations_d[element], self.concat_regions_d[element],
                               self.strands_d[element], self.chromosomes_d[element], self.smooth_window,
                               smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score)
                 logger.info('Plots calculated: {}'.format(element))

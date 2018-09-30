@@ -165,7 +165,6 @@ def write_cluster_results(genome, results, directory, file, sorter, regions_d, i
         None
 
     """
-    reverse_cds_d = IntervalTree()
     sorter_index = dict(zip(sorter, range(len(sorter))))
     file = os.path.join(directory, file)
 

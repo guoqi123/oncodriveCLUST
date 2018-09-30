@@ -64,29 +64,29 @@ def read_regions(input_regions, elements, protein):
     return regions_d, chromosomes_d, strands_d, trees
 
 
-def map_regions_cds(regions_d):
+def map_regions_concatseq(regions_d):
     """
-    Calculate cds position of every region relative to genomic element start
+    Calculate position (index) of every region relative to genomic element start
 
     Args:
         regions_d (dict): dictionary of IntervalTrees with genomic regions for elements
 
     Returns:
-        cds_d (dict): dictionary of dictionaries with relative cds index of genomic regions
+        concat_regions_d (dict): dictionary of dictionaries with relative index of genomic regions
 
     """
     global Cds
-    cds_d = defaultdict(dict)
+    concat_regions_d = defaultdict(dict)
 
     for element, regions in regions_d.items():
         start = 0
         for region in sorted(regions):
             length = region.end - region.begin
             end = start + length - 1
-            cds_d[element][region.begin] = Cds(start, end)
+            concat_regions_d[element][region.begin] = Cds(start, end)
             start = end + 1
 
-    return cds_d
+    return concat_regions_d
 
 
 def read_mutations(input_mutations, trees, is_pancancer, conseq):
@@ -227,14 +227,14 @@ def map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome):
     return elements_to_skip
 
 
-def parse(input_regions, elements, input_mutations, cds, is_pancancer, conseq, protein, genome):
+def parse(input_regions, elements, input_mutations, concatenate, is_pancancer, conseq, protein, genome):
     """Parse genomic regions and dataset of cancer type mutations
 
     Args:
         input_regions (str): path to input genomic regions
         elements (set): elements to analyze. If the set is empty all the elements in genomic regions will be analyzed
         input_mutations (str): path to file containing mutations
-        cds (bool): True calculates clustering on collapsed genomic regions (e.g., coding regions in a gene)
+        concatenate (bool): True calculates clustering on collapsed genomic regions (e.g., coding regions in a gene)
         is_pancancer (bool): True, analysis carried out using cohorts available in the input mutations file
         conseq (bool): True, use AA consequence type
         protein (bool): True analyzes clustering in translated protein sequences
@@ -242,7 +242,7 @@ def parse(input_regions, elements, input_mutations, cds, is_pancancer, conseq, p
 
     Returns:
         regions_d (dict): dictionary of IntervalTrees containing genomic regions from all analyzed elements
-        cds_d (dict): dictionary of dictionaries with relative cds index of genomic regions
+        concat_regions_d (dict): dictionary of dictionaries with relative to start position (index) of genomic regions
         chromosomes_d (dict): dictionary of elements (keys) and chromosomes (values)
         strands_d (dict): dictionary of elements (keys) and strands (values)
         mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
@@ -254,21 +254,21 @@ def parse(input_regions, elements, input_mutations, cds, is_pancancer, conseq, p
     logger = daiquiri.getLogger()
 
     regions_d, chromosomes_d, strands_d, trees = read_regions(input_regions, elements, protein)
-    if cds:
-        cds_d = map_regions_cds(regions_d)
+    if concatenate:
+        concat_regions_d = map_regions_concatseq(regions_d)
     else:
-        cds_d = {}
+        concat_regions_d = {}
     logger.info('Regions parsed')
     mutations_d, samples_d, cohorts_d = read_mutations(input_mutations, trees, is_pancancer, conseq)
     logger.info('Mutations parsed')
 
-    if protein:
-        elements_to_skip = map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome)
-        logger.info('Protein sequences calculated')
-        # Remove invalid transcripts
-        for element in elements_to_skip:
-            del regions_d[element]
-            del cds_d[element]
-            mutations_d.pop(element, None)
+    # if protein:
+    #     elements_to_skip = map_transcripts_protein(regions_d, chromosomes_d, strands_d, genome)
+    #     logger.info('Protein sequences calculated')
+    #     # Remove invalid transcripts
+    #     for element in elements_to_skip:
+    #         del regions_d[element]
+    #         del cds_d[element]
+    #         mutations_d.pop(element, None)
 
-    return regions_d, cds_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d
+    return regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d

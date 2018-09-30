@@ -12,19 +12,19 @@ import json
 Mutation = namedtuple('Mutation', 'position, region, alt, muttype, sample, cancertype')
 
 
-def smooth_nucleotide(regions, cds_d, mutations, tukey_filter, simulation_window):
+def smooth_nucleotide(regions, concat_regions_d, mutations, tukey_filter, simulation_window):
     """Generate a smoothing curve for a list of element's mutations in the nucleotide sequence
 
     Args:
         regions (IntervalTree): IntervalTree with genomic positions of an element
-        cds_d (dict): keys are start genomic regions, values are cds positions
+        concat_regions_d (dict): keys are start genomic regions, values are positions (index) relative to the start
         mutations (list): list of mutations formatted as namedtuple
         tukey_filter (numpy.ndarray): kde array, length equals smoothing window.
         simulation_window (int): simulation window
 
     Returns:
-        final_smooth_tree (IntervalTree): interval are genomic regions or cds, data np.array of smoothing score
-            by position
+        final_smooth_tree (IntervalTree): interval are genomic regions or indexes (concatenate mode),
+            data np.array of smoothing score by position
         mutations_in (list): list of mutations in regions
     """
     first_smooth_tree = IntervalTree()
@@ -37,7 +37,7 @@ def smooth_nucleotide(regions, cds_d, mutations, tukey_filter, simulation_window
         first_smooth_tree.addi(interval.begin, interval.end,
                          np.zeros((interval.end - interval.begin + len(tukey_filter) + simulation_window - 2)))
 
-    if not cds_d:
+    if not concat_regions_d:
         # Smooth
         for mutation in mutations:
             for interval in first_smooth_tree[mutation.region[0]]:
@@ -77,28 +77,28 @@ def smooth_nucleotide(regions, cds_d, mutations, tukey_filter, simulation_window
             slicer = (simulation_window + len(tukey_filter) - 2) // 2
             final_smooth_tree.addi(begin, end, interval.data[slicer: - slicer])
 
-        # Merge sorted regions (one interval == cds) and add tukey//2 to both ends
-        cds_tree = IntervalTree()
-        cds_array = np.zeros((len(tukey_filter)-1) // 2)
+        # Merge sorted regions (one interval == concatenated sequence) and add tukey//2 to both ends
+        concat_tree = IntervalTree()
+        concat_array = np.zeros((len(tukey_filter) - 1) // 2)
         for interval in sorted(final_smooth_tree):
-            cds_array = np.append(cds_array, interval.data)
-        cds_array = np.append(cds_array, np.zeros((len(tukey_filter)-1) // 2))
-        cds_tree.addi(final_smooth_tree.begin(), final_smooth_tree.end(), cds_array)
+            concat_array = np.append(concat_array, interval.data)
+        concat_array = np.append(concat_array, np.zeros((len(tukey_filter) - 1) // 2))
+        concat_tree.addi(final_smooth_tree.begin(), final_smooth_tree.end(), concat_array)
         final_smooth_tree = IntervalTree()
 
         # Smooth mutations inside regions
         for mutation in mutations:
             if mutation.muttype == 1:
                 if first_smooth_tree[mutation.position]:
-                    for interval in cds_tree[mutation.position]:
-                        # Get index of mutation in cds
-                        index = (mutation.position - mutation.region[0]) + cds_d[mutation.region[0]].start
+                    for interval in concat_tree[mutation.position]:
+                        # Get index of mutation in concatenated sequence
+                        index = (mutation.position - mutation.region[0]) + concat_regions_d[mutation.region[0]].start
                         # Smooth mutations
                         interval.data[index: (index + len(tukey_filter))] += tukey_filter
                     mutations_in.append(mutation)
 
         # Remove extra bp
-        for interval in cds_tree:
+        for interval in concat_tree:
             begin = interval.begin
             end = interval.end
             slicer = (len(tukey_filter) -1) // 2
