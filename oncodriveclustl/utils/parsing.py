@@ -122,13 +122,14 @@ def read_mutations(input_mutations, trees, is_pancancer):
             samples_d[sample] += 1
             # Read substitutions only
             if len(ref) == 1 and len(alt) == 1:
-                if ref != '-' and alt != '-':
-                    if trees[chromosome][int(position)] != set():
-                        results = trees[chromosome][int(position)]
-                        for res in results:
-                            m = Mutation(position, (res.begin, res.end), alt, sample, cancer_type)
-                            mutations_d[res.data].append(m)
-                            cohorts_d[res.data].add(cancer_type)
+                if ref != alt:
+                    if ref != '-' and alt != '-':
+                        if trees[chromosome][int(position)] != set():
+                            results = trees[chromosome][int(position)]
+                            for res in results:
+                                m = Mutation(position, (res.begin, res.end), alt, sample, cancer_type)
+                                mutations_d[res.data].append(m)
+                                cohorts_d[res.data].add(cancer_type)
 
     return mutations_d, samples_d, cohorts_d
 

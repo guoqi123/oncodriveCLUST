@@ -91,8 +91,9 @@ class Signature:
             None
         """
         parser = Parser()
-
         read_function, mode, delimiter, _ = prep.check_tabular_csv(mutations_file)
+        half_kmer = self.kmer//2
+
 
         with read_function(mutations_file, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)
@@ -108,34 +109,29 @@ class Signature:
                     cancer_type = 'COHORT'
                 # Read substitutions only
                 if len(ref) == 1 and len(alt) == 1:
-                    if ref != '-' and alt != '-':
-                        if self.kmer == 3:
-                            signature_ref = bg.refseq(self.genome, chromosome,  position - 1, 3).upper()
+                    if ref != alt:
+                        if ref != '-' and alt != '-':
+                            signature_ref = bg.refseq(self.genome, chromosome,  position - half_kmer, self.kmer).upper()
+                            signature_alt = ''.join([signature_ref[0:half_kmer], alt, signature_ref[(half_kmer + 1):]])
                             # Check reference nucleotide in mutations file equals reference genome nucleotide
-                            if signature_ref[1] != ref:
-                                logger.warning('Input REF nucleotide {} in position {} is not equal to '
-                                               'reference genome {} REF nucleotide {}'.format(
-                                                    ref, position, self.genome, signature_ref[1]))
-                            signature_alt = ''.join([signature_ref[0], alt, signature_ref[-1]])
-                        else:
-                            signature_ref = bg.refseq(self.genome, chromosome,  position - 2, 5).upper()
-                            signature_alt = ''.join(
-                                [signature_ref[0], signature_ref[1], alt, signature_ref[-2], signature_ref[-1]]
-                            )
-                        # Control for N nucleotides
-                        n_ref = signature_ref.count('N')
-                        n_alt = signature_alt.count('N')
-                        if n_ref == 0 and n_alt == 0:
-                            try:
-                                self.signatures[cancer_type]['counts'][(signature_ref, signature_alt)] += 1
-                                count += 1
-                            except KeyError as e:
-                                print(signature_ref, signature_alt)
-                                print(self.signatures[cancer_type]['counts'][('TCA', 'TGC')])
-                                quit()
-                                logger.error('{} not found in dictionary of mutations. Mutation is not taken '
-                                             'into account for signatures calculation'.format(
-                                                e, signature_ref, signature_alt))
+                            if signature_ref[half_kmer] == ref:
+                                n_ref = signature_ref.count('N')
+                                n_alt = signature_alt.count('N')
+                                # Control that no N nucleotides in ref or alt kmers
+                                if n_ref == 0 and n_alt == 0:
+                                    self.signatures[cancer_type]['counts'][(signature_ref, signature_alt)] += 1
+                                    count += 1
+                                else:
+                                    logger.warning('`{}{}>{}` kmer contains `N` in {} reference sequence `{}`.\n '
+                                                   'Mutation is skipped for signatures calculation'.format(
+                                                    position, ref, alt, self.genome, signature_ref
+                                                    ))
+                            else:
+                                logger.warning('Input REF nucleotide `{}` in position {} is not equal to '
+                                               'reference genome {} REF nucleotide `{}` '
+                                               'Mutation is skipped for signatures calculation'.format(
+                                                ref, position, self.genome, signature_ref[half_kmer]
+                                                ))
         # Calculate probabilities
         for cohort, values in self.signatures.items():
             try:
