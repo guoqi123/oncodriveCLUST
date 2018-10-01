@@ -14,7 +14,7 @@ def find_locals(smooth_tree, concat_regions_d):
     Find local maximum and minimum of a smoothing curve
 
     Args:
-        smooth_tree (IntervalTree): Interval are genomic regions or cds, data np.array of smoothing score by position.
+        smooth_tree (IntervalTree): Interval are genomic regions, data np.array of smoothing score by position.
         concat_regions_d (dict): keys are start genomic regions, values are positions (index) relative to the start
 
     Returns:

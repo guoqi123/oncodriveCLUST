@@ -3,7 +3,6 @@ Contains functions to write OncodriveCLUSTL's results
 """
 import os
 import logging
-from intervaltree import IntervalTree
 
 import numpy as np
 import pandas as pd
