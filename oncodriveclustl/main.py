@@ -92,7 +92,7 @@ def main(input_file,
          pancancer,
          plot,
          gzip
-     ):
+         ):
     """
     OncodriveCLUSTL is a sequence based clustering method to identify cancer drivers across the genome
 
@@ -280,8 +280,7 @@ def main(input_file,
         if not element_mutations_cutoff:
             if len(v) >= element_mutations:
                 element_mutations_cutoff = True
-    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())
-    ))
+    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
     logger.info('Validated elements with mutations: {}'.format(elem))
     logger.info('Total substitution mutations: {}'.format(mut))
     if not element_mutations_cutoff:

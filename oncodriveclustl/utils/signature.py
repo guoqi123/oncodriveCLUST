@@ -59,7 +59,7 @@ class Signature:
             kmer_nucleotide = ''.join(permutation)
             for alt in set(nucleotides).difference(kmer_nucleotide[half_kmer]):
                 results.add(
-                    (kmer_nucleotide, ''.join([kmer_nucleotide[0:half_kmer], alt, kmer_nucleotide[half_kmer + 1: ]]))
+                    (kmer_nucleotide, ''.join([kmer_nucleotide[0:half_kmer], alt, kmer_nucleotide[half_kmer + 1:]]))
                 )
 
         return {key: 0 for key in results}
@@ -93,7 +93,6 @@ class Signature:
         parser = Parser()
         read_function, mode, delimiter, _ = prep.check_tabular_csv(mutations_file)
         half_kmer = self.kmer//2
-
 
         with read_function(mutations_file, mode) as read_file:
             fd = csv.DictReader(read_file, delimiter=delimiter)

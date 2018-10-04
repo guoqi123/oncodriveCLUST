@@ -73,7 +73,7 @@ def plot(element, strand, smoothing, mutations, length, filter_clusters_tree):
     for maxima in plot_max3:
         ax1.plot(maxima, 0.45, '.', ms=10, c='darkblue')
     for cluster in plot_clusters3:
-        ax1.plot((cluster[0], cluster[1]), (0.45, 0.45), c='darkblue')
+        ax1.plot((cluster[0], cluster[1]), (0.45, 0.45), c='green')
 
     ax1.set_axisbelow(True)
     ax1.grid(color='lightgrey', linestyle='--', linewidth=1)

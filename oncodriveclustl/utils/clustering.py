@@ -252,7 +252,6 @@ def trim(clusters_tree, concat_regions_d):
     for interval in clusters_tree:
         clusters = interval.data.copy()
         for cluster, values in clusters.items():
-
             # Find new margins
             mutation_left = min(values['mutations'], key=lambda x: x.position)
             mutation_right = max(values['mutations'], key=lambda x: x.position)
@@ -274,7 +273,7 @@ def trim(clusters_tree, concat_regions_d):
 
         trim_clusters_tree.addi(interval[0], interval[1], clusters)
 
-        return trim_clusters_tree
+    return trim_clusters_tree
 
 
 def score(clusters_tree, regions, mutations_element):
