@@ -12,14 +12,12 @@ import daiquiri
 from intervaltree import IntervalTree
 from tqdm import tqdm
 import numpy as np
-import bgdata as bgd
 import bgreference as bgr
 
 from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
 from oncodriveclustl.utils import score
 from oncodriveclustl.utils import analyticalpval as ap
-from oncodriveclustl.utils import plots as plot
 
 
 # Logger
@@ -116,7 +114,7 @@ class Experiment:
         # Read CGC
         if self.genome == 'hg19':
             # TODO Remove this hardcoded file
-            with open(os.path.join(os.path.dirname(__file__), '../data/CGCMay17_cancer_types_TCGA.tsv'), 'r') as fd:
+            with open(os.path.join(os.path.dirname(__file__), '../data/CGC_all_Oct15_10_29_09_2018.tsv'), 'r') as fd:
                 self.cgc_genes = set([line.split('\t')[0] for line in fd])
         else:
             self.cgc_genes = set()
@@ -200,7 +198,7 @@ class Experiment:
             sequence = ''
             for interval in self.regions_d[element]:
                 probabilities = defaultdict(list)
-                expected_length = (interval[1] - interval[0] + self.simulation_window - correction)
+                expected_length = interval[1] - interval[0] + self.simulation_window - correction
                 start = interval[0] - (self.simulation_window // 2) - delta
                 size = interval[1] - interval[0] + (self.simulation_window - correction) + delta*2
                 try:
@@ -252,7 +250,7 @@ class Experiment:
 
         return probs_tree, skip
 
-    def analysis(self, element, mutations, analysis_mode='sim'):
+    def analysis(self, element, mutations, analysis_mode='sim', is_plot=False):
         """
         Run clustering analysis for observed or simulated mutations of an element
 
@@ -260,6 +258,7 @@ class Experiment:
             element (str): element of analysis.
             mutations (list): list of mutations of an element
             analysis_mode (str): observed or simulated; default simulated
+            is_plot (bool): True returns smoothing array
 
         Returns:
             score_clusters_tree (IntervalTree): IntervalTree with scored clusters
@@ -283,9 +282,8 @@ class Experiment:
         element_score = score.element_score(score_clusters_tree, analysis_mode)
         logger.debug('Element score calculated')
 
-        if self.is_plot:
-            logger.info('Generating plot: {}'.format(element))
-            return smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score
+        if is_plot:
+            return smooth_tree
         else:
             return score_clusters_tree, element_score
 
@@ -420,10 +418,12 @@ class Experiment:
         Returns:
             length (int): length of an element (bp or aa)
         """
-        length_ele = 0
+        length = 0
 
-        for interval in self.regions_d[element]:
-            length_ele += (interval[1] - interval[0])
+        for region in self.regions_d[element]:
+            length += region[1] - region[0]
+
+        return length
 
     def post_process(self, items):
         """
@@ -519,12 +519,23 @@ class Experiment:
                 n_clusters = n_clusters_sim = obs_score = mut_in_clusters = float('nan')
                 empirical_pvalue = analytical_pvalue = top_cluster_pvalue = float('nan')
 
+            if not self.is_plot:
+                mutations = []
+                smooth_tree = {}
+                probs_tree = {}
+            else:
+                # Plot
+                mutations = self.mutations_d[element]
+                smooth_tree = self.analysis(element, self.mutations_d[element], analysis_mode='obs', is_plot=True)
+                probs_tree, _ = self.mut_probabilities(element)
+
             results.append((
                 element,
-                (self.chromosomes_d[element], self.strands_d[element], element_length, len(self.mutations_d[element]),
-                 mut_in_clusters, n_clusters, n_clusters_sim, obs_score,
-                 empirical_pvalue, analytical_pvalue, top_cluster_pvalue, cgc),
-                (obs_clusters, self.chromosomes_d[element], self.strands_d[element], element_length, cgc)
+                (len(self.mutations_d[element]), mut_in_clusters, n_clusters, n_clusters_sim, obs_score,
+                 empirical_pvalue, analytical_pvalue, top_cluster_pvalue),
+                (obs_clusters, smooth_tree, probs_tree),
+                (self.regions_d[element], self.chromosomes_d[element], self.strands_d[element],
+                 mutations, element_length, cgc)
             ))
 
         return results
@@ -536,9 +547,11 @@ class Experiment:
         Returns:
             elements_results (dict): dict of dict, results of elements analysis
             clusters_results (dict): dict of dict, results of clusters analysis
+            global_info_results (dict): dict of dict, extra information needed to write/plot results
         """
         elements_results = defaultdict()
         clusters_results = defaultdict()
+        global_info_results = defaultdict()
 
         # Filter elements >= cutoff mutations
         analyzed_elements = []
@@ -550,17 +563,6 @@ class Experiment:
                 belowcutoff_elements.append(elem)
         logger.info('Calculating results {} element{}...'.format(len(analyzed_elements),
                     's' if len(analyzed_elements) > 1 else ''))
-        # Plot
-        if self.is_plot:
-            for element in analyzed_elements:
-                smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score = \
-                    self.analysis(element, self.mutations_d[element], analysis_mode='obs')
-                plot.run_plot(element, self.mutations_d[element], self.concat_regions_d[element],
-                              self.strands_d[element], self.chromosomes_d[element], self.smooth_window,
-                              smooth_tree, raw_clusters_tree, merge_clusters_tree, score_clusters_tree, element_score)
-                logger.info('Plots calculated: {}'.format(element))
-            logger.info('Finished')
-            quit()
 
         # Performance tunning
         pf_num_elements = 100
@@ -635,11 +637,12 @@ class Experiment:
                 total_items_split.append(post_item_nan)
                 for results in tqdm(executor.map(
                         self.post_process, total_items_split), total=self.cores, desc="post processing".rjust(30)):
-                    for e, er, cr in results:
-                        elements_results[e] = er
-                        clusters_results[e] = cr
+                    for element, elem_res, clust_res, info in results:
+                        elements_results[element] = elem_res
+                        clusters_results[element] = clust_res
+                        global_info_results[element] = info
 
-        return elements_results, clusters_results
+        return elements_results, clusters_results, global_info_results
 
 
 def partitions_list(total_size, chunk_size):

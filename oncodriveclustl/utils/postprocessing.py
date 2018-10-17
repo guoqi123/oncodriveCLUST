@@ -41,7 +41,7 @@ def write_element_results(genome, results, directory, file, is_gzip):
 
     Args:
         genome (str): reference genome
-        results (dict): dictionary of results, keys are element's symbols
+        results (tuple): tuple containing two dictionaries with results, keys are element's symbols
         directory (str): path to output directory
         file (str): output file name
         is_gzip (bool): True generates gzip compressed output file
@@ -52,6 +52,7 @@ def write_element_results(genome, results, directory, file, is_gzip):
     """
 
     file = os.path.join(directory, file)
+    elements_results, info = results
 
     global logger
     logger = daiquiri.getLogger()
@@ -71,12 +72,13 @@ def write_element_results(genome, results, directory, file, is_gzip):
               'P_TOPCLUSTER',
               'CGC']
 
-    df = pd.DataFrame(columns=header, index=[i for i in range(len(results))])
+    df = pd.DataFrame(columns=header, index=[i for i in range(len(elements_results))])
 
     i = 0
-    for element, values in results.items():
+    for element in elements_results.keys():
         sym, identif = element.split('//')
-        chrom, strand, length, muts, muts_in_clu, obs_clu, sim_clu, obs_score, epval, apval, topcpval, cgc = values
+        _, chrom, strand, _, length, cgc = info[element]
+        muts, muts_in_clu, obs_clu, sim_clu, obs_score, epval, apval, topcpval = elements_results[element]
         obs_score = round(obs_score, 4)
         if genome != 'hg19':
             cgc = 'Non Available'
@@ -147,16 +149,15 @@ def write_element_results(genome, results, directory, file, is_gzip):
     return sorted_list_elements
 
 
-def write_cluster_results(genome, results, directory, file, sorter, regions_d, is_gzip):
+def write_cluster_results(genome, results, directory, file, sorter, is_gzip):
     """Save clusters results to the output file. Order according to elements' ranking
 
     Args:
         genome (str): reference genome
-        results (dict): dictionary of results, keys are element's symbols
+        results (tuple): tuple containing two dictionaries of results, keys are element's symbols
         directory (str): path to output directory
         file (str): output file name
         sorter (list): element symbols ranked by elements p-value to rank clusters
-        regions_d (dict): dictionary of IntervalTrees containing genomic regions from all analyzed elements
         is_gzip (bool): True generates gzip compressed output file
 
     Returns:
@@ -165,6 +166,7 @@ def write_cluster_results(genome, results, directory, file, sorter, regions_d, i
     """
     sorter_index = dict(zip(sorter, range(len(sorter))))
     file = os.path.join(directory, file)
+    clusters_results, info = results
 
     header = ['RANK',
               'SYMBOL',
@@ -183,10 +185,10 @@ def write_cluster_results(genome, results, directory, file, sorter, regions_d, i
 
     with open(file, 'w') as fd:
         fd.write('{}\n'.format('\t'.join(header)))
-        for element, values in results.items():
+        for element in clusters_results.keys():
             sym, identif = element.split('//')
-            clustersinfo, chrom, strand, length, cgc = values
-            regions = regions_d[element]
+            regions, chrom, strand, _, length, cgc = info[element]
+            clustersinfo, _, _ = clusters_results[element]
             if genome != 'hg19':
                 cgc = 'Non Available'
             if type(clustersinfo) != float:

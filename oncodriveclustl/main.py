@@ -14,6 +14,8 @@ from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import run as exp
 from oncodriveclustl.utils import preprocessing as prep
 from oncodriveclustl.utils import postprocessing as postp
+from oncodriveclustl.utils import cluster_plots as cplot
+
 
 # Global variables
 LOGS = {
@@ -44,9 +46,9 @@ LOGS = {
               help='Cutoff of element mutations. Default is 2')
 @click.option('-cmut', '--cluster-mutations', type=click.INT, default=2,
               help='Cutoff of cluster mutations. Default is 2')
-@click.option('-sw', '--smooth-window', type=click.INT, default=30,
+@click.option('-sw', '--smooth-window', type=click.INT, default=30,  # TODO add min and max values
               help='Smoothing window. Default is 30')
-@click.option('-cw', '--cluster-window', type=click.INT, default=30,
+@click.option('-cw', '--cluster-window', type=click.INT, default=30, # TODO add min and max values
               help='Cluster window. Default is 30')
 @click.option('-cs', '--cluster-score', default='cmutcorrected', help='Cluster score formula',
               type=click.Choice(['cmutcorrected']))
@@ -58,7 +60,7 @@ LOGS = {
               help='number of simulations. Default is 10000')
 @click.option('-sim', '--simulation-mode', default='mutation_centered', help='Simulation mode',
               type=click.Choice(['mutation_centered', 'region_restricted']))
-@click.option('-simw', '--simulation-window', type=click.INT, default=45,
+@click.option('-simw', '--simulation-window', type=click.INT, default=45, # TODO add min and max values
               help='Simulation window. Default is 45')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
               help='Number of cores to use in the computation. By default it uses all the available cores.')
@@ -110,8 +112,8 @@ def main(input_file,
         cluster_mutations (int): minimum number of mutations to define a cluster
         smooth_window (int): Tukey kernel smoothing window length
         cluster_window (int): clustering window length
-        cluster_score (str): cluster score method
-        element_score (str): element score method
+        cluster_score (str): cluster score method  # FIXME only one score available, remove?
+        element_score (str): element score method  # FIXME only one score available, remove?
         kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or pentanucleotides)
         n_simulations (int): number of simulations
         simulation_mode (str): simulation mode
@@ -120,7 +122,7 @@ def main(input_file,
         log_level (str): verbosity of the logger
         concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
         pancancer (bool): flag to compute PanCancer cohort analysis
-        plot (bool): flag to generate a clustering plot for an element
+        plot (bool): flag to generate a cluster plot for an element
         gzip (bool): flag to generate GZIP compressed output files
 
     Returns:
@@ -172,10 +174,14 @@ def main(input_file,
         'n_simulations: {}'.format(n_simulations),
         'cores: {}'.format(cores),
         'gzip: {}'.format(gzip),
-        'pancancer: {}'.format(pancancer),
-        ''
+        'pancancer: {}'.format(pancancer)
     ]))
     logger.info('Initializing OncodriveCLUSTL...')
+
+    if simulation_window == 45 and smooth_window == 30 and cluster_window == 30:
+        logger.warning('Running with default simulating, smoothing and clustering OncodriveCLUSTL parameters')
+        logger.warning('Default parameters may not be optimal for your data')
+        logger.warning('Please, read methods for a better fine-tuned results')
 
     # Check parameters
     if n_simulations < 1000:
@@ -184,9 +190,7 @@ def main(input_file,
     # If --plot, only one element is analyzed
     if plot:
         if len(elements) != 1:
-            raise excep.UserInputError('Plot can only be calculated for one element')
-        if not concatenate:
-            raise excep.UserInputError('Plots are only available for analysis mode "--concatenate"')
+            raise excep.UserInputError('A plot can only be generated for one element')
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -200,6 +204,30 @@ def main(input_file,
             'Input element{}: {}'.format('s' if len(elements) > 1 else '', len(elements))
         )
         logger.info(', '.join(elements))
+
+    # Parse regions and dataset mutations
+    logger.info('Parsing genomic regions and mutations...')
+    regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
+        regions_file,
+        elements,
+        input_file,
+        concatenate,
+        pancancer,
+    )
+    mut = 0
+    elem = 0
+    element_mutations_cutoff = False
+    for k, v in mutations_d.items():
+        mut += len(v)
+        elem += 1
+        if not element_mutations_cutoff:
+            if len(v) >= element_mutations:
+                element_mutations_cutoff = True
+    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
+    logger.info('Validated elements with mutations: {}'.format(elem))
+    logger.info('Total substitution mutations: {}'.format(mut))
+    if not element_mutations_cutoff:
+        raise excep.UserInputError('No element found with enough mutations to perform analysis')
 
     # Check format input file and calculate signature
     if not input_signature:
@@ -262,73 +290,56 @@ def main(input_file,
                                        'in the mutations input file, according to "CANCER_TYPE" column.')
         logger.info('Input signatures loaded')
 
-    # Parse regions and dataset mutations
-    logger.info('Parsing genomic regions and mutations...')
-    regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
-        regions_file,
-        elements,
-        input_file,
-        concatenate,
-        pancancer,
-    )
-    mut = 0
-    elem = 0
-    element_mutations_cutoff = False
-    for k, v in mutations_d.items():
-        mut += len(v)
-        elem += 1
-        if not element_mutations_cutoff:
-            if len(v) >= element_mutations:
-                element_mutations_cutoff = True
-    logger.info('Validated elements in genomic regions: {}'.format(len(regions_d.keys())))
-    logger.info('Validated elements with mutations: {}'.format(elem))
-    logger.info('Total substitution mutations: {}'.format(mut))
-    if not element_mutations_cutoff:
-        raise excep.UserInputError('No element found with enough mutations to perform analysis')
-
     # Initialize Experiment class variables and run
-    elements_results, clusters_results = exp.Experiment(
-        regions_d,
-        concat_regions_d,
-        chromosomes_d,
-        strands_d,
-        mutations_d,
-        samples_d,
-        genome,
-        cohorts_d,
-        path_cache,
-        element_mutations,
-        cluster_mutations,
-        smooth_window,
-        cluster_window,
-        cluster_score,
-        element_score,
-        int(kmer),
-        n_simulations,
-        simulation_mode,
-        simulation_window,
-        cores,
-        plot
-    ).run()
+    elements_results, clusters_results, global_info_results = exp.Experiment(
+                                                                            regions_d,
+                                                                            concat_regions_d,
+                                                                            chromosomes_d,
+                                                                            strands_d,
+                                                                            mutations_d,
+                                                                            samples_d,
+                                                                            genome,
+                                                                            cohorts_d,
+                                                                            path_cache,
+                                                                            element_mutations,
+                                                                            cluster_mutations,
+                                                                            smooth_window,
+                                                                            cluster_window,
+                                                                            cluster_score,
+                                                                            element_score,
+                                                                            int(kmer),
+                                                                            n_simulations,
+                                                                            simulation_mode,
+                                                                            simulation_window,
+                                                                            cores,
+                                                                            plot
+                                                                            ).run()
 
     # Write elements results (returns list of ranked elements)
     sorted_list_elements = postp.write_element_results(genome=genome,
-                                                       results=elements_results,
+                                                       results=(elements_results, global_info_results),
                                                        directory=output_directory,
                                                        file=elements_output_file,
-                                                       is_gzip=gzip)
+                                                       is_gzip=gzip
+                                                       )
     logger.info('Elements results calculated')
 
     # Write clusters results
     postp.write_cluster_results(genome=genome,
-                                results=clusters_results,
+                                results=(clusters_results, global_info_results),
                                 directory=output_directory,
                                 file=clusters_output_file,
                                 sorter=sorted_list_elements,
-                                regions_d = regions_d,
-                                is_gzip=gzip)
-
+                                is_gzip=gzip
+                                )
     logger.info('Clusters results calculated')
+
+    # Plot
+    # if plot:
+    #     cplot.run(results=(elements_results, clusters_results, global_info_results),
+    #                    directory=output_directory)
+    #logger.info('Plot generated')
+
     logger.info('Finished')
 
 

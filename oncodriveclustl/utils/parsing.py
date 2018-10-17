@@ -9,9 +9,6 @@ from collections import namedtuple
 
 import daiquiri
 from intervaltree import IntervalTree
-import bgreference as bg
-import bgdata as bgd
-import pickle
 
 from oncodriveclustl.utils import exceptions as excep
 from oncodriveclustl.utils import preprocessing as prep
