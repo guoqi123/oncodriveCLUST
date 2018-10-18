@@ -335,10 +335,10 @@ def main(input_file,
     logger.info('Clusters results calculated')
 
     # Plot
-    # if plot:
-    #     cplot.run(results=(elements_results, clusters_results, global_info_results),
-    #                    directory=output_directory)
-    #logger.info('Plot generated')
+    if plot:
+        cplot.make_plot(elements_results, clusters_results, global_info_results,
+                  directory=output_directory)
+    logger.info('Plot generated')
 
     logger.info('Finished')
 
