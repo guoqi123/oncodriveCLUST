@@ -19,7 +19,7 @@ logs = {
 }
 
 
-def mtc(p_value, alpha=0.05):
+def mtc(p_value, alpha=0.1):
     """
     Adjust p-valus by multiple test correction using false discovery rate (FDR) Benjamini–Hochberg method
 
