@@ -56,7 +56,7 @@ def concat_smooth(smooth_tree, strand):
     """
 
     smooth = []
-    for region in smooth_tree:
+    for region in sorted(smooth_tree):
         smooth.extend(region.data)
     if strand == '-':
         smooth = smooth[::-1]

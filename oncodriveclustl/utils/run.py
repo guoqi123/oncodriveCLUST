@@ -77,7 +77,7 @@ class Experiment:
             simulation_mode (str): simulation mode
             simulation_window (int): window length to simulate mutations
             cores (int): number of CPUs to use
-            is_plot (bool): True generates a clustering plot for an element
+            is_plot (bool): True generates extra data to build the cluster plot of an element
 
         Returns:
             None
