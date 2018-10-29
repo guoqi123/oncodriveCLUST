@@ -1,23 +1,26 @@
 """
 Contains the command line parsing
 """
+
+# Import modules
+import csv
 import logging
 import os
-import csv
 
 import click
 import daiquiri
 
-from oncodriveclustl.utils import exceptions as excep
-from oncodriveclustl.utils import signature as sign
-from oncodriveclustl.utils import parsing as pars
-from oncodriveclustl.utils import run as exp
-from oncodriveclustl.utils import preprocessing as prep
-from oncodriveclustl.utils import postprocessing as postp
 from oncodriveclustl.utils import cluster_plots as cplot
+from oncodriveclustl.utils import exceptions as excep
+from oncodriveclustl.utils import parsing as pars
+from oncodriveclustl.utils import postprocessing as postp
+from oncodriveclustl.utils import preprocessing as prep
+from oncodriveclustl.utils import run as exp
+from oncodriveclustl.utils import signature as sign
 
 
 # Global variables
+CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 LOGS = {
     'debug': logging.DEBUG,
     'info': logging.INFO,
@@ -27,7 +30,7 @@ LOGS = {
 }
 
 
-@click.command()
+@click.command(context_settings=CONTEXT_SETTINGS)
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
 @click.option('-r', '--regions-file', default=None, required=True, type=click.Path(exists=True),
@@ -130,6 +133,8 @@ def main(input_file,
 
     """
 
+    global logger
+
     # Get output directory
     if not os.path.exists(output_directory):
         os.makedirs(output_directory, exist_ok=True)
@@ -148,9 +153,11 @@ def main(input_file,
 
     daiquiri.setup(level=LOGS[log_level], outputs=(
         daiquiri.output.STDERR,
-        daiquiri.output.File(filename=output_file+'.log', directory=output_directory)
+        daiquiri.output.File(
+            filename=output_file + '.log',
+            directory=output_directory
+        )
     ))
-    global logger
     logger = daiquiri.getLogger()
 
     logger.info('OncodriveCLUSTL')
@@ -185,7 +192,7 @@ def main(input_file,
 
     # Check parameters
     if n_simulations < 1000:
-        raise excep.UserInputError('Invalid number of simulations: please choose integer greater than 1000')
+        raise excep.UserInputError('Invalid number of simulations: please choose an integer greater than 1000')
 
     # If --plot, only one element is analyzed
     if plot:
@@ -252,6 +259,7 @@ def main(input_file,
                         len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) > 1 else ''
                     )
                 )
+
                 # Check if signatures computed
                 for cohort in cohorts_of_analysis:
                     path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer))
@@ -259,6 +267,7 @@ def main(input_file,
                         pancancer_pickles += 1
                 if len(cohorts_of_analysis) == pancancer_pickles:
                     logger.info('Signatures computed')
+
                 # Calculate signatures
                 else:
                     logger.info('Computing signatures...')
