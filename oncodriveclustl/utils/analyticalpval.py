@@ -8,6 +8,10 @@ from scipy.stats import gaussian_kde
 from sklearn.neighbors import KernelDensity
 from sklearn.model_selection import GridSearchCV
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 
 class AnalyticalPvalue:
     """Class to calculate the analytical pvalue of elements"""
@@ -21,6 +25,7 @@ class AnalyticalPvalue:
         Returns:
             None
         """
+
         self.jobs = jobs
         self.gkde = None
         self.bandwidth = None
@@ -34,6 +39,7 @@ class AnalyticalPvalue:
         Returns:
             float, best bandwidth estimator
         """
+
         # parameters of the fitting
         params = {
             'bandwidth': np.logspace(-1, 0, 10),
@@ -56,6 +62,7 @@ class AnalyticalPvalue:
         Returns:
             float, pvalue > 0
         """
+
         if pvals is None:
             pvals = []
         calls += 1
@@ -80,6 +87,7 @@ class AnalyticalPvalue:
             None
 
         """
+
         # Add a pseudocount to get rid of LinAlgError("singular matrix")
         if sum(expected) == 0:
             expected = np.array([0] * 999 + [pseudocount])
@@ -103,6 +111,7 @@ class AnalyticalPvalue:
             float, analytical pvalue
 
         """
+
         analytical_pvalue = self.gkde.integrate_box_1d(observed, float('inf'))
         if analytical_pvalue == 0:
             analytical_pvalue = self._get_min_analytical_pvalue(up=observed, down=0)
@@ -117,5 +126,6 @@ class AnalyticalPvalue:
         Returns:
             analytical_pvalue (float): analytical pvalue
         """
+
         analytical_pvalue = self._calculate_analytical_pvalue(observed)
         return analytical_pvalue
