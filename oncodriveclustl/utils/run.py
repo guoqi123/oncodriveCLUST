@@ -115,6 +115,7 @@ class Experiment:
         if self.genome == 'hg19':
             # TODO Remove this hardcoded file
             with open(os.path.join(os.path.dirname(__file__), '../data/CGC_all_Oct15_10_29_09_2018.tsv'), 'r') as fd:
+                next(fd)
                 self.cgc_genes = set([line.split('\t')[0] for line in fd])
         else:
             self.cgc_genes = set()
