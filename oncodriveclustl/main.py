@@ -10,11 +10,12 @@ import os
 import click
 import daiquiri
 
-from oncodriveclustl.utils import cluster_plots as cplot
+from oncodriveclustl.utils import cluster_plot as cplot
 from oncodriveclustl.utils import exceptions as excep
 from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import postprocessing as postp
 from oncodriveclustl.utils import preprocessing as prep
+from oncodriveclustl.utils import qq_plot as qplot
 from oncodriveclustl.utils import run as exp
 from oncodriveclustl.utils import signature as sign
 
@@ -72,8 +73,9 @@ LOGS = {
 @click.option('--concatenate', is_flag=True, help='Calculate clustering on concatenated genomic regions (e.g., exons '
                                                   'in coding sequences)')
 @click.option('--pancancer', is_flag=True, help='PanCancer cohort analysis')
+@click.option('--clustplot', is_flag=True, help='Generate a needle plot with clusters for an element')
+@click.option('--qqplot', is_flag=True, help='Generate a quantile-quantile (QQ) plot for a dataset')
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
-@click.option('--plot', is_flag=True, help='Generate a clustering plot for an element')
 def main(input_file,
          regions_file,
          output_directory,
@@ -95,7 +97,8 @@ def main(input_file,
          log_level,
          concatenate,
          pancancer,
-         plot,
+         clustplot,
+         qqplot,
          gzip
          ):
     """
@@ -125,7 +128,8 @@ def main(input_file,
         log_level (str): verbosity of the logger
         concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
         pancancer (bool): flag to compute PanCancer cohort analysis
-        plot (bool): flag to generate a cluster plot for an element
+        clustplot (bool): flag to generate a needle plot with clusters for an element
+        qqplot (bool): flat to generate a quantile-quantile (QQ) plot for a dataset
         gzip (bool): flag to generate GZIP compressed output files
 
     Returns:
@@ -194,10 +198,10 @@ def main(input_file,
     if n_simulations < 1000:
         raise excep.UserInputError('Invalid number of simulations: please choose an integer greater than 1000')
 
-    # If --plot, only one element is analyzed
-    if plot:
-        if len(elements) != 1:
-            raise excep.UserInputError('A plot can only be generated for one element')
+    # If --clustplot, only one element is analyzed
+    if clustplot:
+        if len(elements) > 10:
+            raise excep.UserInputError('Needle plots can only be generated for a maximum of 10 elements')
 
     # Create a list of elements to analyze
     if elements is not None:
@@ -321,7 +325,7 @@ def main(input_file,
                                                                             simulation_mode,
                                                                             simulation_window,
                                                                             cores,
-                                                                            plot
+                                                                            clustplot
                                                                             ).run()
 
     # Write elements results (returns list of ranked elements)
@@ -343,11 +347,29 @@ def main(input_file,
                                 )
     logger.info('Clusters results calculated')
 
-    # Plot
-    if plot:
-        cplot.make_plot(elements_results, clusters_results, global_info_results,
-                  directory=output_directory)
-        logger.info('Plot generated')
+    # Cluster plot
+    if clustplot:
+        cplot.make_clustplot(elements_results,
+                        clusters_results,
+                        global_info_results,
+                        directory=output_directory
+                        )
+        logger.info('Cluster plot{} generated at : {}'.format('s' if len(elements) > 1 else '',
+                                                              output_directory)
+                    )
+
+    # Quantile-quantile plot
+    if qqplot:
+        if len(elements) < 30:
+            logger.warning('QQ-plot generated for less than 30 elements')
+        input_qqplot_file = os.path.join(output_directory, elements_output_file)
+        output_qqplot_file = os.path.join(output_directory, 'quantile_quantile_plot.png')
+        qplot.make_qqplot(file=input_qqplot_file,
+                          output=output_qqplot_file,
+                          col_values='P_ANALYTICAL',
+                          top=10
+                         )
+        logger.info('QQ-plot plot generated at : {}'.format(output_qqplot_file))
 
     logger.info('Finished')
 
