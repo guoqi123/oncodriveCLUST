@@ -350,13 +350,12 @@ def main(input_file,
     # Cluster plot
     if clustplot:
         cplot.make_clustplot(elements_results,
-                        clusters_results,
-                        global_info_results,
-                        directory=output_directory
-                        )
+                             clusters_results,
+                             global_info_results,
+                             directory=output_directory
+                            )
         logger.info('Cluster plot{} generated at : {}'.format('s' if len(elements) > 1 else '',
-                                                              output_directory)
-                    )
+                                                              output_directory))
 
     # Quantile-quantile plot
     if qqplot:
@@ -368,7 +367,7 @@ def main(input_file,
                           output=output_qqplot_file,
                           col_values='P_ANALYTICAL',
                           top=10
-                         )
+                          )
         logger.info('QQ-plot plot generated at : {}'.format(output_qqplot_file))
 
     logger.info('Finished')
