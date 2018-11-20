@@ -3,19 +3,16 @@ from oncodriveclustl import __version__, __author__, __author_email__, __descrip
 
 
 install_requires = [
-    'numpy',
-    'pandas',
-    'daiquiri',
-    'click',
     'intervaltree',
-    'bgdata',
-    'bgreference',
-    'tqdm',
+    'numpy',
     'scipy',
-    'scikit-learn',
+    'pandas',
     'statsmodels',
-    'matplotlib',
-    'seaborn'
+    'bgreference',
+    'click',
+    'daiquiri',
+    'tqdm',
+    'matplotlib'
 ]
 
 

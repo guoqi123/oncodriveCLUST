@@ -2,6 +2,7 @@
 Contains functions to generate a cluster plot
 """
 import os
+import math
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
@@ -127,8 +128,8 @@ def clusters_plot(element,
                   mutations_xcoords_number,
                   plot_cluster_xcoords,
                   output,
-                  fig_height=6,
-                  fig_width=12,
+                  fig_height=4,
+                  fig_width=8,
                   title=None
                   ):
     """
@@ -175,22 +176,24 @@ def clusters_plot(element,
         ax0.axvline(x=region_xcoord, color='grey', linestyle='--', linewidth=2, alpha=0.25)
 
     # Smoothing
-    ax0_2.plot(smooth, color='red', linewidth=2, solid_capstyle='butt', alpha=1)
+    ax0_2.plot(smooth, color='royalblue', linewidth=2, solid_capstyle='butt', alpha=0.75)
     ax0_2.get_yaxis().set_ticks([])
 
     # Mutations
     for xcoord, ycoord in mutations_xcoords_number.items():
         x = (xcoord, xcoord)
         y = (0, ycoord)
-        ax0.plot(x, y, color='grey', linewidth=2, alpha=0.75)
+        ax0.plot(x, y, color='black', linewidth=2, alpha=0.75)
     ax0.set_ylabel('Number of mutations', color='black', fontsize=16)
+    yint = range(0, math.ceil(max(mutations_xcoords_number.values())) + 1, 5)
+    ax0.get_yaxis().set_ticks(yint)
 
     if title:
         ax0.set_title(title, fontsize=16)
     else:
         ax0.set_title(element.split('//')[0], fontsize=16)
 
-    plt.annotate('Score: {}\np-value: {}'.format(round(score, 4), round(pvalue, 4)), xy=(1, 1), xytext=(12, -12),
+    plt.annotate('Score: {}\np-value: {:.2e}'.format(round(score, 4), pvalue), xy=(1, 1), xytext=(12, -12),
                  va='top', fontsize=12,
                  xycoords='axes fraction', textcoords='offset points',
                  bbox=dict(facecolor='none', edgecolor='grey', alpha=0.25, linewidth=2, boxstyle='round')
@@ -213,7 +216,7 @@ def clusters_plot(element,
     for index, cluster_xcoord in enumerate(plot_cluster_xcoords):
         index += 1
         if index % 2 and cluster_xcoord != plot_cluster_xcoords[-1]:
-            ax1.axvspan(xmin=cluster_xcoord, xmax=plot_cluster_xcoords[index], color='red', alpha=0.75, linewidth=0)
+            ax1.axvspan(xmin=cluster_xcoord, xmax=plot_cluster_xcoords[index], color='royalblue', alpha=0.75, linewidth=0)
 
     plt.savefig(output, bbox_inches='tight')
 

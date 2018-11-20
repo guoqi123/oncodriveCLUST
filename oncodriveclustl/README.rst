@@ -17,7 +17,7 @@ OncodriveCLUSTL will be available to the general public subject to certain condi
 Installation
 ------------
 
-OncodriveCLUSTL depends on Python 3.6 and some external libraries. First you need to downloadn and uncompress the oncodriveclustl-0.1.0.tar.gz file.
+OncodriveCLUSTL depends on Python 3.5 and some external libraries. First you need to downloadn and uncompress the oncodriveclustl-0.1.0.tar.gz file.
 Then you can install it with ``pip``::
 
         $ cd oncodriveclustl-0.1.0/
@@ -55,3 +55,9 @@ You can plot the observed clusters for a gene::
 
         $ oncodriveclustl -i example/BRCA.txt -r example/cds_regions.gz -o example/output_example --concatenate -e PIK3CA --plot
 
+
+To Do:
+------
+* License
+* Update examples in the readme
+* Remove unused options in the click

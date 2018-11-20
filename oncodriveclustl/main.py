@@ -338,7 +338,7 @@ def main(input_file,
     if plot:
         cplot.make_plot(elements_results, clusters_results, global_info_results,
                   directory=output_directory)
-    logger.info('Plot generated')
+        logger.info('Plot generated')
 
     logger.info('Finished')
 
