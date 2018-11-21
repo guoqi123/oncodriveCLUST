@@ -2,16 +2,16 @@
 Contains functions to generate a cluster plot
 """
 import os
+import math
 from collections import defaultdict
 
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 
 
-# TODO write Plot class
-
 def concat_regions_to_plot(element, regions, strand):
-    """Generate info to map regions into a concatenated sequence to plot
+    """
+    Generate info to map regions into a concatenated sequence to plot
 
     Args:
         element (str): element of analysis
@@ -45,7 +45,8 @@ def concat_regions_to_plot(element, regions, strand):
 
 
 def concat_smooth(smooth_tree, strand):
-    """Concatenate smoothing arrays for each genomic region to plot
+    """
+    Concatenate smoothing arrays for each genomic region to plot
 
     Args:
         smooth_tree (IntervalTree): intervaltree of smoothing in genomic regions for an element
@@ -65,7 +66,8 @@ def concat_smooth(smooth_tree, strand):
 
 
 def mutations_index(element, mutations, concat_regions_d, strand, length):
-    """Map mutations to concatenated sequence to plot
+    """
+    Map mutations to concatenated sequence to plot
 
     Args:
         element (str): element under analysis
@@ -120,23 +122,19 @@ def cluster_coords(element, clusters_tree, strand, length, concat_regions_d):
 
 
 def clusters_plot(element,
-                  score,
-                  pvalue,
                   plot_regions_xcoords,
                   smooth,
                   mutations_xcoords_number,
                   plot_cluster_xcoords,
                   output,
-                  fig_height=6,
-                  fig_width=12,
+                  fig_height=4,
+                  fig_width=8,
                   title=None
                   ):
     """
 
     Args:
         element (str): element under analysis
-        score (float): element score
-        pvalue (float): element p-value
         plot_regions_xcoords (list): list of indexes to plot corresponding to start/end of genomic sequences.
             Indexes are reversed for negative strand elements
         smooth (list): smoothing scores per position in an element. List is reversed for negative strand elements
@@ -166,6 +164,11 @@ def clusters_plot(element,
     ax0_2 = ax0.twinx()
     ax0.get_xaxis().set_visible(False)
 
+    if title:
+        ax0.set_title(title, fontsize=16)
+    else:
+        ax0.set_title(element.split('//')[0], fontsize=16)
+
     # Regions
     ax0.axhline(y=0, color='lightgrey', linestyle='--', linewidth=2)
     for index, region_xcoord in enumerate(plot_regions_xcoords):
@@ -175,31 +178,27 @@ def clusters_plot(element,
         ax0.axvline(x=region_xcoord, color='grey', linestyle='--', linewidth=2, alpha=0.25)
 
     # Smoothing
-    ax0_2.plot(smooth, color='red', linewidth=2, solid_capstyle='butt', alpha=1)
+    ax0_2.plot(smooth, color='#0571b0', linewidth=2, solid_capstyle='butt', alpha=0.75)
     ax0_2.get_yaxis().set_ticks([])
 
     # Mutations
     for xcoord, ycoord in mutations_xcoords_number.items():
         x = (xcoord, xcoord)
         y = (0, ycoord)
-        ax0.plot(x, y, color='grey', linewidth=2, alpha=0.75)
-    ax0.set_ylabel('Number of mutations', color='black', fontsize=16)
-
-    if title:
-        ax0.set_title(title, fontsize=16)
-    else:
-        ax0.set_title(element.split('//')[0], fontsize=16)
-
-    plt.annotate('Score: {}\np-value: {}'.format(round(score, 4), round(pvalue, 4)), xy=(1, 1), xytext=(12, -12),
-                 va='top', fontsize=12,
-                 xycoords='axes fraction', textcoords='offset points',
-                 bbox=dict(facecolor='none', edgecolor='grey', alpha=0.25, linewidth=2, boxstyle='round')
-                 )
+        ax0.plot(x, y, color='black', linewidth=2, alpha=0.75)
+    ax0.set_ylabel('# mutations', color='black', fontsize=16)
+    yint = range(0, math.ceil(max(mutations_xcoords_number.values())) + 1, 5)
+    ax0.get_yaxis().set_ticks(yint)
+    keys = list(map(lambda x: int(x), mutations_xcoords_number.keys()))
+    values = list(map(int, mutations_xcoords_number.values()))
+    print(keys, values)
+    ax0.plot(keys, values, linewidth=0, marker='o', markersize=4, color='black', alpha=1)
+    ax0.set_axisbelow(True)
 
     # Grid 2
     ax1 = plt.subplot(gs[1], sharex=ax0)
     ax1.get_xaxis().set_visible(False)
-    ax1.set_ylabel('Clusters', color='black', fontsize=12)
+    ax1.set_ylabel('Clusters', color='black', fontsize=10)
     ax1.get_yaxis().set_ticks([])
 
     # Regions
@@ -213,12 +212,13 @@ def clusters_plot(element,
     for index, cluster_xcoord in enumerate(plot_cluster_xcoords):
         index += 1
         if index % 2 and cluster_xcoord != plot_cluster_xcoords[-1]:
-            ax1.axvspan(xmin=cluster_xcoord, xmax=plot_cluster_xcoords[index], color='red', alpha=0.75, linewidth=0)
+            ax1.axvspan(xmin=cluster_xcoord, xmax=plot_cluster_xcoords[index],
+                        color='#0571b0', alpha=0.75, linewidth=0)
 
     plt.savefig(output, bbox_inches='tight')
 
 
-def make_plot(elements_results, clusters_results, global_info_results, directory):
+def make_clustplot(elements_results, clusters_results, global_info_results, directory):
     """
 
     Args:
@@ -247,11 +247,9 @@ def make_plot(elements_results, clusters_results, global_info_results, directory
         output = os.path.join(directory, '{}_plot.png'.format(element.split('//')[0]))
 
         clusters_plot(element,
-                      score,
-                      pvalue,
                       plot_regions_xcoords,
                       smooth,
                       mutations_xcoords_number,
                       plot_cluster_xcoords,
-                      output
+                      output,
                       )
