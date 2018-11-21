@@ -79,7 +79,6 @@ def write_element_results(genome, results, directory, file, is_gzip):
         sym, identif = element.split('//')
         _, chrom, strand, _, length, cgc = info[element]
         muts, muts_in_clu, obs_clu, sim_clu, obs_score, epval, apval, topcpval = elements_results[element]
-        obs_score = round(obs_score, 4)
         if genome != 'hg19':
             cgc = 'Non Available'
         df.loc[i] = pd.Series({
@@ -139,6 +138,7 @@ def write_element_results(genome, results, directory, file, is_gzip):
              'Q_TOPCLUSTER']]
 
     # Create a sorted list of elements to order the clusters file
+    df.sort_values(by=['P_ANALYTICAL', 'SCORE', 'CGC'], ascending=[True, False, False], inplace=True)
     sorted_list_elements = df['SYMBOL'].tolist()
 
     if is_gzip is True:
