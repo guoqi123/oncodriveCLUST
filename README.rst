@@ -20,7 +20,7 @@ Installation
 OncodriveCLUSTL depends on Python 3.5 and some external libraries. First you need to download and uncompress the oncodriveclustl-0.1.0.tar.gz file.
 Then you can install it with ``pip``::
 
-        $ cd oncodriveclustl-0.1.0/
+        $ cd oncodriveclustl-1.0.0/
         $ pip install .
 
 We recommend using `conda <https://www.anaconda.com/download/>`_ to install Python 3.5 and OncodriveCLUSTL.
@@ -62,32 +62,6 @@ OncodriveCLUSTL only requires two main inputs:
 
 You can check the input formats in the files provided in the example.
 
-.. _readme commandline:
-
-Command line
----------------
-- '-i', '--input-file': File containing mutations (required)
-- '-r', '--regions-file': GZIP compressed file with the genomic regions to analyze (required)
-- '-o', '--output-directory': Output directory to be created (required)
-- '-sign', '--input-signature': File containing input context based mutational probabilities
-- '-ef', '--elements-file': File with the symbol of a set elements to analyze, one per row
-- '-e', '--elements': Symbol of the element to analyze
-- '-g', '--genome': Genome to use. Default is hg19.
-- '-emut', '--element-mutations': Cutoff of element mutations. Default is 2
-- '-cmut', '--cluster-mutations': Cutoff of cluster mutations. Default is 2
-- '-sw', '--smooth-window': Smoothing window. Default is 11
-- '-cw', '--cluster-window': Cluster window. Default is 11
-- '-kmer', '--kmer': Kmer-nucleotide context (3 or 5)
-- '-n', '--n-simulations': Number of simulations. Default is 1000
-- '-sim', '--simulation-mode': Simulation mode. Default is 'mutation_centered'
-- '-simw', '--simulation-window': Simulation window. Default is 31
-- '-c', '--cores': Number of cores to use in the computation. By default it uses all the available cores
-- '--log-level': Verbosity of the logger. Default is 'info'
-- '--concatenate', is_flag=True: Calculate clustering on concatenated genomic regions (e.g., exons in coding sequences)
-- '--pancancer': PanCancer cohort analysis
-- '--clustplot': Generate a needle plot with clusters for an element
-- '--qqplot': Generate a quantile-quantile (QQ) plot for a dataset
-- '--gzip': Gzip compress files
 
 .. _readme outputdata:
 
@@ -136,6 +110,33 @@ OncodriveCLUSTL generates three output files :
 - Log file ('results.log'). TXT file containing OncodriveCLUSTL's run information
 
 
+.. _readme commandline:
+
+Command line
+---------------
+- '-i', '--input-file': File containing mutations (required)
+- '-r', '--regions-file': GZIP compressed file with the genomic regions to analyze (required)
+- '-o', '--output-directory': Output directory to be created (required)
+- '-sign', '--input-signature': File containing input context based mutational probabilities
+- '-ef', '--elements-file': File with the symbol of a set elements to analyze, one per row
+- '-e', '--elements': Symbol of the element to analyze
+- '-g', '--genome': Genome to use. Default is hg19.
+- '-emut', '--element-mutations': Cutoff of element mutations. Default is 2
+- '-cmut', '--cluster-mutations': Cutoff of cluster mutations. Default is 2
+- '-sw', '--smooth-window': Smoothing window. Default is 11
+- '-cw', '--cluster-window': Cluster window. Default is 11
+- '-kmer', '--kmer': Kmer-nucleotide context (3 or 5)
+- '-n', '--n-simulations': Number of simulations. Default is 1000
+- '-sim', '--simulation-mode': Simulation mode. Default is 'mutation_centered'
+- '-simw', '--simulation-window': Simulation window. Default is 31
+- '-c', '--cores': Number of cores to use in the computation. By default it uses all the available cores
+- '--log-level': Verbosity of the logger. Default is 'info'
+- '--concatenate', is_flag=True: Calculate clustering on concatenated genomic regions (e.g., exons in coding sequences)
+- '--pancancer': PanCancer cohort analysis
+- '--clustplot': Generate a needle plot with clusters for an element
+- '--qqplot': Generate a quantile-quantile (QQ) plot for a dataset
+- '--gzip': Gzip compress files
+
 .. _readme example:
 
 Run the example
@@ -148,7 +149,7 @@ First you need to download the example folder. Then you run OncodriveCLUSTL with
 
 The results will be saved in a folder named ``output_example``.
 
-You can compute a more sophisticated analyzis and generate a quantile-quantile plot by typing::
+You can compute a more sophisticated analysis and generate a quantile-quantile plot by typing::
 
         $ oncodriveclustl -i ~/example/PAAD.tsv.gz -r ~/example/cds_regions.gz -o ~/example/output_example -sw 15 -cw 15 -simw 35 -sim region_restricted --concatenate --qqplot
 
