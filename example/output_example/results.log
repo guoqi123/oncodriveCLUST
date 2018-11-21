@@ -1,0 +1,50 @@
+2018-11-21 18:07:22,451 [1042] INFO     root: OncodriveCLUSTL
+2018-11-21 18:07:22,451 [1042] INFO     root: 
+input_file: /home/carnedo/projects/oncodriveclustl/example/PAAD.tsv.gz
+input_signature: None
+output_directory: /home/carnedo/projects/oncodriveclustl/example/output_example
+regions_file: /home/carnedo/projects/oncodriveclustl/example/cds_regions.gz
+genome: hg19
+element_mutations: 2
+cluster_mutations: 2
+concatenate: True
+smooth_window: 15
+cluster_window: 15
+cluster_score: cmutcorrected
+element_score: sum
+kmer: 3
+simulation_mode: region_restricted
+simulation_window: 35
+n_simulations: 1000
+cores: 4
+gzip: False
+pancancer: False
+2018-11-21 18:07:22,451 [1042] INFO     root: Initializing OncodriveCLUSTL...
+2018-11-21 18:07:22,451 [1042] INFO     root: Parsing genomic regions and mutations...
+2018-11-21 18:07:38,924 [1042] INFO     root: Regions parsed
+2018-11-21 18:07:39,253 [1042] INFO     root: Mutations parsed
+2018-11-21 18:07:39,309 [1042] INFO     root: Validated elements in genomic regions: 20169
+2018-11-21 18:07:39,309 [1042] INFO     root: Validated elements with mutations: 5183
+2018-11-21 18:07:39,310 [1042] INFO     root: Total substitution mutations: 7913
+2018-11-21 18:07:39,310 [1042] INFO     root: Signatures computed
+2018-11-21 18:07:39,324 [1042] INFO     root: Calculating results 1456 elements...
+2018-11-21 18:07:39,325 [1042] INFO     root: Iteration 1 of 15
+2018-11-21 18:08:49,847 [1042] INFO     root: Iteration 2 of 15
+2018-11-21 18:10:09,725 [1042] INFO     root: Iteration 3 of 15
+2018-11-21 18:11:14,838 [1042] INFO     root: Iteration 4 of 15
+2018-11-21 18:12:36,946 [1042] INFO     root: Iteration 5 of 15
+2018-11-21 18:13:14,278 [1042] INFO     root: Iteration 6 of 15
+2018-11-21 18:14:34,336 [1042] INFO     root: Iteration 7 of 15
+2018-11-21 18:15:43,551 [1042] INFO     root: Iteration 8 of 15
+2018-11-21 18:16:28,406 [1042] INFO     root: Iteration 9 of 15
+2018-11-21 18:18:04,073 [1042] INFO     root: Iteration 10 of 15
+2018-11-21 18:19:37,021 [1042] INFO     root: Iteration 11 of 15
+2018-11-21 18:20:35,639 [1042] INFO     root: Iteration 12 of 15
+2018-11-21 18:22:24,297 [1042] INFO     root: Iteration 13 of 15
+2018-11-21 18:23:29,242 [1042] INFO     root: Iteration 14 of 15
+2018-11-21 18:24:22,628 [1042] INFO     root: Iteration 15 of 15
+2018-11-21 18:25:05,485 [1042] INFO     root: Elements results calculated
+2018-11-21 18:25:05,522 [1042] INFO     root: Clusters results calculated
+2018-11-21 18:25:05,523 [1042] WARNING  root: QQ-plot generated for less than 30 elements
+2018-11-21 18:25:06,277 [1042] INFO     root: QQ-plot plot generated at : /home/carnedo/projects/oncodriveclustl/example/output_example/quantile_quantile_plot.png
+2018-11-21 18:25:06,277 [1042] INFO     root: Finished
