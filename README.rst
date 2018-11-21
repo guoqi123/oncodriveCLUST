@@ -4,6 +4,7 @@ OncodriveCLUSTL
 ================
 
 One of the main goals of cancer research is the identification of the genomic elements that drive tumorigenesis. OncodriveCLUSTL is a new nucleotide sequence-based clustering algorithm to detect cancer drivers in genomic regions. OncodriveCLUSTL is based on a local background model derived from the nucleotide context mutational probabilities of the chort under study. Our method is able to identify well-known cancer drivers in coding regions. It can be applied to non-coding regions and non-human data.
+
 .. _readme license:
 
 License
