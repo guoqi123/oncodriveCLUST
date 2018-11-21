@@ -3,21 +3,20 @@
 OncodriveCLUSTL
 ================
 
-One of the main goals of cancer research is the identification of the genomic elements that drive tumorigenesis. We present OncodriveCLUSTL, a sequence-based clustering method for the detection of cancer drivers in any genomic region of interest  using a local simulation of the mutational process affecting them.
-
+One of the main goals of cancer research is the identification of the genomic elements that drive tumorigenesis. OncodriveCLUSTL is a new nucleotide sequence-based clustering algorithm to detect cancer drivers in genomic regions. OncodriveCLUSTL is based on a local background model derived from the nucleotide context mutational probabilities of the chort under study. Our method is able to identify well-known cancer drivers in coding regions. It can be applied to non-coding regions and non-human data.
 .. _readme license:
 
 License
 -------
 
-OncodriveCLUSTL will be available to the general public subject to certain conditions described in its `LICENSE <LICENSE>`_.
+OncodriveCLUSTL is available to the general public subject to certain conditions described in its `LICENSE <LICENSE>`_.
 
 .. _readme install:
 
 Installation
 ------------
 
-OncodriveCLUSTL depends on Python 3.5 and some external libraries. First you need to downloadn and uncompress the oncodriveclustl-0.1.0.tar.gz file.
+OncodriveCLUSTL depends on Python 3.5 and some external libraries. First you need to download and uncompress the oncodriveclustl-0.1.0.tar.gz file.
 Then you can install it with ``pip``::
 
         $ cd oncodriveclustl-0.1.0/
