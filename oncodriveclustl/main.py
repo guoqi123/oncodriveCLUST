@@ -284,7 +284,7 @@ def main(input_file,
             file_prefix = input_file.split('/')[-1].split('.')[0]
             path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
             if os.path.isfile(path_pickle):
-                logger.info('Signatures computed')  # TODO check format
+                logger.info('Signatures computed')
             # Calculate signatures
             else:
                 logger.info('Computing signatures...')

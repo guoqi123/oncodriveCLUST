@@ -1,13 +1,10 @@
 """
-Contains function to apply kde smooth of mutations
+Contains function to apply KDE smoothing of mutations
 """
-import os
 from intervaltree import IntervalTree
 from collections import namedtuple
 
 import numpy as np
-import bgreference as bg
-import json
 
 Mutation = namedtuple('Mutation', 'position, region, alt, sample, cancertype')
 
@@ -35,7 +32,7 @@ def smooth_nucleotide(regions, concat_regions_d, mutations, tukey_filter, simula
     for interval in regions:
         # Add extra bases for smoothing of simulated mutations that fall outside regions and tukey_filter
         first_smooth_tree.addi(interval.begin, interval.end,
-                         np.zeros((interval.end - interval.begin + len(tukey_filter) + simulation_window - 2)))
+                               np.zeros((interval.end - interval.begin + len(tukey_filter) + simulation_window - 2)))
 
     if not concat_regions_d:
         # Smooth
@@ -99,7 +96,7 @@ def smooth_nucleotide(regions, concat_regions_d, mutations, tukey_filter, simula
         for interval in concat_tree:
             begin = interval.begin
             end = interval.end
-            slicer = (len(tukey_filter) -1) // 2
+            slicer = (len(tukey_filter) - 1) // 2
             final_smooth_tree.addi(begin, end, interval.data[slicer: -slicer])
 
     return final_smooth_tree, mutations_in

@@ -271,7 +271,8 @@ class Experiment:
             concat_regions_d = {}
 
         smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], concat_regions_d, mutations,
-                                                              self.tukey_filter, self.simulation_window)
+                                                          self.tukey_filter, self.simulation_window
+                                                          )
         index_tree = clu.find_locals(smooth_tree, concat_regions_d)
         raw_clusters_tree = clu.find_clusters(index_tree)
         merge_clusters_tree = clu.merge(raw_clusters_tree, self.cluster_window)

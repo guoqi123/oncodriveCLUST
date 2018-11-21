@@ -37,7 +37,6 @@ def find_locals(smooth_tree, concat_regions_d):
         min_eq = argrelextrema(smooth, np.less_equal, order=1, mode='clip')[0].tolist()
         # Find maximums and minimums
         indexes = list(set(max_eq).symmetric_difference(set(min_eq)))
-
         # Add information to index
         for index in sorted(indexes):
             score_index = smooth[index]
@@ -141,7 +140,6 @@ def merge(clusters_tree, window):
                     maximum = clusters[x]['max']
                     left_margin = clusters[x]['left_m']
                     right_margin = clusters[x]['right_m']
-
                     # Define the interval of search
                     search_r = set(range(right_margin[0], right_margin[0] + window + 1))
                     # If there is a maximum in the search region
@@ -184,7 +182,7 @@ def merge(clusters_tree, window):
                                 maxs_set.remove(maxs[x])
                             # If same cluster
                             else:
-                                # Don't iterate again
+                                # Do not iterate again
                                 maxs_set.remove(maxs[x])
             if stop == 0:
                 iterate = 0
@@ -255,7 +253,6 @@ def trim(clusters_tree, concat_regions_d):
             # Find new margins
             mutation_left = min(values['mutations'], key=lambda x: x.position)
             mutation_right = max(values['mutations'], key=lambda x: x.position)
-
             # Get index of mutation in cds
             if concat_regions_d:
                 left_correction = concat_regions_d[mutation_left.region[0]].start
@@ -263,10 +260,8 @@ def trim(clusters_tree, concat_regions_d):
             else:
                 left_correction = 0
                 right_correction = 0
-
             mutation_left_index = (mutation_left.position - mutation_left.region[0]) + left_correction
             mutation_right_index = (mutation_right.position - mutation_right.region[0]) + right_correction
-
             # Update clusters coordinates
             values['left_m'] = (mutation_left_index, mutation_left.position, np.nan)
             values['right_m'] = (mutation_right_index, mutation_right.position, np.nan)
@@ -296,22 +291,18 @@ def score(clusters_tree, regions, mutations_element):
         for cluster, values in clusters.items():
             score_ = 0
             mutated_positions_d = defaultdict(int)
-
             # Get number of mutations on each mutated position
             for mutation in values['mutations']:
                 mutated_positions_d[mutation.position] += 1
-
             # Map mutated position and smoothing maximum to region
             for position, count in mutated_positions_d.items():
                 map_mut_pos = set()
                 map_smo_max = set()
-
                 if regions[position]:
                     for i in regions[position]:
                         map_mut_pos = i
                     for i in regions[values['max'][1]]:
                         map_smo_max = i
-
                     # Calculate distance of position to smoothing maximum
                     if map_mut_pos[0] == map_smo_max[0]:
                         distance_to_max = abs(position - values['max'][1])
@@ -319,17 +310,13 @@ def score(clusters_tree, regions, mutations_element):
                         distance_to_max = (map_mut_pos[1] - position) + (values['max'][1] - map_smo_max[0])
                     else:
                         distance_to_max = (map_smo_max[1] - values['max'][1]) + (position - map_mut_pos[0])
-
                     # Calculate fraction of mutations
                     numerator = (count / mutations_element) * 100
-
                     # Calculate cluster score
                     denominator = m.pow(root, distance_to_max)
                     score_ += (numerator / denominator)
-
             # Update
             clusters[cluster]['score'] = score_ * len(values['mutations'])
-
         score_clusters_tree.addi(interval[0], interval[1], clusters)
 
     return score_clusters_tree
