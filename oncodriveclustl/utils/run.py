@@ -113,7 +113,6 @@ class Experiment:
 
         # Read CGC
         if self.genome == 'hg19':
-            # TODO Remove this hardcoded file
             with open(os.path.join(os.path.dirname(__file__), '../data/CGC_all_Oct15_10_29_09_2018.tsv'), 'r') as fd:
                 next(fd)
                 self.cgc_genes = set([line.split('\t')[0] for line in fd])
@@ -180,7 +179,7 @@ class Experiment:
         correction = 1
         skip = False
 
-        # Check signatures pickles exist and read          # TODO memory?
+        # Check signatures pickles exist and read
         signatures_d = defaultdict()
         for cohort in self.cohorts_d[element]:
             if os.path.isfile(self.path_cache):

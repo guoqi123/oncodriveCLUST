@@ -8,7 +8,6 @@ import pickle
 import csv
 import itertools
 import gzip
-# TODO check conditional import
 
 import daiquiri
 from tqdm import tqdm
