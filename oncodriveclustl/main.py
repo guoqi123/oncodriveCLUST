@@ -53,12 +53,12 @@ LOGS = {
 @click.option('-sw', '--smooth-window', type=click.IntRange(3, 101), default=11,
               help='Smoothing window. Default is 11')
 @click.option('-cw', '--cluster-window', type=click.IntRange(3, 101), default=11,
-              help='Cluster window. Default is 30')
+              help='Cluster window. Default is 11')
 @click.option('-cs', '--cluster-score', default='cmutcorrected', help='Cluster score formula',
               type=click.Choice(['cmutcorrected']))
 @click.option('-es', '--element-score', default='sum', help='Element score formula',
               type=click.Choice(['sum']))
-@click.option('-kmer', '--kmer', default='3', help='Number of nucleotides of the signature',
+@click.option('-kmer', '--kmer', default='3', help='Kmer-nucleotide context',
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=1000,
               help='number of simulations. Default is 1000')
