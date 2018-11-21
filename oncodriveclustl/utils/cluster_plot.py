@@ -187,11 +187,16 @@ def clusters_plot(element,
         y = (0, ycoord)
         ax0.plot(x, y, color='black', linewidth=2, alpha=0.75)
     ax0.set_ylabel('# mutations', color='black', fontsize=16)
-    yint = range(0, math.ceil(max(mutations_xcoords_number.values())) + 1, 5)
+    max_mutations = math.ceil(max(mutations_xcoords_number.values()))
+    if max_mutations >= 30:
+        yint = range(0, max_mutations + 1, 10)
+    elif 30 > max_mutations >= 5:
+        yint = range(0, max_mutations + 1, 5)
+    else:
+        yint = range(0, max_mutations + 1, 1)
     ax0.get_yaxis().set_ticks(yint)
     keys = list(map(lambda x: int(x), mutations_xcoords_number.keys()))
     values = list(map(int, mutations_xcoords_number.values()))
-    print(keys, values)
     ax0.plot(keys, values, linewidth=0, marker='o', markersize=4, color='black', alpha=1)
     ax0.set_axisbelow(True)
 
@@ -238,18 +243,22 @@ def make_clustplot(elements_results, clusters_results, global_info_results, dire
         observed_clusters, smooth_tree, probabilities = clusters_results[element]
         regions, _, strand, mutations, length, _ = global_info_results[element]
 
-        # Preprocess data
-        concat_regions_d, plot_regions_xcoords = concat_regions_to_plot(element, regions, strand)
-        smooth = concat_smooth(smooth_tree, strand)
-        mutations_xcoords_number = mutations_index(element, mutations, concat_regions_d, strand, length)
-        plot_cluster_xcoords = cluster_coords(element, observed_clusters, strand, length, concat_regions_d)
+        if type(observed_clusters) != float:
+            # Preprocess data
+            concat_regions_d, plot_regions_xcoords = concat_regions_to_plot(element, regions, strand)
+            smooth = concat_smooth(smooth_tree, strand)
+            mutations_xcoords_number = mutations_index(element, mutations, concat_regions_d, strand, length)
+            plot_cluster_xcoords = cluster_coords(element, observed_clusters, strand, length, concat_regions_d)
 
-        output = os.path.join(directory, '{}_plot.png'.format(element.split('//')[0]))
+            output = os.path.join(directory, '{}_plot.png'.format(element.split('//')[0]))
 
-        clusters_plot(element,
-                      plot_regions_xcoords,
-                      smooth,
-                      mutations_xcoords_number,
-                      plot_cluster_xcoords,
-                      output,
-                      )
+            clusters_plot(element,
+                          plot_regions_xcoords,
+                          smooth,
+                          mutations_xcoords_number,
+                          plot_cluster_xcoords,
+                          output,
+                          )
+        else:
+            print('Element {0} does not have clusters. No cluster plot is generated for {0}'.format(element))
+

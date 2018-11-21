@@ -118,8 +118,8 @@ def main(input_file,
         cluster_mutations (int): minimum number of mutations to define a cluster
         smooth_window (int): Tukey kernel smoothing window length
         cluster_window (int): clustering window length
-        cluster_score (str): cluster score method  # FIXME only one score available, remove?
-        element_score (str): element score method  # FIXME only one score available, remove?
+        cluster_score (str): cluster score method
+        element_score (str): element score method
         kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or pentanucleotides)
         n_simulations (int): number of simulations
         simulation_mode (str): simulation mode
@@ -192,13 +192,12 @@ def main(input_file,
     if simulation_window == 31 and smooth_window == 11 and cluster_window == 11:
         logger.warning('Running with default simulating, smoothing and clustering OncodriveCLUSTL parameters')
         logger.warning('Default parameters may not be optimal for your data')
-        logger.warning('Please, read methods for a better fine-tuned results')
+        logger.warning('Please, read Supplementary Methods to perform model selection for your data')
 
     # Check parameters
     if n_simulations < 1000:
         raise excep.UserInputError('Invalid number of simulations: please choose an integer greater than 1000')
 
-    # If --clustplot, only one element is analyzed
     if clustplot:
         if len(elements) > 10:
             raise excep.UserInputError('Needle plots can only be generated for a maximum of 10 elements')
