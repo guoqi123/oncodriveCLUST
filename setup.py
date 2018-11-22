@@ -14,12 +14,13 @@ install_requires = [
     'numpy>=1.13.3',
     'scipy>=1.0.0',
     'pandas>=0.22.0',
-    'statsmodels>=0.9.0',
+    'statsmodels>=0.8.0',
     'bgreference>=0.5',
     'click>=6.7',
     'daiquiri>=1.3.0',
     'tqdm>=4.19.4',
-    'matplotlib>=2.0.2'
+    'matplotlib>=2.0.2',
+    'scikit-learn>=0.19.2'
 ]
 
 
@@ -32,7 +33,7 @@ setup(
     author=__author__,
     author_email=__author_email__,
     description=__description__,
-    license="GPLv3",
+    license="AGPLv3",
     keywords="",
     url="https://bitbucket.org/bbglab/oncodriveclustl",
     download_url="https://bitbucket.org/bbglab/oncodriveclustl/get/" + __version__ + ".tar.gz",

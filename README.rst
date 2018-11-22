@@ -17,13 +17,9 @@ OncodriveCLUSTL is available to the general public subject to certain conditions
 Installation
 ------------
 
-OncodriveCLUSTL depends on Python 3.5 and some external libraries. First you need to download and uncompress the oncodriveclustl-0.1.0.tar.gz file.
-Then you can install it with ``pip``::
+OncodriveCLUSTL depends on Python 3.5 and some external libraries. We recommend to install it using `conda <https://www.anaconda.com/download/>`_.
 
-        $ cd oncodriveclustl-1.0.0/
-        $ pip install .
-
-We recommend using `conda <https://www.anaconda.com/download/>`_ to install Python 3.5 and OncodriveCLUSTL.
+        $ conda install -c bbglab oncodriveclustl
 
 .. note::
 

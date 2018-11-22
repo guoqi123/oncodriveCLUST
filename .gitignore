@@ -16,6 +16,9 @@ Distance_mutations.ipynb
 oncodriveclustl/count_mutations.py
 oncodriveclustl/mutations_intogen_local.txt
 
+# Singularity images
+*.simg
+
 # Intellij IDEA files
 .idea
 *.iml

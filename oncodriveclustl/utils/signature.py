@@ -7,7 +7,6 @@ from collections import defaultdict
 import pickle
 import csv
 import itertools
-import gzip
 
 import daiquiri
 from tqdm import tqdm
