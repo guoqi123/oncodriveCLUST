@@ -216,9 +216,9 @@ def clusters_plot(element,
 
     for index, cluster_xcoord in enumerate(plot_cluster_xcoords):
         index += 1
-        if index % 2 and cluster_xcoord != plot_cluster_xcoords[-1]:
+        if index % 2: # and cluster_xcoord != plot_cluster_xcoords[-1]:
             ax1.axvspan(xmin=cluster_xcoord, xmax=plot_cluster_xcoords[index],
-                        color='#0571b0', alpha=0.75, linewidth=0)
+                        color='#0571b0', alpha=0.75, linewidth=1.5)
 
     plt.savefig(output, bbox_inches='tight')
 
