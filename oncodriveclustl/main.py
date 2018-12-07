@@ -68,6 +68,7 @@ LOGS = {
               help='Simulation window. Default is 31')
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
               help='Number of cores to use in the computation. By default it uses all the available cores.')
+@click.option('--seed', type=click.INT, default=None, help='Seed to use in the simulations')
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--concatenate', is_flag=True, help='Calculate clustering on concatenated genomic regions (e.g., exons '
@@ -94,6 +95,7 @@ def main(input_file,
          simulation_mode,
          simulation_window,
          cores,
+         seed,
          log_level,
          concatenate,
          pancancer,
@@ -125,6 +127,7 @@ def main(input_file,
         simulation_mode (str): simulation mode
         simulation_window (int): window length to simulate mutations
         cores (int): number of CPUs to use
+        seed (int): seed
         log_level (str): verbosity of the logger
         concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
         pancancer (bool): flag to compute PanCancer cohort analysis
@@ -185,7 +188,8 @@ def main(input_file,
         'n_simulations: {}'.format(n_simulations),
         'cores: {}'.format(cores),
         'gzip: {}'.format(gzip),
-        'pancancer: {}'.format(pancancer)
+        'pancancer: {}'.format(pancancer),
+        'seed: {}'.format(seed)
     ]))
     logger.info('Initializing OncodriveCLUSTL...')
 
@@ -324,7 +328,8 @@ def main(input_file,
                                                                             simulation_mode,
                                                                             simulation_window,
                                                                             cores,
-                                                                            clustplot
+                                                                            clustplot,
+                                                                            seed
                                                                             ).run()
 
     # Write elements results (returns list of ranked elements)

@@ -50,7 +50,8 @@ class Experiment:
                  simulation_mode,
                  simulation_window,
                  cores,
-                 is_plot):
+                 is_plot,
+                 seed):
 
         """Initialize the Experiment class
 
@@ -78,6 +79,7 @@ class Experiment:
             simulation_window (int): window length to simulate mutations
             cores (int): number of CPUs to use
             is_plot (bool): True generates extra data to build the cluster plot of an element
+            seed (int): seed to randomize
 
         Returns:
             None
@@ -110,6 +112,7 @@ class Experiment:
         self.simulation_window = simulation_window + (1 - simulation_window % 2)
         self.cores = cores
         self.is_plot = is_plot
+        self.main_seed = seed
 
         # Read CGC
         if self.genome == 'hg19':
@@ -300,12 +303,13 @@ class Experiment:
             sim_scores_chunk (list): simulated element's results
             sim_cluster_chunk (list): simulated cluster's results
         """
-        element, probs_tree, n_sim = item
+        element, probs_tree, n_sim, seed = item
         sim_scores_chunk = []
         sim_cluster_chunk = []
         df_simulated_mutations = []
         half_window = (self.simulation_window - 1) // 2
         nucleot = {'A', 'C', 'G', 'T'}
+        np.random.seed(seed)
 
         # Simulate mutations
         for mutation in self.mutations_d[element]:
@@ -440,7 +444,8 @@ class Experiment:
         pseudo_pvalue = 1.1102230246251566e-19
         results = []
         for item in items:
-            element, obs_clusters, obs_score, sim_clusters_scores, sim_element_scores = item
+            element, obs_clusters, obs_score, sim_clusters_scores, sim_element_scores, seed = item
+            np.random.seed(seed)
             mut_in_clusters = 0
 
             # Get GCG boolean
@@ -554,11 +559,12 @@ class Experiment:
         elements_results = defaultdict()
         clusters_results = defaultdict()
         global_info_results = defaultdict()
+        np.random.seed(self.main_seed)
 
         # Filter elements >= cutoff mutations
         analyzed_elements = []
         belowcutoff_elements = []
-        for elem in self.regions_d.keys():
+        for elem in sorted(self.regions_d.keys()):
             if len(self.mutations_d[elem]) >= self.element_mutations_cutoff:
                 analyzed_elements.append(elem)
             else:
@@ -572,6 +578,7 @@ class Experiment:
 
         # Run analysis on each element
         analyzed_elements = list(chunkizator(analyzed_elements, pf_num_elements))
+        chunk_seed_list = np.random.randint(2**32 - 1, size=len(analyzed_elements))
         for i, elements in enumerate(analyzed_elements, start=1):
             observed_clusters_d = {}
             observed_scores_d = {}
@@ -580,6 +587,7 @@ class Experiment:
             noprobabilities_elements = []
             nocluster_elements = []
             logger.info("Iteration {} of {}".format(i, len(analyzed_elements)))
+            second_seed = chunk_seed_list[(i - 1)]
 
             for element in elements:
                 # Calculate observed results
@@ -601,9 +609,9 @@ class Experiment:
                     if not skip:
                         element_size = ((len(self.mutations_d[element]) * self.n_simulations) // pf_num_simulations) + 1
                         chunk_size = (self.n_simulations // element_size) + 1
-                        simulations += [(element, probs_tree, n_sim) for n_sim in partitions_list(
+                        simulations += [(element, probs_tree, n_sim, second_seed) for n_sim in partitions_list(
                                         self.n_simulations,
-                                        chunk_size
+                                        chunk_size,
                                         )]
                         simulated_elements.append(element)
                     # Skip analysis if problems with mutational probabilities
@@ -629,9 +637,13 @@ class Experiment:
                     sim_scores_list[element] = sim_clusters_list[element] = float('nan')
 
                 # Post process
-                post_item_simulated = [(e, observed_clusters_d[e], observed_scores_d[e], sim_clusters_list[e],
-                                        sim_scores_list[e]) for e in simulated_elements + nocluster_elements]
-                post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan')) for
+                post_item_simulated = [(e,
+                                        observed_clusters_d[e],
+                                        observed_scores_d[e],
+                                        sim_clusters_list[e],
+                                        sim_scores_list[e],
+                                        second_seed) for e in simulated_elements + nocluster_elements]
+                post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan'), None) for
                                  e in noprobabilities_elements + belowcutoff_elements]
                 total_items_split = list(
                     chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / (self.cores-1))))
