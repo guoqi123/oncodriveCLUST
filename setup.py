@@ -42,6 +42,7 @@ setup(
     entry_points={
         'console_scripts': [
             'oncodriveclustl = oncodriveclustl.main:main',
+            'parse_vcf = oncodriveclustl.parsers.vcf:vcf_to_tsv',
         ]
     }
 )
