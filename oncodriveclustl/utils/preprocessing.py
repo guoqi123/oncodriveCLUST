@@ -41,8 +41,7 @@ def check_compression(file):
                         comp = None
                         break
             except Exception as e:
-                logger.critical('{}. Incorrect file format for {}'.format(e, file))
-                quit(-1)
+                raise excep.UserInputError('{}. Error reading {}. Please check file format and/or compression'.format(e, file))
     else:
         raise FileNotFoundError('{} file not found'.format(file))
 

@@ -50,9 +50,10 @@ def read_regions(input_regions, elements):
                     chromosomes_d[symbol + '//' + ensid] = chromosome
                     strands_d[symbol + '//' + ensid] = strand
         if not regions_d.keys():
-            raise excep.UserInputError('No elements found in genomic regions. Please, check input data')
+            raise excep.UserInputError('No elements found in genomic regions. '
+                                       'Please, check input data ({})'.format(input_regions))
     else:
-        raise excep.UserInputError('Genomic regions are not compressed, please input GZIP compressed file')
+        raise excep.UserInputError('Genomic regions file is not compressed, please input GZIP compressed file')
 
     return regions_d, chromosomes_d, strands_d, trees
 

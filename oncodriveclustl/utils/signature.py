@@ -124,10 +124,10 @@ class Signature:
                                                     position, ref, alt, self.genome, signature_ref
                                                     ))
                             else:
-                                logger.warning('Input REF nucleotide `{}` in position {} is not equal to '
+                                logger.warning('Input REF nucleotide `{}` in chr{}:{} is not equal to '
                                                'reference genome {} REF nucleotide `{}` '
                                                'Mutation is skipped for signatures calculation'.format(
-                                                ref, position, self.genome, signature_ref[half_kmer]
+                                                ref, chromosome, position, self.genome, signature_ref[half_kmer]
                                                 ))
         # Calculate probabilities
         for cohort, values in self.signatures.items():

@@ -138,7 +138,10 @@ def write_element_results(genome, results, directory, file, is_gzip):
              'Q_TOPCLUSTER']]
 
     # Create a sorted list of elements to order the clusters file
-    df.sort_values(by=['P_ANALYTICAL', 'SCORE', 'CGC'], ascending=[True, False, False], inplace=True)
+    df.sort_values(by=['Q_ANALYTICAL', 'P_ANALYTICAL', 'SCORE', 'CGC'],
+                   ascending=[True, True, False, False],
+                   inplace=True
+                   )
     sorted_list_elements = df['SYMBOL'].tolist()
 
     if is_gzip is True:
