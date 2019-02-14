@@ -39,7 +39,7 @@ Input data
 ---------------
 OncodriveCLUSTL only requires two main inputs:
 
-- Mutations file. TSV file containing the substitutions from whole exome (WXS) or whole genome (WGS) data mapped to a reference genome (e.g., human hg19 or mice c3h). This file must contain, at least, the following columns with header:
+- Mutations file. TSV file containing SNVs from whole exome (WXS) or whole genome (WGS) data mapped to a reference genome (e.g., human hg19 or mouse c3h). This file must contain, at least, the following columns with header in the following order:
 
     1. CHROMOSOME: 1, 2,..., X, Y
     2. POSITION: Integer indicating the position of the mutation
@@ -59,6 +59,11 @@ OncodriveCLUSTL only requires two main inputs:
 
 You can check the input formats in the files provided in the example.
 
+If you have a directory containing mutation files in VCF format, you can run our VCF parser to obtain a tabular file compatible with OncodriveCLUSTL input format::
+
+       $ parse_vcf -i [INPUT_DIRECTORY] -o [OUTPUT_FILE]
+
+Please, can check 'parsers/vcf.py' module for more details.
 
 .. _readme outputdata:
 
