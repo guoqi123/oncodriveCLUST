@@ -83,7 +83,7 @@ def make_qqplot(file, col_values, top=10, output=None):
     data = preprocess_dataframe(file=file, col_values=col_values)
 
     # Scatter of the p-values
-    color = np.where(data['Q'] < 0.1, '#ca0020', '#0571b0')
+    color = np.where(data['Q'] < 0.01, '#ca0020', '#0571b0')
     ax.scatter(data['exp'], data['obs'], color=color, alpha=0.5)
 
     # Null hypothesis
