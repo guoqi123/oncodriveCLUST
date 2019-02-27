@@ -22,7 +22,7 @@ from oncodriveclustl.utils import analyticalpval as ap
 
 # Logger
 logger = daiquiri.getLogger()
-Mutation = namedtuple('Mutation', 'position, region, alt, sample, cancertype')
+Mutation = namedtuple('Mutation', 'position, region, alt, sample, group')
 Cds = namedtuple('Cds', 'start, end')
 
 
@@ -37,7 +37,7 @@ class Experiment:
                  mutations_d,
                  samples_d,
                  genome,
-                 cohorts_d,
+                 groups_d,
                  path_cache,
                  element_mutations_cutoff,
                  cluster_mutations_cutoff,
@@ -64,7 +64,7 @@ class Experiment:
             mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
             samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
             genome (str): genome to use
-            cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
+            groups_d (dict): dictionary of elements and groups (keys) containing element mutations (values)
             path_cache (str): path to pickles directory (cache)
             element_mutations_cutoff (int): minimum number of mutations per genomic element to undertake analysis
             cluster_mutations_cutoff (int): minimum number of mutations to define a cluster
@@ -97,7 +97,7 @@ class Experiment:
         self.samples_d = samples_d
         self.genome = genome
         self.path_cache = path_cache
-        self.cohorts_d = cohorts_d
+        self.groups_d = groups_d
         self.element_mutations_cutoff = element_mutations_cutoff
         self.cluster_mutations_cutoff = cluster_mutations_cutoff
         self.smooth_window = smooth_window + (1 - smooth_window % 2)
@@ -115,7 +115,7 @@ class Experiment:
         self.main_seed = seed
 
         # Read CGC
-        if self.genome == 'hg19':
+        if self.genome in ['hg38', 'hg19']:
             with open(os.path.join(os.path.dirname(__file__), '../data/CGC_all_Oct15_10_29_09_2018.tsv'), 'r') as fd:
                 next(fd)
                 self.cgc_genes = set([line.split('\t')[0] for line in fd])
@@ -184,15 +184,15 @@ class Experiment:
 
         # Check signatures pickles exist and read
         signatures_d = defaultdict()
-        for cohort in self.cohorts_d[element]:
+        for group in self.groups_d[element]:
             if os.path.isfile(self.path_cache):
                 path_to_signature_pickle = self.path_cache
             else:
-                path_to_signature_pickle = os.path.join(self.path_cache, '{}_kmer_{}.pickle'.format(cohort, self.kmer))
+                path_to_signature_pickle = os.path.join(self.path_cache, '{}_kmer_{}.pickle'.format(group, self.kmer))
 
             if os.path.isfile(path_to_signature_pickle):
                 signature = pickle.load(open(path_to_signature_pickle, "rb"))
-                signatures_d[cohort] = signature['probabilities']
+                signatures_d[group] = signature['probabilities']
             else:
                 skip = True
 
@@ -220,26 +220,26 @@ class Experiment:
                             # sort alternates to keep track
                             for alt in sorted(list(nucleot.difference({ref_kmer[self.kmer//2]}))):
                                 alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
-                                for cohort, signature in signatures_d.items():
-                                    prob[cohort].append(signature[(ref_kmer, alt_kmer)])
+                                for group, signature in signatures_d.items():
+                                    prob[group].append(signature[(ref_kmer, alt_kmer)])
                         else:
-                            for cohort, signature in signatures_d.items():
-                                prob[cohort].extend([0, 0, 0])
+                            for group, signature in signatures_d.items():
+                                prob[group].extend([0, 0, 0])
                         # Extend position info
-                        for cohort in signatures_d.keys():
-                            probabilities[cohort].extend(prob[cohort])
+                        for group in signatures_d.keys():
+                            probabilities[group].extend(prob[group])
 
                     # Check and add
-                    for cohort in signatures_d.keys():
-                        if sum(probabilities[cohort]) != 0 and len(probabilities[cohort]) == 3 * expected_length:
-                            probs_tree[cohort].addi(interval[0], interval[1], probabilities[cohort])
-                        elif sum(probabilities[cohort]) == 0:
-                            logger.critical('Context based mutational probabilities in {0} '
-                                            'region {1}-{2} equal to 0\n'.format(element, interval[0], interval[1]))
+                    for group in signatures_d.keys():
+                        if sum(probabilities[group]) != 0 and len(probabilities[group]) == 3 * expected_length:
+                            probs_tree[group].addi(interval[0], interval[1], probabilities[group])
+                        elif sum(probabilities[group]) == 0:
+                            logger.critical('Context based mutational probabilities in {} '
+                                            'region {}-{} equal to 0\n'.format(element, interval[0], interval[1]))
                             skip = True
                             break
-                        elif len(probabilities[cohort]) != 3 * expected_length:
-                            logger.warning('{0} probabilities list length is different than expected'.format(element))
+                        elif len(probabilities[group]) != 3 * expected_length:
+                            logger.warning('{} probabilities list length is different than expected'.format(element))
                             skip = True
                             break
                     if skip:
@@ -314,7 +314,7 @@ class Experiment:
         # Simulate mutations
         for mutation in self.mutations_d[element]:
 
-            # Get hotspot for simulations
+            # Get coordinates of randomization window
             expected_hotspot_begin = mutation.position - half_window
             expected_hotspot_end = mutation.position + half_window
 
@@ -326,14 +326,14 @@ class Experiment:
                 First, it checks that the genomic region where the mutation is going to be simulated is longer or equal
                 than l.            
                 
-                If this is true, it calculates the expected start and end positions of the 
-                simulation window. If one of them falls outside the genomic element, the window of length l is displaced 
-                to fit in the genomic element. If both expected start and end positions fall outside the genomic region, 
-                the simulation window is trimmed and simulations are performed inside the genomic region. 
+                If this is true, it calculates the expected start and end positions of the simulation window. 
+                If one of them falls outside the genomic element, the window of length l is displaced to fit in the 
+                genomic element. If both expected start and end positions fall outside the genomic region, the 
+                simulation window is trimmed and simulations are performed inside the genomic region. 
                 
-                If the genomic region is smaller than l, the simulation window becomes the genomic region, 
-                in other words, the simulation window is trimmed and simulations are performed between the end and the 
-                start of the genomic region. 
+                If the genomic region is smaller than l, the simulation window becomes the genomic region. This means 
+                that the simulation window is trimmed and simulations are performed between the end and the start of 
+                the genomic region. 
                 """
 
                 if (mutation.region[1] - mutation.region[0] + 1) >= self.simulation_window:
@@ -358,7 +358,8 @@ class Experiment:
                     hotspot_end = mutation.region[1] - 1  # regions end +1 in tree
             else:
                 """
-                Simulations are `mutation centered`, they can fall outside the genomic region. 
+                Simulations are `mutation centered`, they are centered in the mutated position and can fall outside 
+                the genomic region. 
                 """
                 hotspot_begin = expected_hotspot_begin
                 hotspot_end = expected_hotspot_end
@@ -368,7 +369,7 @@ class Experiment:
             # half_window added in probabilities array
             start_index = 3*(hotspot_begin - (mutation.region[0] - half_window))
             end_index = 3*(hotspot_end - (mutation.region[0] - half_window) + 1)  # +1, range and slice
-            for interval in probs_tree[mutation.cancertype][mutation.region[0]]:  # unique iteration
+            for interval in probs_tree[mutation.group][mutation.region[0]]:  # unique iteration
                 simulations = np.random.choice(range(start_index, end_index), size=n_sim,
                                                p=self.normalize(element, interval.data[start_index:end_index]))
                 # Add info per simulated mutation
@@ -385,7 +386,7 @@ class Experiment:
                     alternate = sorted(list(nucleot.difference({ref_nucleotide})))[alternate_index]
                     # Simulated mutation
                     list_simulations_per_mutation.append(
-                        Mutation(position, mutation.region, alternate, mutation.sample, mutation.cancertype)
+                        Mutation(position, mutation.region, alternate, mutation.sample, mutation.group)
                     )
                 df_simulated_mutations.append(list_simulations_per_mutation)
 

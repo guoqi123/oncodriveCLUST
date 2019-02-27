@@ -73,7 +73,7 @@ LOGS = {
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--concatenate', is_flag=True, help='Calculate clustering on concatenated genomic regions (e.g., exons '
                                                   'in coding sequences)')
-@click.option('--pancancer', is_flag=True, help='PanCancer cohort analysis')
+@click.option('--groupby', is_flag=True, help='Analysis carried out by groups (e.g., PanCancer cohort analysis)')
 @click.option('--clustplot', is_flag=True, help='Generate a needle plot with clusters for an element')
 @click.option('--qqplot', is_flag=True, help='Generate a quantile-quantile (QQ) plot for a dataset')
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
@@ -98,7 +98,7 @@ def main(input_file,
          seed,
          log_level,
          concatenate,
-         pancancer,
+         groupby,
          clustplot,
          qqplot,
          gzip
@@ -115,7 +115,7 @@ def main(input_file,
         elements_file (str): path to file containing one element per row (optional) to analyzed the listed elements.
             By default, OncodriveCLUSTL analyzes all genomic elements contained in `regions_file`.
         elements (str): genomic element symbol (optional). The analysis will be performed only on the specified element.
-        genome (str): genome to use: 'hg19', 'mm10', 'c3h', 'car', 'cast' and 'f344'
+        genome (str): genome to use: 'hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast' and 'f344'
         element_mutations (int): minimum number of mutations per genomic element to undertake analysis
         cluster_mutations (int): minimum number of mutations to define a cluster
         smooth_window (int): Tukey kernel smoothing window length
@@ -130,7 +130,7 @@ def main(input_file,
         seed (int): seed
         log_level (str): verbosity of the logger
         concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
-        pancancer (bool): flag to compute PanCancer cohort analysis
+        groupby (bool): flag to compute PanCancer cohort analysis
         clustplot (bool): flag to generate a needle plot with clusters for an element
         qqplot (bool): flat to generate a quantile-quantile (QQ) plot for a dataset
         gzip (bool): flag to generate GZIP compressed output files
@@ -188,7 +188,7 @@ def main(input_file,
         'n_simulations: {}'.format(n_simulations),
         'cores: {}'.format(cores),
         'gzip: {}'.format(gzip),
-        'pancancer: {}'.format(pancancer),
+        'groupby: {}'.format(groupby),
         'seed: {}'.format(seed)
     ]))
     logger.info('Initializing OncodriveCLUSTL...')
@@ -221,12 +221,12 @@ def main(input_file,
 
     # Parse regions and dataset mutations
     logger.info('Parsing genomic regions and mutations...')
-    regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d = pars.parse(
+    regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, groups_d = pars.parse(
         regions_file,
         elements,
         input_file,
         concatenate,
-        pancancer,
+        groupby,
     )
     mut = 0
     elem = 0
@@ -245,36 +245,33 @@ def main(input_file,
 
     # Check format input file and calculate signature
     if not input_signature:
-        read_function, mode, delimiter, cancer_type = prep.check_tabular_csv(input_file)
+        read_function, mode, delimiter, groupby_header = prep.check_tabular_csv(input_file)
         path_cache = os.path.join(output_directory, 'cache')
         os.makedirs(path_cache, exist_ok=True)
-        signature_object = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), pancancer=pancancer)
-        cohorts_of_analysis = set()
+        signature_object = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), groupby=groupby)
+        groups_of_analysis = set()
 
-        if pancancer:
+        if groupby:
             # Check header
-            if cancer_type:
+            if groupby_header:
                 # Read file and get input cohorts
-                pancancer_pickles = 0
+                groups_pickles = 0
                 with read_function(input_file, mode) as read_file:
                     fd = csv.DictReader(read_file, delimiter=delimiter)
                     for line in fd:
-                        cohorts_of_analysis.add(line['CANCER_TYPE'])
-
+                        groups_of_analysis.add(line['GROUP_BY'])
                 logger.info(
-                    'PanCancer analysis for {} cohort{}'.format(
-                        len(cohorts_of_analysis), 's' if len(cohorts_of_analysis) > 1 else ''
+                    'Analysis carried out for {} group{}'.format(
+                        len(groups_of_analysis), 's' if len(groups_of_analysis) > 1 else ''
                     )
                 )
-
                 # Check if signatures computed
-                for cohort in cohorts_of_analysis:
-                    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(cohort, kmer))
+                for group in groups_of_analysis:
+                    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(group, kmer))
                     if os.path.isfile(path_pickle):
-                        pancancer_pickles += 1
-                if len(cohorts_of_analysis) == pancancer_pickles:
+                        groups_pickles += 1
+                if len(groups_of_analysis) == groups_pickles:
                     logger.info('Signatures computed')
-
                 # Calculate signatures
                 else:
                     logger.info('Computing signatures...')
@@ -282,7 +279,7 @@ def main(input_file,
                     signature_object.save(path_cache, prefix='')
                     logger.info('Signatures computed')
             else:
-                raise excep.UserInputError('PanCancer analysis requires "CANCER_TYPE" column in input file')
+                raise excep.UserInputError('Analysis by groups requires "GROUP_BY" column in input file')
         else:
             # Check if signatures computed
             file_prefix = input_file.split('/')[-1].split('.')[0]
@@ -301,9 +298,11 @@ def main(input_file,
         error = prep.check_signature(input_signature, kmer)
         if error:
             raise excep.UserInputError('Signatures file could not be read. Please check {}'.format(input_signature))
-        if pancancer:
-            raise excep.UserInputError('PanCancer analysis computes one signature file for each cancer type present '
-                                       'in the mutations input file, according to "CANCER_TYPE" column.')
+        if groupby:
+            raise excep.UserInputError('--groupby flag is not compatible with input signature file. '
+                                       'Please, remove input signature file. '
+                                       'OncodriveCLUSTL will compute one signature file for each group present '
+                                       'in the mutations input file, according to "GROUP_BY" column.')
         logger.info('Input signatures loaded')
 
     # Initialize Experiment class variables and run
@@ -315,7 +314,7 @@ def main(input_file,
                                                                             mutations_d,
                                                                             samples_d,
                                                                             genome,
-                                                                            cohorts_d,
+                                                                            groups_d,
                                                                             path_cache,
                                                                             element_mutations,
                                                                             cluster_mutations,

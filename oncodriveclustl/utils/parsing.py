@@ -13,7 +13,7 @@ from intervaltree import IntervalTree
 from oncodriveclustl.utils import exceptions as excep
 from oncodriveclustl.utils import preprocessing as prep
 
-Mutation = namedtuple('Mutation', 'position, region, alt, sample, cancertype')
+Mutation = namedtuple('Mutation', 'position, region, alt, sample, group')
 Cds = namedtuple('Cds', 'start, end')
 
 
@@ -83,26 +83,26 @@ def map_regions_concatseq(regions_d):
     return concat_regions_d
 
 
-def read_mutations(input_mutations, trees, is_pancancer):
+def read_mutations(input_mutations, trees, is_group):
     """
     Read mutations file (only substitutions) and map to elements' genomic regions
 
     Args:
         input_mutations (str): path to input file containing mutations
         trees (dict): dictionary of dictionary of IntervalTrees containing intervals of genomic elements per chromosome
-        is_pancancer (bool): True, analysis carried out using cohorts available in the input mutations file
+        is_group (bool): True, analysis carried out using groups available in the input mutations file
 
     Returns:
         mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
         samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
-        cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
+        groups_d (dict): dictionary of elements (keys) and set of groups containing element mutations (values)
 
     """
     global Mutation
     mutations_d = defaultdict(list)
     samples_d = defaultdict(int)
-    cohorts_d = defaultdict(set)
-    read_function, mode, delimiter, cancer_type_header = prep.check_tabular_csv(input_mutations)
+    groups_d = defaultdict(set)
+    read_function, mode, delimiter, groupby_header = prep.check_tabular_csv(input_mutations)
     file_prefix = input_mutations.split('/')[-1].split('.')[0]
 
     with read_function(input_mutations, mode) as read_file:
@@ -113,10 +113,10 @@ def read_mutations(input_mutations, trees, is_pancancer):
             ref = line['REF']
             alt = line['ALT']
             sample = line['SAMPLE']
-            if cancer_type_header and is_pancancer:
-                cancer_type = line['CANCER_TYPE']
+            if groupby_header and is_group:
+                group = line['GROUP_BY']
             else:
-                cancer_type = file_prefix
+                group = file_prefix
             samples_d[sample] += 1
             # Read substitutions only
             if len(ref) == 1 and len(alt) == 1:
@@ -125,14 +125,14 @@ def read_mutations(input_mutations, trees, is_pancancer):
                         if trees[chromosome][int(position)] != set():
                             results = trees[chromosome][int(position)]
                             for res in results:
-                                m = Mutation(position, (res.begin, res.end), alt, sample, cancer_type)
+                                m = Mutation(position, (res.begin, res.end), alt, sample, group)
                                 mutations_d[res.data].append(m)
-                                cohorts_d[res.data].add(cancer_type)
+                                groups_d[res.data].add(group)
 
-    return mutations_d, samples_d, cohorts_d
+    return mutations_d, samples_d, groups_d
 
 
-def parse(input_regions, elements, input_mutations, concatenate, is_pancancer):
+def parse(input_regions, elements, input_mutations, concatenate, is_group):
     """Parse genomic regions and dataset of cancer type mutations
 
     Args:
@@ -140,7 +140,7 @@ def parse(input_regions, elements, input_mutations, concatenate, is_pancancer):
         elements (set): elements to analyze. If the set is empty all the elements in genomic regions will be analyzed
         input_mutations (str): path to file containing mutations
         concatenate (bool): True calculates clustering on collapsed genomic regions (e.g., coding regions in a gene)
-        is_pancancer (bool): True, analysis carried out using cohorts available in the input mutations file
+        is_group (bool): True, analysis carried out using groups available in the input mutations file
 
     Returns:
         regions_d (dict): dictionary of IntervalTrees containing genomic regions from all analyzed elements
@@ -149,7 +149,7 @@ def parse(input_regions, elements, input_mutations, concatenate, is_pancancer):
         strands_d (dict): dictionary of elements (keys) and strands (values)
         mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
         samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
-        cohorts_d (dict): dictionary of elements (keys) and set of cohorts containing element mutations (values)
+        groups_d (dict): dictionary of elements (keys) and set of groups containing element mutations (values)
 
     """
     global logger
@@ -161,7 +161,7 @@ def parse(input_regions, elements, input_mutations, concatenate, is_pancancer):
     else:
         concat_regions_d = {}
     logger.info('Regions parsed')
-    mutations_d, samples_d, cohorts_d = read_mutations(input_mutations, trees, is_pancancer)
+    mutations_d, samples_d, groups_d = read_mutations(input_mutations, trees, is_group)
     logger.info('Mutations parsed')
 
-    return regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, cohorts_d
+    return regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, groups_d

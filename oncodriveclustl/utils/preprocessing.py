@@ -59,7 +59,7 @@ def check_tabular_csv(file):
         read_function: function to read file
         mode (str): reading mode
         dialect.delimiter (str): file column delimiter
-        cancer_type (bool): True if `CANCER_TYPE` column exists in input file
+        groupby (bool): True if `GROUP_BY` column exists in input file
 
     """
 
@@ -81,10 +81,10 @@ def check_tabular_csv(file):
             ref = 'REF' in line
             alt = 'ALT' in line
             sample = 'SAMPLE' in line
-            cancer_type = 'CANCER_TYPE' in line
+            groupby = 'GROUP_BY' in line
             break
         if chrom and pos and ref and alt and sample:
-            return read_function, mode, dialect.delimiter, cancer_type
+            return read_function, mode, dialect.delimiter, groupby
         else:
             raise excep.UserInputError('{} does not contain header and/or header is not in correct format'.format(file))
 
