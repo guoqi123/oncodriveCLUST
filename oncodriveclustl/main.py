@@ -226,7 +226,7 @@ def main(input_file,
         elements,
         input_file,
         concatenate,
-        groupby,
+        groupby
     )
     mut = 0
     elem = 0
@@ -352,13 +352,13 @@ def main(input_file,
 
     # Cluster plot
     if clustplot:
-        cplot.make_clustplot(elements_results,
+        info_cluster_plots = cplot.make_clustplot(elements_results,
                              clusters_results,
                              global_info_results,
                              directory=output_directory
                             )
-        logger.info('Cluster plot{} generated at : {}'.format('s' if len(elements) > 1 else '',
-                                                              output_directory))
+        for message in info_cluster_plots:
+            logger.info(message)
 
     # Quantile-quantile plot
     if qqplot:

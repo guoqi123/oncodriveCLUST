@@ -47,15 +47,20 @@ OncodriveCLUSTL only requires two main inputs:
     4. ALT: Alternate nucleotide
     5. SAMPLE: Identifier of the sample
 
-- Annotations file. TSV GZIP compressed file without headers containing the genomic positions annotations of genomic elements (GEs):
+- Annotations file. TSV GZIP compressed file without headers containing the genomic coordinates of genomic elements (GEs):
 
     1. Chromosome: 1, 2,..., X, Y
     2. Start: Starting position of the genomic region
     3. End: Final position of the genomic region
     4. Strand: Strand of the genomic region ("+" or "-")
-    5. Element ID: Identifier of the genomic element
+    5. Element ID: Identifier of the genomic element.
     6. Transcript ID: Identifier of the transcript
     7. Symbol: Symbol of the genomic element
+
+OncodriveCLUSTL will analyze genomic elements as Symbol + Element ID.
+
+.. note::
+    Coordinates of a given GE cannot overlap.
 
 You can check the input formats in the files provided in the example.
 
@@ -63,13 +68,13 @@ If you have a directory containing mutation files in VCF format, you can run our
 
        $ parse_vcf -i [INPUT_DIRECTORY] -o [OUTPUT_FILE]
 
-Please, can check 'parsers/vcf.py' module for more details.
+Please, check 'parsers/vcf.py' module for more details.
 
 .. _readme outputdata:
 
 Output data
 ---------------
-OncodriveCLUSTL generates three output files :
+OncodriveCLUSTL generates three output files:
 
 - Elements results file ('elements_results.txt'). TSV file containing results of the analyzed elements:
 
@@ -133,11 +138,17 @@ Command line
 - '-simw', '--simulation-window': Simulation window. Default is 31
 - '-c', '--cores': Number of cores to use in the computation. By default it uses all the available cores
 - '--log-level': Verbosity of the logger. Default is 'info'
-- '--concatenate', is_flag=True: Calculate clustering on concatenated genomic regions (e.g., exons in coding sequences)
-- '--pancancer': PanCancer cohort analysis
+- '--concatenate': Calculate clustering on concatenated genomic regions (e.g., exons in coding sequences)
+- '--groupby': Analysis carried out by groups (e.g., PanCancer cohort analysis).
 - '--clustplot': Generate a needle plot with clusters for an element
 - '--qqplot': Generate a quantile-quantile (QQ) plot for a dataset
 - '--gzip': Gzip compress files
+
+.. note::
+    When using simulation mode 'mutation_centered', simulation windows can be simulated outside the genomic element.
+
+.. note::
+    When using '--groupby' flag, input mutation file requires an extra column "GROUP_BY" (group identifier). According to it, one mutational signature will be computed for each group. Please check that the number of mutations per group is sufficient for an accurate signatures calculation.
 
 .. _readme example:
 

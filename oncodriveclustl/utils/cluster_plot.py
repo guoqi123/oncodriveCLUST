@@ -233,9 +233,10 @@ def make_clustplot(elements_results, clusters_results, global_info_results, dire
         directory (str): path to output
 
     Returns:
-        None
+        info (str): message
 
     """
+    info_cluster_plots = []
 
     # Parse
     for element, data in elements_results.items():
@@ -244,14 +245,14 @@ def make_clustplot(elements_results, clusters_results, global_info_results, dire
         regions, _, strand, mutations, length, _ = global_info_results[element]
 
         if type(observed_clusters) != float:
+
             # Preprocess data
             concat_regions_d, plot_regions_xcoords = concat_regions_to_plot(element, regions, strand)
             smooth = concat_smooth(smooth_tree, strand)
             mutations_xcoords_number = mutations_index(element, mutations, concat_regions_d, strand, length)
             plot_cluster_xcoords = cluster_coords(element, observed_clusters, strand, length, concat_regions_d)
-
             output = os.path.join(directory, '{}_plot.png'.format(element.split('//')[0]))
-
+            # Plot
             clusters_plot(element,
                           plot_regions_xcoords,
                           smooth,
@@ -259,6 +260,9 @@ def make_clustplot(elements_results, clusters_results, global_info_results, dire
                           plot_cluster_xcoords,
                           output,
                           )
+            info = 'Cluster plot for {} generated at: {}'.format(element.split('//')[0], output)
         else:
-            print('Element {0} does not have clusters. No cluster plot is generated for {0}'.format(element))
+            info = 'No clusters found in {}. No cluster plot is generated for this element'.format(element.split('//')[0])
+        info_cluster_plots.append(info)
 
+    return info_cluster_plots
