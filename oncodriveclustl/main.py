@@ -252,7 +252,7 @@ def main(input_file,
                                   kmer_size=int(kmer),
                                   genome_build=genome,
                                   normalize_file=None,
-                                  collapse=False,
+                                  collapse=True,
                                   includeN=False,
                                   group=None
                                   )
@@ -268,6 +268,7 @@ def main(input_file,
         signatures['probabilities'][new_key] = v
 
     path_cache = os.path.join(output_directory, 'cache')
+    os.makedirs(path_cache, exist_ok=True)
     file_prefix = input_file.split('/')[-1].split('.')[0]
     output_file = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
     with open(output_file, 'wb') as fd:
