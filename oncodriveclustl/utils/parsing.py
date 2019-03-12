@@ -40,6 +40,7 @@ def read_regions(input_regions, elements):
 
     if comp == 'gz':
         with gzip.open(input_regions, 'rt') as fd:
+            next(fd)
             for line in fd:
                 chromosome, start, end, strand, ensid, _, symbol = line.strip().split('\t')
                 if elements and symbol not in elements:

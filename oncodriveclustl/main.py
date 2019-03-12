@@ -3,12 +3,15 @@ Contains the command line parsing
 """
 
 # Import modules
+from collections import defaultdict
 import csv
 import logging
 import os
 
+import bgsignature as bgsign
 import click
 import daiquiri
+import pickle
 
 from oncodriveclustl.utils import cluster_plot as cplot
 from oncodriveclustl.utils import exceptions as excep
@@ -243,67 +246,94 @@ def main(input_file,
     if not element_mutations_cutoff:
         raise excep.UserInputError('No element found with enough mutations to perform analysis')
 
-    # Check format input file and calculate signature
-    if not input_signature:
-        read_function, mode, delimiter, groupby_header = prep.check_tabular_csv(input_file)
-        path_cache = os.path.join(output_directory, 'cache')
-        os.makedirs(path_cache, exist_ok=True)
-        signature_object = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), groupby=groupby)
-        groups_of_analysis = set()
+    # Signature
+    normalized_counts = bgsign.normalize(input_file,
+                                  regions_file,
+                                  kmer_size=int(kmer),
+                                  genome_build=genome,
+                                  normalize_file=None,
+                                  collapse=False,
+                                  includeN=False,
+                                  group=None
+                                  )
+    # Reformat
+    signatures = defaultdict(dict)
+    for k, v in normalized_counts.items():
+        reference_kmer, alternate = k.split('>')
+        alternate_kmer = '{}{}{}'.format(reference_kmer[0:len(reference_kmer) // 2],
+                                         alternate,
+                                         reference_kmer[len(reference_kmer) // 2 + 1:]
+                                         )
+        new_key = (reference_kmer, alternate_kmer)
+        signatures['probabilities'][new_key] = v
 
-        if groupby:
-            # Check header
-            if groupby_header:
-                # Read file and get input cohorts
-                groups_pickles = 0
-                with read_function(input_file, mode) as read_file:
-                    fd = csv.DictReader(read_file, delimiter=delimiter)
-                    for line in fd:
-                        groups_of_analysis.add(line['GROUP_BY'])
-                logger.info(
-                    'Analysis carried out for {} group{}'.format(
-                        len(groups_of_analysis), 's' if len(groups_of_analysis) > 1 else ''
-                    )
-                )
-                # Check if signatures computed
-                for group in groups_of_analysis:
-                    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(group, kmer))
-                    if os.path.isfile(path_pickle):
-                        groups_pickles += 1
-                if len(groups_of_analysis) == groups_pickles:
-                    logger.info('Signatures computed')
-                # Calculate signatures
-                else:
-                    logger.info('Computing signatures...')
-                    signature_object.calculate(input_file)
-                    signature_object.save(path_cache, prefix='')
-                    logger.info('Signatures computed')
-            else:
-                raise excep.UserInputError('Analysis by groups requires "GROUP_BY" column in input file')
-        else:
-            # Check if signatures computed
-            file_prefix = input_file.split('/')[-1].split('.')[0]
-            path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
-            if os.path.isfile(path_pickle):
-                logger.info('Signatures computed')
-            # Calculate signatures
-            else:
-                logger.info('Computing signatures...')
-                signature_object.calculate(input_file)
-                signature_object.save(path_cache, prefix=file_prefix)
-                logger.info('Signatures computed')
-    else:
-        # Check format
-        path_cache = input_signature
-        error = prep.check_signature(input_signature, kmer)
-        if error:
-            raise excep.UserInputError('Signatures file could not be read. Please check {}'.format(input_signature))
-        if groupby:
-            raise excep.UserInputError('--groupby flag is not compatible with input signature file. '
-                                       'Please, remove input signature file. '
-                                       'OncodriveCLUSTL will compute one signature file for each group present '
-                                       'in the mutations input file, according to "GROUP_BY" column.')
-        logger.info('Input signatures loaded')
+    path_cache = os.path.join(output_directory, 'cache')
+    file_prefix = input_file.split('/')[-1].split('.')[0]
+    output_file = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
+    with open(output_file, 'wb') as fd:
+        pickle.dump(signatures, fd, protocol=2)
+
+    # Check format input file and calculate signature
+    # if not input_signature:
+    #     read_function, mode, delimiter, groupby_header = prep.check_tabular_csv(input_file)
+    #     path_cache = os.path.join(output_directory, 'cache')
+    #     os.makedirs(path_cache, exist_ok=True)
+    #     signature_object = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), groupby=groupby)
+    #     groups_of_analysis = set()
+    #
+    #     if groupby:
+    #         # Check header
+    #         if groupby_header:
+    #             # Read file and get input cohorts
+    #             groups_pickles = 0
+    #             with read_function(input_file, mode) as read_file:
+    #                 fd = csv.DictReader(read_file, delimiter=delimiter)
+    #                 for line in fd:
+    #                     groups_of_analysis.add(line['GROUP_BY'])
+    #             logger.info(
+    #                 'Analysis carried out for {} group{}'.format(
+    #                     len(groups_of_analysis), 's' if len(groups_of_analysis) > 1 else ''
+    #                 )
+    #             )
+    #             # Check if signatures computed
+    #             for group in groups_of_analysis:
+    #                 path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(group, kmer))
+    #                 if os.path.isfile(path_pickle):
+    #                     groups_pickles += 1
+    #             if len(groups_of_analysis) == groups_pickles:
+    #                 logger.info('Signatures computed')
+    #             # Calculate signatures
+    #             else:
+    #                 logger.info('Computing signatures...')
+    #                 signature_object.calculate(input_file)
+    #                 signature_object.save(path_cache, prefix='')
+    #                 logger.info('Signatures computed')
+    #         else:
+    #             raise excep.UserInputError('Analysis by groups requires "GROUP_BY" column in input file')
+    #     else:
+    #         # Check if signatures computed
+    #         file_prefix = input_file.split('/')[-1].split('.')[0]
+    #         path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
+    #         if os.path.isfile(path_pickle):
+    #             logger.info('Signatures computed')
+    #         # Calculate signatures
+    #         else:
+    #             logger.info('Computing signatures...')
+    #             signature_object.calculate(input_file)
+    #             signature_object.save(path_cache, prefix=file_prefix)
+    #             logger.info('Signatures computed')
+    # else:
+    #     # Check format
+    #     path_cache = input_signature
+    #     error = prep.check_signature(input_signature, kmer)
+    #     if error:
+    #         raise excep.UserInputError('Signatures file could not be read. Please check {}'.format(input_signature))
+    #     if groupby:
+    #         raise excep.UserInputError('--groupby flag is not compatible with input signature file. '
+    #                                    'Please, remove input signature file. '
+    #                                    'OncodriveCLUSTL will compute one signature file for each group present '
+    #                                    'in the mutations input file, according to "GROUP_BY" column.')
+    #     logger.info('Input signatures loaded')
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results, global_info_results = exp.Experiment(
