@@ -221,7 +221,7 @@ class Experiment:
                             for alt in sorted(list(nucleot.difference({ref_kmer[self.kmer//2]}))):
                                 alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
                                 for group, signature in signatures_d.items():
-                                    prob[group].append(signature[(ref_kmer, alt_kmer)])
+                                    prob[group].append(signature.get((ref_kmer, alt_kmer), 0))
                         else:
                             for group, signature in signatures_d.items():
                                 prob[group].extend([0, 0, 0])

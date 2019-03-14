@@ -9,7 +9,6 @@ import logging
 import os
 
 import bgsignature as bgsign
-from bgsignature import file
 import click
 import daiquiri
 import pickle
@@ -21,7 +20,6 @@ from oncodriveclustl.utils import postprocessing as postp
 from oncodriveclustl.utils import preprocessing as prep
 from oncodriveclustl.utils import qq_plot as qplot
 from oncodriveclustl.utils import run as exp
-from oncodriveclustl.utils import signature as sign
 
 
 # Global variables
@@ -81,7 +79,7 @@ LOGS = {
 @click.option('--clustplot', is_flag=True, help='Generate a needle plot with clusters for an element')
 @click.option('--qqplot', is_flag=True, help='Generate a quantile-quantile (QQ) plot for a dataset')
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
-@click.option('-t', '--test', help='testing', type=click.Choice(['1','2', '3', '4', '5', '6', '7', '8']))
+@click.option('-t', '--test', default='7', help='testing', type=click.Choice(['1','2', '3', '4', '5', '6', '7', '8']))
 def main(input_file,
          regions_file,
          output_directory,
@@ -257,53 +255,29 @@ def main(input_file,
 
 
     test = int(test)
-    if test in [1, 5]:
-        regions_file_signature = None
-        collapse = False
-    elif test in [2, 4]:
-        regions_file_signature = None
-        collapse = True
-    elif test in [3, 7]:
-        regions_file_signature = regions_file
-        collapse = False
-    else:   #elif test == '4':
-        regions_file_signature = regions_file
-        collapse = True
+    # TODO remove
+    # if test in [1, 5]:
+    #     regions_file_signature = None
+    #     collapse = False
+    # elif test in [2, 6]:   # 4 was wrong
+    #     regions_file_signature = None
+    #     collapse = True
+    # elif test in [3, 7]:
+    #     regions_file_signature = regions_file
+    #     collapse = False
+    # else:   #elif test == '4':
+    #     regions_file_signature = regions_file
+    #     collapse = True
 
-    if test <= 4:
-        normalized_counts = bgsign.relative_frequency(input_file,
-                                               regions_file_signature,
-                                               kmer_size=int(kmer),
-                                               genome_build=genome,
-                                               collapse=collapse,
-                                               includeN=False,
-                                               group=None
-                                               )
-    elif 4 < test <= 6:
-        region_counts = bgsign.count(None, regions_file, int(kmer), genome, collapse)
-        output_file_regions = os.path.join(path_cache, '{}_kmer_{}.json'.format(file_prefix, kmer))
-        bgsign.file.save(region_counts, file=output_file_regions)
-
-        normalized_counts = bgsign.normalize(input_file,
-                                             regions_file_signature,
-                                             kmer_size=int(kmer),
-                                             genome_build=genome,
-                                             normalize_file=output_file_regions,
-                                             collapse=collapse,
-                                             includeN=False,
-                                             group=None
-                                             )
-
-    else:
-        normalized_counts = bgsign.normalize(input_file,
-                                              regions_file_signature,
-                                              kmer_size=int(kmer),
-                                              genome_build=genome,
-                                              normalize_file=None,
-                                              collapse=collapse,
-                                              includeN=False,
-                                              group=None
-                                             )
+    normalized_counts = bgsign.normalize(input_file,
+                                          regions_file,
+                                          kmer_size=int(kmer),
+                                          genome_build=genome,
+                                          normalize_file=None,
+                                          collapse=False,
+                                          includeN=False,
+                                          group=None
+                                         )
     # Reformat
     signatures = defaultdict(dict)
     for k, v in normalized_counts.items():
@@ -317,6 +291,7 @@ def main(input_file,
     with open(output_file, 'wb') as fd:
         pickle.dump(signatures, fd, protocol=2)
 
+    # TODO remove
     # Check format input file and calculate signature
     # if not input_signature:
     #     read_function, mode, delimiter, groupby_header = prep.check_tabular_csv(input_file)
