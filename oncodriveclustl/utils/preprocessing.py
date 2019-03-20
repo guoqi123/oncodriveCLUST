@@ -12,6 +12,8 @@ import pickle
 from oncodriveclustl.utils import exceptions as excep
 
 
+# FIXME remove module
+
 def check_compression(file):
     """
     Check input file compression

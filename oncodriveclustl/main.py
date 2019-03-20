@@ -17,7 +17,6 @@ from oncodriveclustl.utils import cluster_plot as cplot
 from oncodriveclustl.utils import exceptions as excep
 from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import postprocessing as postp
-from oncodriveclustl.utils import preprocessing as prep
 from oncodriveclustl.utils import qq_plot as qplot
 from oncodriveclustl.utils import run as exp
 
@@ -32,7 +31,6 @@ LOGS = {
     'critical': logging.CRITICAL
 }
 
-
 @click.command(context_settings=CONTEXT_SETTINGS)
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
@@ -46,7 +44,8 @@ LOGS = {
               help='File with the symbol of the elements to analyze')
 @click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
               help='Symbol of the element to analyze')
-@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
+@click.option('-g', '--genome', default='hg19',
+              type=click.Choice(['hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
               help='Genome to use')
 @click.option('-emut', '--element-mutations', type=click.INT, default=2,
               help='Cutoff of element mutations. Default is 2')
@@ -68,6 +67,9 @@ LOGS = {
               type=click.Choice(['mutation_centered', 'region_restricted']))
 @click.option('-simw', '--simulation-window', type=click.IntRange(19, 101), default=31,
               help='Simulation window. Default is 31')
+@click.option('-sgroup', '--signature-group', default=None,
+              help='Header of the column to group signatures calculation',
+              type=click.Choice(['SIGNATURE', 'SAMPLE', 'CANCER_TYPE']))
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
               help='Number of cores to use in the computation. By default it uses all the available cores.')
 @click.option('--seed', type=click.INT, default=None, help='Seed to use in the simulations')
@@ -75,11 +77,9 @@ LOGS = {
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--concatenate', is_flag=True, help='Calculate clustering on concatenated genomic regions (e.g., exons '
                                                   'in coding sequences)')
-@click.option('--groupby', is_flag=True, help='Analysis carried out by groups (e.g., PanCancer cohort analysis)')
 @click.option('--clustplot', is_flag=True, help='Generate a needle plot with clusters for an element')
 @click.option('--qqplot', is_flag=True, help='Generate a quantile-quantile (QQ) plot for a dataset')
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
-@click.option('-t', '--test', default='7', help='testing', type=click.Choice(['1','2', '3', '4', '5', '6', '7', '8']))
 def main(input_file,
          regions_file,
          output_directory,
@@ -97,15 +97,14 @@ def main(input_file,
          n_simulations,
          simulation_mode,
          simulation_window,
+         signature_group,
          cores,
          seed,
          log_level,
          concatenate,
-         groupby,
          clustplot,
          qqplot,
          gzip,
-         test
          ):
     """
     OncodriveCLUSTL is a sequence based clustering method to identify cancer drivers across the genome
@@ -130,11 +129,11 @@ def main(input_file,
         n_simulations (int): number of simulations
         simulation_mode (str): simulation mode
         simulation_window (int): window length to simulate mutations
+        signature_group (str): header of the column to group signatures calculation
         cores (int): number of CPUs to use
         seed (int): seed
         log_level (str): verbosity of the logger
         concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
-        groupby (bool): flag to compute PanCancer cohort analysis
         clustplot (bool): flag to generate a needle plot with clusters for an element
         qqplot (bool): flat to generate a quantile-quantile (QQ) plot for a dataset
         gzip (bool): flag to generate GZIP compressed output files
@@ -190,9 +189,9 @@ def main(input_file,
         'simulation_mode: {}'.format(simulation_mode),
         'simulation_window: {}'.format(simulation_window),
         'n_simulations: {}'.format(n_simulations),
+        'signature_group: {}'.format(signature_group),
         'cores: {}'.format(cores),
         'gzip: {}'.format(gzip),
-        'groupby: {}'.format(groupby),
         'seed: {}'.format(seed)
     ]))
     logger.info('Initializing OncodriveCLUSTL...')
@@ -230,8 +229,9 @@ def main(input_file,
         elements,
         input_file,
         concatenate,
-        groupby,
+        signature_group
     )
+    # Summary
     mut = 0
     elem = 0
     element_mutations_cutoff = False
@@ -252,22 +252,6 @@ def main(input_file,
     os.makedirs(path_cache, exist_ok=True)
     file_prefix = input_file.split('/')[-1].split('.')[0]
     output_file = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
-
-
-    test = int(test)
-    # TODO remove
-    # if test in [1, 5]:
-    #     regions_file_signature = None
-    #     collapse = False
-    # elif test in [2, 6]:   # 4 was wrong
-    #     regions_file_signature = None
-    #     collapse = True
-    # elif test in [3, 7]:
-    #     regions_file_signature = regions_file
-    #     collapse = False
-    # else:   #elif test == '4':
-    #     regions_file_signature = regions_file
-    #     collapse = True
 
     normalized_counts = bgsign.normalize(input_file,
                                           regions_file,
