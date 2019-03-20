@@ -5,6 +5,8 @@ import os
 import math
 from collections import defaultdict
 
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
 

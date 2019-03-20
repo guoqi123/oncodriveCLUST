@@ -561,6 +561,7 @@ class Experiment:
         clusters_results = defaultdict()
         global_info_results = defaultdict()
         np.random.seed(self.main_seed)
+        cores_minus_one = self.cores - 1 if self.cores != 1 else self.cores
 
         # Filter elements >= cutoff mutations
         analyzed_elements = []
@@ -647,7 +648,7 @@ class Experiment:
                 post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan'), None) for
                                  e in noprobabilities_elements + belowcutoff_elements]
                 total_items_split = list(
-                    chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / (self.cores-1))))
+                    chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / cores_minus_one)))
                 )
                 total_items_split.append(post_item_nan)
                 for results in tqdm(executor.map(
