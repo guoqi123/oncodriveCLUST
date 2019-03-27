@@ -43,8 +43,6 @@ class Experiment:
                  cluster_mutations_cutoff,
                  smooth_window,
                  cluster_window,
-                 cluster_score,
-                 element_score,
                  kmer,
                  n_simulations,
                  simulation_mode,
@@ -70,8 +68,6 @@ class Experiment:
             cluster_mutations_cutoff (int): minimum number of mutations to define a cluster
             smooth_window (int): Tukey kernel smoothing window length
             cluster_window (int): clustering window length
-            cluster_score (str): cluster score method
-            element_score (str): element score method
             kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or
                 pentanucleotides)
             n_simulations (int): number of simulations
@@ -104,8 +100,6 @@ class Experiment:
         # Calculate tukey filter
         self.tukey_filter = self.tukey(self.smooth_window)
         self.cluster_window = cluster_window
-        self.cluster_score = cluster_score
-        self.element_score = element_score
         self.kmer = kmer
         self.n_simulations = n_simulations
         self.simulation_mode = simulation_mode

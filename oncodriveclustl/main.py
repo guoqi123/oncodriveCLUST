@@ -54,10 +54,6 @@ LOGS = {
               help='Smoothing window. Default is 11')
 @click.option('-cw', '--cluster-window', type=click.IntRange(3, 101), default=11,
               help='Cluster window. Default is 11')
-@click.option('-cs', '--cluster-score', default='cmutcorrected', help='Cluster score formula',
-              type=click.Choice(['cmutcorrected']))
-@click.option('-es', '--element-score', default='sum', help='Element score formula',
-              type=click.Choice(['sum']))
 @click.option('-kmer', '--kmer', default='3', help='K-mer nucleotide context',
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=1000,
@@ -94,8 +90,6 @@ def main(input_file,
          cluster_mutations,
          smooth_window,
          cluster_window,
-         cluster_score,
-         element_score,
          kmer,
          n_simulations,
          simulation_mode,
@@ -127,8 +121,6 @@ def main(input_file,
         cluster_mutations (int): minimum number of mutations to define a cluster
         smooth_window (int): Tukey kernel smoothing window length
         cluster_window (int): clustering window length
-        cluster_score (str): cluster score method
-        element_score (str): element score method
         kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or pentanucleotides)
         n_simulations (int): number of simulations
         simulation_mode (str): simulation mode
@@ -193,8 +185,6 @@ def main(input_file,
         'concatenate: {}'.format(concatenate),
         'smooth_window: {}'.format(smooth_window),
         'cluster_window: {}'.format(cluster_window),
-        'cluster_score: {}'.format(cluster_score),
-        'element_score: {}'.format(element_score),
         'k-mer: {}'.format(kmer),
         'simulation_mode: {}'.format(simulation_mode),
         'simulation_window: {}'.format(simulation_window),
@@ -356,8 +346,6 @@ def main(input_file,
                                                                             cluster_mutations,
                                                                             smooth_window,
                                                                             cluster_window,
-                                                                            cluster_score,
-                                                                            element_score,
                                                                             int(kmer),
                                                                             n_simulations,
                                                                             simulation_mode,
