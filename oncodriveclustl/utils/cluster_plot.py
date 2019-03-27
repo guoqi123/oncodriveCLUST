@@ -9,6 +9,9 @@ import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import gridspec
+from matplotlib import rcParams
+rcParams['font.family'] = 'sans-serif'
+rcParams['font.sans-serif'] = ['Arial']
 
 
 def concat_regions_to_plot(element, regions, strand):

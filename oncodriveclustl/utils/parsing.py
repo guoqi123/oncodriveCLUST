@@ -2,16 +2,14 @@
 Contains functions to parse input mutations and genomic regions files
 """
 
-import gzip
-import csv
 from collections import defaultdict
 from collections import namedtuple
 
+from bgparsers import readers
 import daiquiri
 from intervaltree import IntervalTree
 
 from oncodriveclustl.utils import exceptions as excep
-from oncodriveclustl.utils import preprocessing as prep
 
 Mutation = namedtuple('Mutation', 'position, region, alt, sample, group')
 Cds = namedtuple('Cds', 'start, end')
@@ -36,24 +34,31 @@ def read_regions(input_regions, elements):
     regions_d = defaultdict(IntervalTree)
     chromosomes_d = defaultdict()
     strands_d = defaultdict()
-    comp = prep.check_compression(input_regions)
 
-    if comp == 'gz':
-        with gzip.open(input_regions, 'rt') as fd:
-            for line in fd:
-                chromosome, start, end, strand, ensid, _, symbol = line.strip().split('\t')
-                if elements and symbol not in elements:
-                    continue
-                if int(start) != int(end):
-                    trees[chromosome][int(start): int(end) + 1] = symbol + '//' + ensid
-                    regions_d[symbol + '//' + ensid].addi(int(start), (int(end) + 1))
-                    chromosomes_d[symbol + '//' + ensid] = chromosome
-                    strands_d[symbol + '//' + ensid] = strand
-        if not regions_d.keys():
-            raise excep.UserInputError('No elements found in genomic regions. '
-                                       'Please, check input data ({})'.format(input_regions))
-    else:
-        raise excep.UserInputError('Genomic regions file is not compressed, please input GZIP compressed file')
+    # Read regions
+    for row in readers.elements(
+            input_regions,
+            required=['CHROMOSOME', 'START', 'END', 'ELEMENT', 'SYMBOL'],
+            extra=['STRAND']
+    ):
+        chromosome = row['CHROMOSOME']
+        start = row['START']
+        end = row['END']
+        ensid = row['ELEMENT']
+        symbol = row['SYMBOL']
+        strand = row.get('STRAND', '+')  # If None, '+' by default
+
+        if elements and symbol not in elements:
+            continue
+        if int(start) != int(end):
+            trees[chromosome][int(start): int(end) + 1] = symbol + '//' + ensid
+            regions_d[symbol + '//' + ensid].addi(int(start), (int(end) + 1))
+            chromosomes_d[symbol + '//' + ensid] = chromosome
+            strands_d[symbol + '//' + ensid] = strand
+    # Check
+    if not regions_d.keys():
+        raise excep.UserInputError('No elements found in genomic regions. '
+                                   'Please, check input data ({})'.format(input_regions))
 
     return regions_d, chromosomes_d, strands_d, trees
 
@@ -83,56 +88,61 @@ def map_regions_concatseq(regions_d):
     return concat_regions_d
 
 
-def read_mutations(input_mutations, trees, is_group):
+def read_mutations(input_mutations, trees, signature_group):
     """
     Read mutations file (only substitutions) and map to elements' genomic regions
 
     Args:
         input_mutations (str): path to input file containing mutations
         trees (dict): dictionary of dictionary of IntervalTrees containing intervals of genomic elements per chromosome
-        is_group (bool): True, analysis carried out using groups available in the input mutations file
+        signature_group (str): header of the column to group signatures calculation
 
     Returns:
         mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
         samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
-        groups_d (dict): dictionary of elements (keys) and set of groups containing element mutations (values)
+        groups_d (dict): dictionary of elements (keys) and groups (values)
 
     """
     global Mutation
     mutations_d = defaultdict(list)
     samples_d = defaultdict(int)
     groups_d = defaultdict(set)
-    read_function, mode, delimiter, groupby_header = prep.check_tabular_csv(input_mutations)
     file_prefix = input_mutations.split('/')[-1].split('.')[0]
 
-    with read_function(input_mutations, mode) as read_file:
-        fd = csv.DictReader(read_file, delimiter=delimiter)
-        for line in fd:
-            chromosome = line['CHROMOSOME']
-            position = int(line['POSITION'])
-            ref = line['REF']
-            alt = line['ALT']
-            sample = line['SAMPLE']
-            if groupby_header and is_group:
-                group = line['GROUP_BY']
-            else:
-                group = file_prefix
-            samples_d[sample] += 1
-            # Read substitutions only
-            if len(ref) == 1 and len(alt) == 1:
-                if ref != alt:
-                    if ref != '-' and alt != '-':
-                        if trees[chromosome][int(position)] != set():
-                            results = trees[chromosome][int(position)]
-                            for res in results:
-                                m = Mutation(position, (res.begin, res.end), alt, sample, group)
-                                mutations_d[res.data].append(m)
-                                groups_d[res.data].add(group)
+    # Read mutations
+    for row in readers.variants(
+            input_mutations,
+            required=['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE'],
+            extra=['SIGNATURE', 'CANCER_TYPE']
+    ):
+        chromosome = row['CHROMOSOME']
+        position = int(row['POSITION'])
+        ref = row['REF']
+        alt = row['ALT']
+        sample = row['SAMPLE']
+        samples_d[sample] += 1
+        if signature_group:
+            try:
+                group = row[signature_group]
+            except KeyError:
+                raise excep.UserInputError('Mutation file does not contain column "{}" '.format(signature_group))
+        else:
+            group = file_prefix
+        # Read substitutions only
+        if len(ref) == 1 and len(alt) == 1:
+            if ref != alt:
+                if ref != '-' and alt != '-':
+                    if trees[chromosome][int(position)] != set():
+                        results = trees[chromosome][int(position)]
+                        for res in results:
+                            m = Mutation(position, (res.begin, res.end), alt, sample, group)
+                            mutations_d[res.data].append(m)
+                            groups_d[res.data].add(group)
 
     return mutations_d, samples_d, groups_d
 
 
-def parse(input_regions, elements, input_mutations, concatenate, is_group):
+def parse(input_regions, elements, input_mutations, concatenate, signature_group):
     """Parse genomic regions and dataset of cancer type mutations
 
     Args:
@@ -140,7 +150,7 @@ def parse(input_regions, elements, input_mutations, concatenate, is_group):
         elements (set): elements to analyze. If the set is empty all the elements in genomic regions will be analyzed
         input_mutations (str): path to file containing mutations
         concatenate (bool): True calculates clustering on collapsed genomic regions (e.g., coding regions in a gene)
-        is_group (bool): True, analysis carried out using groups available in the input mutations file
+        signature_group (str): header of the column to group signatures calculation
 
     Returns:
         regions_d (dict): dictionary of IntervalTrees containing genomic regions from all analyzed elements
@@ -149,7 +159,7 @@ def parse(input_regions, elements, input_mutations, concatenate, is_group):
         strands_d (dict): dictionary of elements (keys) and strands (values)
         mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
         samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
-        groups_d (dict): dictionary of elements (keys) and set of groups containing element mutations (values)
+        groups_d (dict): dictionary of elements (keys) and groups (values)
 
     """
     global logger
@@ -161,7 +171,7 @@ def parse(input_regions, elements, input_mutations, concatenate, is_group):
     else:
         concat_regions_d = {}
     logger.info('Regions parsed')
-    mutations_d, samples_d, groups_d = read_mutations(input_mutations, trees, is_group)
+    mutations_d, samples_d, groups_d = read_mutations(input_mutations, trees, signature_group)
     logger.info('Mutations parsed')
 
     return regions_d, concat_regions_d, chromosomes_d, strands_d, mutations_d, samples_d, groups_d

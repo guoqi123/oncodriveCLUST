@@ -3,21 +3,20 @@ Contains the command line parsing
 """
 
 # Import modules
-import csv
 import logging
 import os
 
+import bgsignature as bgsign
 import click
 import daiquiri
+import pickle
 
 from oncodriveclustl.utils import cluster_plot as cplot
 from oncodriveclustl.utils import exceptions as excep
 from oncodriveclustl.utils import parsing as pars
 from oncodriveclustl.utils import postprocessing as postp
-from oncodriveclustl.utils import preprocessing as prep
 from oncodriveclustl.utils import qq_plot as qplot
 from oncodriveclustl.utils import run as exp
-from oncodriveclustl.utils import signature as sign
 
 
 # Global variables
@@ -38,13 +37,14 @@ LOGS = {
               help='GZIP compressed file with the genomic regions to analyze')
 @click.option('-o', '--output-directory', default=None, required=True,
               help='Output directory to be created')
-@click.option('-sign', '--input-signature', default=None, required=False, type=click.Path(exists=True),
+@click.option('-sig', '--input-signature', default=None, required=False, type=click.Path(exists=True),
               help='File containing input context based mutational probabilities (signature)')
 @click.option('-ef', '--elements-file', default=None, type=click.Path(exists=True),
-              help='File with the symbol of the elements to analyze')
+              help='File with the symbols of the elements to analyze')
 @click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
               help='Symbol of the element to analyze')
-@click.option('-g', '--genome', default='hg19', type=click.Choice(['hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
+@click.option('-g', '--genome', default='hg19',
+              type=click.Choice(['hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
               help='Genome to use')
 @click.option('-emut', '--element-mutations', type=click.INT, default=2,
               help='Cutoff of element mutations. Default is 2')
@@ -54,11 +54,7 @@ LOGS = {
               help='Smoothing window. Default is 11')
 @click.option('-cw', '--cluster-window', type=click.IntRange(3, 101), default=11,
               help='Cluster window. Default is 11')
-@click.option('-cs', '--cluster-score', default='cmutcorrected', help='Cluster score formula',
-              type=click.Choice(['cmutcorrected']))
-@click.option('-es', '--element-score', default='sum', help='Element score formula',
-              type=click.Choice(['sum']))
-@click.option('-kmer', '--kmer', default='3', help='Kmer-nucleotide context',
+@click.option('-kmer', '--kmer', default='3', help='K-mer nucleotide context',
               type=click.Choice(['3', '5']))
 @click.option('-n', '--n-simulations', type=click.INT, default=1000,
               help='number of simulations. Default is 1000')
@@ -66,14 +62,20 @@ LOGS = {
               type=click.Choice(['mutation_centered', 'region_restricted']))
 @click.option('-simw', '--simulation-window', type=click.IntRange(19, 101), default=31,
               help='Simulation window. Default is 31')
+@click.option('-sigcalc', '--signature-calculation', default='frequencies',
+              help='Signature calculation: mutation frequencies (default) or mutation counts normalized by k-mer '
+                   'region counts',
+              type=click.Choice(['frequencies', 'region_normalized']))
+@click.option('-siggroup', '--signature-group', default=None,
+              help='Header of the column to group signatures calculation',
+              type=click.Choice(['SIGNATURE', 'SAMPLE', 'CANCER_TYPE']))
 @click.option('-c', '--cores', type=click.IntRange(min=1, max=os.cpu_count(), clamp=False), default=os.cpu_count(),
-              help='Number of cores to use in the computation. By default it uses all the available cores.')
+              help='Number of cores to use in the computation. By default it will use all the available cores.')
 @click.option('--seed', type=click.INT, default=None, help='Seed to use in the simulations')
 @click.option('--log-level', default='info', help='Verbosity of the logger',
               type=click.Choice(['debug', 'info', 'warning', 'error', 'critical']))
 @click.option('--concatenate', is_flag=True, help='Calculate clustering on concatenated genomic regions (e.g., exons '
                                                   'in coding sequences)')
-@click.option('--groupby', is_flag=True, help='Analysis carried out by groups (e.g., PanCancer cohort analysis)')
 @click.option('--clustplot', is_flag=True, help='Generate a needle plot with clusters for an element')
 @click.option('--qqplot', is_flag=True, help='Generate a quantile-quantile (QQ) plot for a dataset')
 @click.option('--gzip', is_flag=True, help='Gzip compress files')
@@ -88,17 +90,16 @@ def main(input_file,
          cluster_mutations,
          smooth_window,
          cluster_window,
-         cluster_score,
-         element_score,
          kmer,
          n_simulations,
          simulation_mode,
          simulation_window,
+         signature_calculation,
+         signature_group,
          cores,
          seed,
          log_level,
          concatenate,
-         groupby,
          clustplot,
          qqplot,
          gzip
@@ -110,7 +111,7 @@ def main(input_file,
         input_file (str): path to mutations file
         regions_file (str): path to input genomic coordinates file
         output_directory(str): path to output directory. Output files will be generated in it.
-        input_signature (str): path to file containing input context based mutational probabilities (optional).
+        input_signature (str): path to file containing input context based mutational probabilities.
             By default (when no input signatures), OncodriveCLUSTL will calculate them from the mutations input file.
         elements_file (str): path to file containing one element per row (optional) to analyzed the listed elements.
             By default, OncodriveCLUSTL analyzes all genomic elements contained in `regions_file`.
@@ -120,17 +121,17 @@ def main(input_file,
         cluster_mutations (int): minimum number of mutations to define a cluster
         smooth_window (int): Tukey kernel smoothing window length
         cluster_window (int): clustering window length
-        cluster_score (str): cluster score method
-        element_score (str): element score method
         kmer (int): context nucleotides to calculate the mutational probabilities (trinucleotides or pentanucleotides)
         n_simulations (int): number of simulations
         simulation_mode (str): simulation mode
         simulation_window (int): window length to simulate mutations
+        signature_calculation (str): signature calculation, mutation frequencies (default) or mutation counts
+            normalized by k-mer region counts
+        signature_group (str): header of the column to group signatures. One signature will be computed for each group
         cores (int): number of CPUs to use
         seed (int): seed
         log_level (str): verbosity of the logger
         concatenate (bool): flag to calculate clustering on collapsed genomic regions (e.g., coding regions in a gene)
-        groupby (bool): flag to compute PanCancer cohort analysis
         clustplot (bool): flag to generate a needle plot with clusters for an element
         qqplot (bool): flat to generate a quantile-quantile (QQ) plot for a dataset
         gzip (bool): flag to generate GZIP compressed output files
@@ -145,6 +146,10 @@ def main(input_file,
     # Get output directory
     if not os.path.exists(output_directory):
         os.makedirs(output_directory, exist_ok=True)
+
+    # Get cache directory
+    path_cache = os.path.join(output_directory, 'cache')
+    os.makedirs(path_cache, exist_ok=True)
 
     # Get output files name
     if elements_file is not None:
@@ -171,34 +176,48 @@ def main(input_file,
     logger.info('\n'.join([
         '',
         'input_file: {}'.format(input_file),
+        'regions_file: {}'.format(regions_file),
         'input_signature: {}'.format(input_signature),
         'output_directory: {}'.format(output_directory),
-        'regions_file: {}'.format(regions_file),
         'genome: {}'.format(genome),
         'element_mutations: {}'.format(element_mutations),
         'cluster_mutations: {}'.format(cluster_mutations),
         'concatenate: {}'.format(concatenate),
         'smooth_window: {}'.format(smooth_window),
         'cluster_window: {}'.format(cluster_window),
-        'cluster_score: {}'.format(cluster_score),
-        'element_score: {}'.format(element_score),
-        'kmer: {}'.format(kmer),
+        'k-mer: {}'.format(kmer),
         'simulation_mode: {}'.format(simulation_mode),
         'simulation_window: {}'.format(simulation_window),
         'n_simulations: {}'.format(n_simulations),
+        'signature_calculation: {}'.format(signature_calculation),
+        'signature_group: {}'.format(signature_group),
         'cores: {}'.format(cores),
         'gzip: {}'.format(gzip),
-        'groupby: {}'.format(groupby),
         'seed: {}'.format(seed)
     ]))
     logger.info('Initializing OncodriveCLUSTL...')
 
-    if simulation_window == 31 and smooth_window == 11 and cluster_window == 11:
-        logger.warning('Running with default simulating, smoothing and clustering OncodriveCLUSTL parameters')
-        logger.warning('Default parameters may not be optimal for your data')
-        logger.warning('Please, read Supplementary Methods to perform model selection for your data')
-
     # Check parameters
+    if simulation_window == 31 and smooth_window == 11 and cluster_window == 11:
+        logger.warning(
+            '\nRunning with default simulating, smoothing and clustering OncodriveCLUSTL parameters. '
+            'Default parameters may not be optimal for your data.\n'
+            'Please, read Supplementary Methods to perform model selection for your data.'
+        )
+
+    if not input_signature and signature_calculation == 'frequencies':
+        logger.warning(
+            '\nSignatures will be calculated as mutation frequencies: '
+            '# mutated ref>alt k-mer counts / # total substitutions\n'
+            'Please, read Supplementary Methods to perform a more accurate signatures calculation'
+        )
+
+    if signature_calculation == 'region_normalized':
+        logger.warning(
+            '\nMutation k-mer counts will be normalized by k-mer region counts in {}\n'
+            'Only mutations inside regions will contribute for the signature calculation'.format(regions_file)
+        )
+
     if n_simulations < 1000:
         raise excep.UserInputError('Invalid number of simulations: please choose an integer greater than 1000')
 
@@ -226,8 +245,9 @@ def main(input_file,
         elements,
         input_file,
         concatenate,
-        groupby
+        signature_group
     )
+    # Summary
     mut = 0
     elem = 0
     element_mutations_cutoff = False
@@ -243,67 +263,73 @@ def main(input_file,
     if not element_mutations_cutoff:
         raise excep.UserInputError('No element found with enough mutations to perform analysis')
 
-    # Check format input file and calculate signature
-    if not input_signature:
-        read_function, mode, delimiter, groupby_header = prep.check_tabular_csv(input_file)
-        path_cache = os.path.join(output_directory, 'cache')
-        os.makedirs(path_cache, exist_ok=True)
-        signature_object = sign.Signature(start_at_0=True, genome=genome, kmer=int(kmer), groupby=groupby)
-        groups_of_analysis = set()
+    # Signature
+    file_prefix = input_file.split('/')[-1].split('.')[0]
+    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
 
-        if groupby:
-            # Check header
-            if groupby_header:
-                # Read file and get input cohorts
-                groups_pickles = 0
-                with read_function(input_file, mode) as read_file:
-                    fd = csv.DictReader(read_file, delimiter=delimiter)
-                    for line in fd:
-                        groups_of_analysis.add(line['GROUP_BY'])
-                logger.info(
-                    'Analysis carried out for {} group{}'.format(
-                        len(groups_of_analysis), 's' if len(groups_of_analysis) > 1 else ''
-                    )
-                )
-                # Check if signatures computed
-                for group in groups_of_analysis:
-                    path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(group, kmer))
-                    if os.path.isfile(path_pickle):
-                        groups_pickles += 1
-                if len(groups_of_analysis) == groups_pickles:
-                    logger.info('Signatures computed')
-                # Calculate signatures
-                else:
-                    logger.info('Computing signatures...')
-                    signature_object.calculate(input_file)
-                    signature_object.save(path_cache, prefix='')
-                    logger.info('Signatures computed')
-            else:
-                raise excep.UserInputError('Analysis by groups requires "GROUP_BY" column in input file')
+    if not input_signature:
+        """
+        Calculate signatures
+        
+        By default, all mutations are taken into account to calculate the relative frequencies for each
+        k-mer ref>alt. 
+         
+        Alternatively, when specified by 'signature_calculation' parameter, k-mer mutation counts can be normalized
+        by the k-mer counts in the regions under analysis listed in 'regions_file'. In this case, only mutations 
+        that fall inside the regions will contribute to the signature calculation.         
+        
+        For both options, k-mers are not collapsed (192 channels) and do not include N (unknown reference nucleotides).
+        """
+        logger.info('Computing signature{}...'.format('s for each group' if signature_group else ''))
+        normalize_regions_file = regions_file if signature_calculation == 'region_normalized' else None
+        signatures_dict = bgsign.relative_frequency(
+            mutations_file=input_file,
+            regions_file=normalize_regions_file,
+            kmer_size=int(kmer),
+            genome_build=genome,
+            collapse=None,
+            includeN=None,
+            group=signature_group,
+            cores=cores
+        )
+        # Reformat dictionary
+        if not signature_group:
+            signatures_to_pickle = {file_prefix: signatures_dict}
         else:
-            # Check if signatures computed
-            file_prefix = input_file.split('/')[-1].split('.')[0]
-            path_pickle = os.path.join(path_cache, '{}_kmer_{}.pickle'.format(file_prefix, kmer))
-            if os.path.isfile(path_pickle):
-                logger.info('Signatures computed')
-            # Calculate signatures
-            else:
-                logger.info('Computing signatures...')
-                signature_object.calculate(input_file)
-                signature_object.save(path_cache, prefix=file_prefix)
-                logger.info('Signatures computed')
+            signatures_to_pickle = signatures_dict
+        # Save to cache
+        with open(path_pickle, 'wb') as fd:
+            pickle.dump(signatures_to_pickle, fd, protocol=2)
+        logger.info('Signature{} computed'.format('s' if signature_group else ''))
     else:
-        # Check format
-        path_cache = input_signature
-        error = prep.check_signature(input_signature, kmer)
-        if error:
-            raise excep.UserInputError('Signatures file could not be read. Please check {}'.format(input_signature))
-        if groupby:
-            raise excep.UserInputError('--groupby flag is not compatible with input signature file. '
-                                       'Please, remove input signature file. '
-                                       'OncodriveCLUSTL will compute one signature file for each group present '
-                                       'in the mutations input file, according to "GROUP_BY" column.')
-        logger.info('Input signatures loaded')
+        try:
+            load_sign = bgsign.file.load(file=input_signature)
+        except UnicodeDecodeError:
+            raise excep.UserInputError('Error in input signatures file {}\n'
+                                       'Please, check signatures file format (JSON)'.format(input_signature))
+        # Check format and save pickle to chache
+        keys = set(load_sign.keys())
+        if not signature_group:
+            # Expects 'file_prefix' to be a key in signatures dictionary of dictionaries
+            if file_prefix in keys:
+                with open(path_pickle, 'wb') as fd:
+                    pickle.dump(load_sign, fd, protocol=2)
+            # When dictionary has k-mer (ex. AAA>T) as keys, accepts dictionary and adds extra key for 'file_prefix'
+            elif '>' in list(keys)[0]:
+                with open(path_pickle, 'wb') as fd:
+                    pickle.dump({file_prefix: load_sign}, fd, protocol=2)
+            # Error, 'file_prefix' and k-mers not found as keys, check format
+            else:
+                raise excep.UserInputError('Incorrect format for input signature file {}'.format(input_signature))
+        else:
+            if not '>' in list(keys)[0]:
+                with open(path_pickle, 'wb') as fd:
+                    pickle.dump(load_sign, fd, protocol=2)
+            # n signature dictionaries are expected (n = groups)
+            else:
+                raise excep.UserInputError('Groups are missing in signature dictionary at {}'.format(input_signature))
+
+        logger.info('Input signature{} ready'.format('s' if signature_group else ''))
 
     # Initialize Experiment class variables and run
     elements_results, clusters_results, global_info_results = exp.Experiment(
@@ -315,13 +341,11 @@ def main(input_file,
                                                                             samples_d,
                                                                             genome,
                                                                             groups_d,
-                                                                            path_cache,
+                                                                            path_pickle,
                                                                             element_mutations,
                                                                             cluster_mutations,
                                                                             smooth_window,
                                                                             cluster_window,
-                                                                            cluster_score,
-                                                                            element_score,
                                                                             int(kmer),
                                                                             n_simulations,
                                                                             simulation_mode,
@@ -332,31 +356,34 @@ def main(input_file,
                                                                             ).run()
 
     # Write elements results (returns list of ranked elements)
-    sorted_list_elements = postp.write_element_results(genome=genome,
-                                                       results=(elements_results, global_info_results),
-                                                       directory=output_directory,
-                                                       file=elements_output_file,
-                                                       is_gzip=gzip
-                                                       )
+    sorted_list_elements = postp.write_element_results(
+        genome=genome,
+        results=(elements_results, global_info_results),
+        directory=output_directory,
+        file=elements_output_file,
+        is_gzip=gzip
+    )
     logger.info('Elements results calculated')
 
     # Write clusters results
-    postp.write_cluster_results(genome=genome,
-                                results=(clusters_results, global_info_results),
-                                directory=output_directory,
-                                file=clusters_output_file,
-                                sorter=sorted_list_elements,
-                                is_gzip=gzip
-                                )
+    postp.write_cluster_results(
+        genome=genome,
+        results=(clusters_results, global_info_results),
+        directory=output_directory,
+        file=clusters_output_file,
+        sorter=sorted_list_elements,
+        is_gzip=gzip
+    )
     logger.info('Clusters results calculated')
 
     # Cluster plot
     if clustplot:
-        info_cluster_plots = cplot.make_clustplot(elements_results,
-                             clusters_results,
-                             global_info_results,
-                             directory=output_directory
-                            )
+        info_cluster_plots = cplot.make_clustplot(
+            elements_results,
+            clusters_results,
+            global_info_results,
+            directory=output_directory
+        )
         for message in info_cluster_plots:
             logger.info(message)
 
@@ -366,13 +393,13 @@ def main(input_file,
             logger.warning('QQ-plot generated for less than 30 elements')
         input_qqplot_file = os.path.join(output_directory, elements_output_file)
         output_qqplot_file = os.path.join(output_directory, 'quantile_quantile_plot.png')
-        qplot.make_qqplot(file=input_qqplot_file,
-                          output=output_qqplot_file,
-                          col_values='P_ANALYTICAL',
-                          top=10
-                          )
+        qplot.make_qqplot(
+            file=input_qqplot_file,
+            output=output_qqplot_file,
+            col_values='P_ANALYTICAL',
+            top=10
+        )
         logger.info('QQ-plot plot generated at : {}'.format(output_qqplot_file))
-
     logger.info('Finished')
 
 

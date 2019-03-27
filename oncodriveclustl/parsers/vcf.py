@@ -53,7 +53,7 @@ def vcf_to_tsv(input_directory, output_file_tsv):
                         read_function = open
                         mode = 'r'
 
-                        # Read
+                    # Read
                     if read_function and mode:
                         with read_function(entry.path, mode) as fd:
                             sample_ident = entry.name.split('.')[0]
