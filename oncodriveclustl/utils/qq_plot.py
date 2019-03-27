@@ -4,6 +4,8 @@ Contains functions to generate a quantile-quantile plot for a dataset
 import numpy as np
 import pandas as pd
 
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 from matplotlib import rcParams
 rcParams['font.family'] = 'sans-serif'
