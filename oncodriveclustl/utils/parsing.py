@@ -100,7 +100,7 @@ def read_mutations(input_mutations, trees, signature_group):
     Returns:
         mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
         samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
-        groups_d (dict): dictionary of elements (keys) and set of groups containing element mutations (values)
+        groups_d (dict): dictionary of elements (keys) and groups (values)
 
     """
     global Mutation
@@ -159,7 +159,7 @@ def parse(input_regions, elements, input_mutations, concatenate, signature_group
         strands_d (dict): dictionary of elements (keys) and strands (values)
         mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
         samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
-        groups_d (dict): dictionary of elements (keys) and set of groups containing element mutations (values)
+        groups_d (dict): dictionary of elements (keys) and groups (values)
 
     """
     global logger

@@ -7,12 +7,12 @@ import math
 from collections import defaultdict
 from collections import namedtuple
 
-import pickle
+import bgreference as bgr
 import daiquiri
 from intervaltree import IntervalTree
-from tqdm import tqdm
 import numpy as np
-import bgreference as bgr
+import pickle
+from tqdm import tqdm
 
 from oncodriveclustl.utils import smoothing as smo
 from oncodriveclustl.utils import clustering as clu
@@ -38,7 +38,7 @@ class Experiment:
                  samples_d,
                  genome,
                  groups_d,
-                 path_cache,
+                 path_pickle,
                  element_mutations_cutoff,
                  cluster_mutations_cutoff,
                  smooth_window,
@@ -64,8 +64,8 @@ class Experiment:
             mutations_d (dict): dictionary of elements (keys) and list of mutations formatted as namedtuple (values)
             samples_d (dict): dictionary of samples (keys) and number of mutations per sample (values)
             genome (str): genome to use
-            groups_d (dict): dictionary of elements and groups (keys) containing element mutations (values)
-            path_cache (str): path to pickles directory (cache)
+            groups_d (dict): dictionary of elements (keys) and groups (values)
+            path_pickle (str): path to signature file (cache)
             element_mutations_cutoff (int): minimum number of mutations per genomic element to undertake analysis
             cluster_mutations_cutoff (int): minimum number of mutations to define a cluster
             smooth_window (int): Tukey kernel smoothing window length
@@ -96,7 +96,7 @@ class Experiment:
         self.mutations_d = mutations_d
         self.samples_d = samples_d
         self.genome = genome
-        self.path_cache = path_cache
+        self.path_pickle = path_pickle
         self.groups_d = groups_d
         self.element_mutations_cutoff = element_mutations_cutoff
         self.cluster_mutations_cutoff = cluster_mutations_cutoff
@@ -182,17 +182,16 @@ class Experiment:
         correction = 1
         skip = False
 
-        # Check signatures pickles exist and read
+        # Check signatures dictionaries per group
         signatures_d = defaultdict()
         for group in self.groups_d[element]:
-            if os.path.isfile(self.path_cache):
-                path_to_signature_pickle = self.path_cache
-            else:
-                path_to_signature_pickle = os.path.join(self.path_cache, '{}_kmer_{}.pickle'.format(group, self.kmer))
-
-            if os.path.isfile(path_to_signature_pickle):
-                signature = pickle.load(open(path_to_signature_pickle, "rb"))
-                signatures_d[group] = signature['probabilities']
+            if os.path.isfile(self.path_pickle):
+                signature = pickle.load(open(self.path_pickle, "rb"))
+                try:
+                    signatures_d[group] = signature[group]
+                except KeyError:
+                    raise Exception('Signatures for group {} are missing in signatures dictionary\n'
+                                    'Please check signatures file {}'.format(group, self.path_pickle))
             else:
                 skip = True
 
@@ -219,9 +218,8 @@ class Experiment:
                             # calculate mutational prob to any other kmer
                             # sort alternates to keep track
                             for alt in sorted(list(nucleot.difference({ref_kmer[self.kmer//2]}))):
-                                alt_kmer = ref_kmer[: self.kmer//2] + alt + ref_kmer[self.kmer//2 + 1:]
                                 for group, signature in signatures_d.items():
-                                    prob[group].append(signature.get((ref_kmer, alt_kmer), 0))
+                                    prob[group].append(signature.get('{}>{}'.format(ref_kmer, alt), 0))
                         else:
                             for group, signature in signatures_d.items():
                                 prob[group].extend([0, 0, 0])
@@ -273,9 +271,13 @@ class Experiment:
         else:
             concat_regions_d = {}
 
-        smooth_tree, mutations_in = smo.smooth_nucleotide(self.regions_d[element], concat_regions_d, mutations,
-                                                          self.tukey_filter, self.simulation_window
-                                                          )
+        smooth_tree, mutations_in = smo.smooth_nucleotide(
+            self.regions_d[element],
+            concat_regions_d,
+            mutations,
+            self.tukey_filter,
+            self.simulation_window
+        )
         index_tree = clu.find_locals(smooth_tree, concat_regions_d)
         raw_clusters_tree = clu.find_clusters(index_tree)
         merge_clusters_tree = clu.merge(raw_clusters_tree, self.cluster_window)
@@ -561,6 +563,7 @@ class Experiment:
         clusters_results = defaultdict()
         global_info_results = defaultdict()
         np.random.seed(self.main_seed)
+        cores_minus_one = self.cores - 1 if self.cores != 1 else self.cores
 
         # Filter elements >= cutoff mutations
         analyzed_elements = []
@@ -592,9 +595,11 @@ class Experiment:
 
             for element in elements:
                 # Calculate observed results
-                observed_clusters_d[element], observed_scores_d[element] = self.analysis(element,
-                                                                                         self.mutations_d[element],
-                                                                                         analysis_mode='obs')
+                observed_clusters_d[element], observed_scores_d[element] = self.analysis(
+                                                                                element,
+                                                                                self.mutations_d[element],
+                                                                                analysis_mode='obs'
+                                                                                )
                 logger.debug('Observed mutations analyzed')
                 # Calculate simulated mutations results if element has observed clusters at least in one region
                 check = 0
@@ -647,7 +652,7 @@ class Experiment:
                 post_item_nan = [(e, float('nan'), float('nan'), float('nan'), float('nan'), None) for
                                  e in noprobabilities_elements + belowcutoff_elements]
                 total_items_split = list(
-                    chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / (self.cores-1))))
+                    chunkizator(post_item_simulated, int(math.ceil(len(post_item_simulated) / cores_minus_one)))
                 )
                 total_items_split.append(post_item_nan)
                 for results in tqdm(executor.map(
