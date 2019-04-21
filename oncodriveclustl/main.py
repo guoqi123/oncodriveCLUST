@@ -34,7 +34,7 @@ LOGS = {
 @click.option('-i', '--input-file', default=None, required=True, type=click.Path(exists=True),
               help='File containing somatic mutations')
 @click.option('-r', '--regions-file', default=None, required=True, type=click.Path(exists=True),
-              help='GZIP compressed file with the genomic regions to analyze')
+              help='File with the genomic regions to analyze')
 @click.option('-o', '--output-directory', default=None, required=True,
               help='Output directory to be created')
 @click.option('-sig', '--input-signature', default=None, required=False, type=click.Path(exists=True),
@@ -271,24 +271,28 @@ def main(input_file,
         """
         Calculate signatures
         
-        By default, all mutations are taken into account to calculate the relative frequencies for each
+        By default, all substutions are taken into account to calculate the relative frequencies for each
         k-mer ref>alt. 
          
         Alternatively, when specified by 'signature_calculation' parameter, k-mer mutation counts can be normalized
-        by the k-mer counts in the regions under analysis listed in 'regions_file'. In this case, only mutations 
+        by the k-mer counts in the regions under analysis listed in 'regions_file'. In this case, only substitutions 
         that fall inside the regions will contribute to the signature calculation.         
         
         For both options, k-mers are not collapsed (192 channels) and do not include N (unknown reference nucleotides).
         """
         logger.info('Computing signature{}...'.format('s for each group' if signature_group else ''))
-        normalize_regions_file = regions_file if signature_calculation == 'region_normalized' else None
-        signatures_dict = bgsign.relative_frequency(
+
+        if signature_calculation == 'region_normalized':
+            normalize_regions_file, signature_calc_function = regions_file, bgsign.normalize
+        else:
+            normalize_regions_file, signature_calc_function = None, bgsign.relative_frequency
+
+        signatures_dict = signature_calc_function(
             mutations_file=input_file,
             regions_file=normalize_regions_file,
             kmer_size=int(kmer),
             genome_build=genome,
             collapse=None,
-            includeN=None,
             group=signature_group,
             cores=cores
         )
@@ -307,7 +311,7 @@ def main(input_file,
         except UnicodeDecodeError:
             raise excep.UserInputError('Error in input signatures file {}\n'
                                        'Please, check signatures file format (JSON)'.format(input_signature))
-        # Check format and save pickle to chache
+        # Check format and save pickle to cache
         keys = set(load_sign.keys())
         if not signature_group:
             # Expects 'file_prefix' to be a key in signatures dictionary of dictionaries
