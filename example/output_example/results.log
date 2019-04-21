@@ -1,50 +1,97 @@
-2018-11-21 18:07:22,451 [1042] INFO     root: OncodriveCLUSTL
-2018-11-21 18:07:22,451 [1042] INFO     root: 
-input_file: /home/carnedo/projects/oncodriveclustl/example/PAAD.tsv.gz
+2019-04-21 11:57:00,628 [28001] INFO     root: OncodriveCLUSTL
+2019-04-21 11:57:00,629 [28001] INFO     root: 
+input_file: ./PAAD.tsv.gz
+regions_file: ./cds.hg19.regions.gz
 input_signature: None
-output_directory: /home/carnedo/projects/oncodriveclustl/example/output_example
-regions_file: /home/carnedo/projects/oncodriveclustl/example/cds_regions.gz
+output_directory: ./output_example
 genome: hg19
 element_mutations: 2
 cluster_mutations: 2
 concatenate: True
 smooth_window: 15
 cluster_window: 15
-cluster_score: cmutcorrected
-element_score: sum
-kmer: 3
+k-mer: 3
 simulation_mode: region_restricted
 simulation_window: 35
 n_simulations: 1000
+signature_calculation: frequencies
+signature_group: None
 cores: 4
 gzip: False
-pancancer: False
-2018-11-21 18:07:22,451 [1042] INFO     root: Initializing OncodriveCLUSTL...
-2018-11-21 18:07:22,451 [1042] INFO     root: Parsing genomic regions and mutations...
-2018-11-21 18:07:38,924 [1042] INFO     root: Regions parsed
-2018-11-21 18:07:39,253 [1042] INFO     root: Mutations parsed
-2018-11-21 18:07:39,309 [1042] INFO     root: Validated elements in genomic regions: 20169
-2018-11-21 18:07:39,309 [1042] INFO     root: Validated elements with mutations: 5183
-2018-11-21 18:07:39,310 [1042] INFO     root: Total substitution mutations: 7913
-2018-11-21 18:07:39,310 [1042] INFO     root: Signatures computed
-2018-11-21 18:07:39,324 [1042] INFO     root: Calculating results 1456 elements...
-2018-11-21 18:07:39,325 [1042] INFO     root: Iteration 1 of 15
-2018-11-21 18:08:49,847 [1042] INFO     root: Iteration 2 of 15
-2018-11-21 18:10:09,725 [1042] INFO     root: Iteration 3 of 15
-2018-11-21 18:11:14,838 [1042] INFO     root: Iteration 4 of 15
-2018-11-21 18:12:36,946 [1042] INFO     root: Iteration 5 of 15
-2018-11-21 18:13:14,278 [1042] INFO     root: Iteration 6 of 15
-2018-11-21 18:14:34,336 [1042] INFO     root: Iteration 7 of 15
-2018-11-21 18:15:43,551 [1042] INFO     root: Iteration 8 of 15
-2018-11-21 18:16:28,406 [1042] INFO     root: Iteration 9 of 15
-2018-11-21 18:18:04,073 [1042] INFO     root: Iteration 10 of 15
-2018-11-21 18:19:37,021 [1042] INFO     root: Iteration 11 of 15
-2018-11-21 18:20:35,639 [1042] INFO     root: Iteration 12 of 15
-2018-11-21 18:22:24,297 [1042] INFO     root: Iteration 13 of 15
-2018-11-21 18:23:29,242 [1042] INFO     root: Iteration 14 of 15
-2018-11-21 18:24:22,628 [1042] INFO     root: Iteration 15 of 15
-2018-11-21 18:25:05,485 [1042] INFO     root: Elements results calculated
-2018-11-21 18:25:05,522 [1042] INFO     root: Clusters results calculated
-2018-11-21 18:25:05,523 [1042] WARNING  root: QQ-plot generated for less than 30 elements
-2018-11-21 18:25:06,277 [1042] INFO     root: QQ-plot plot generated at : /home/carnedo/projects/oncodriveclustl/example/output_example/quantile_quantile_plot.png
-2018-11-21 18:25:06,277 [1042] INFO     root: Finished
+seed: None
+2019-04-21 11:57:00,629 [28001] INFO     root: Initializing OncodriveCLUSTL...
+2019-04-21 11:57:00,629 [28001] WARNING  root: 
+Signatures will be calculated as mutation frequencies: # mutated ref>alt k-mer counts / # total substitutions
+Please, read Supplementary Methods to perform a more accurate signatures calculation
+2019-04-21 11:57:00,629 [28001] INFO     root: Parsing genomic regions and mutations...
+2019-04-21 11:57:18,289 [28001] INFO     root: Regions parsed
+2019-04-21 11:57:18,620 [28001] INFO     root: Mutations parsed
+2019-04-21 11:57:18,671 [28001] INFO     root: Validated elements in genomic regions: 20169
+2019-04-21 11:57:18,671 [28001] INFO     root: Validated elements with mutations: 5183
+2019-04-21 11:57:18,671 [28001] INFO     root: Total substitution mutations: 7913
+2019-04-21 11:57:18,672 [28001] INFO     root: Computing signature...
+2019-04-21 11:57:18,672 [28001] INFO     bgsignature: Computing counts...
+2019-04-21 11:57:23,729 [28001] INFO     root: Signature computed
+2019-04-21 11:57:23,770 [28001] INFO     root: Calculating results 1456 elements...
+2019-04-21 11:57:23,771 [28001] INFO     root: Iteration 1 of 15
+2019-04-21 11:57:56,272 [28001] INFO     root: Iteration 2 of 15
+2019-04-21 11:58:45,102 [28001] INFO     root: Iteration 3 of 15
+2019-04-21 11:59:33,988 [28001] INFO     root: Iteration 4 of 15
+2019-04-21 12:00:13,156 [28001] INFO     root: Iteration 5 of 15
+2019-04-21 12:01:24,510 [28001] INFO     root: Iteration 6 of 15
+2019-04-21 12:02:51,377 [28001] INFO     root: Iteration 7 of 15
+2019-04-21 12:03:41,901 [28001] INFO     root: Iteration 8 of 15
+2019-04-21 12:05:04,758 [28001] INFO     root: Iteration 9 of 15
+2019-04-21 12:06:54,034 [28001] INFO     root: Iteration 10 of 15
+2019-04-21 12:07:48,565 [28001] INFO     root: Iteration 11 of 15
+2019-04-21 12:08:23,892 [28001] INFO     root: Iteration 12 of 15
+2019-04-21 12:09:41,693 [28001] INFO     root: Iteration 13 of 15
+2019-04-21 12:10:49,434 [28001] INFO     root: Iteration 14 of 15
+2019-04-21 12:12:12,975 [28001] INFO     root: Iteration 15 of 15
+2019-04-21 12:12:55,103 [28001] INFO     root: Elements results calculated
+2019-04-21 12:12:55,141 [28001] INFO     root: Clusters results calculated
+2019-04-21 12:12:55,141 [28001] WARNING  root: QQ-plot generated for less than 30 elements
+2019-04-21 12:12:55,885 [28001] INFO     root: QQ-plot plot generated at : ./output_example/quantile_quantile_plot.png
+2019-04-21 12:12:55,886 [28001] INFO     root: Finished
+2019-04-21 12:31:18,464 [28574] INFO     root: OncodriveCLUSTL
+2019-04-21 12:31:18,464 [28574] INFO     root: 
+input_file: ./PAAD.tsv.gz
+regions_file: ./cds.hg19.regions.gz
+input_signature: None
+output_directory: ./output_example
+genome: hg19
+element_mutations: 2
+cluster_mutations: 2
+concatenate: True
+smooth_window: 15
+cluster_window: 15
+k-mer: 3
+simulation_mode: region_restricted
+simulation_window: 35
+n_simulations: 1000
+signature_calculation: frequencies
+signature_group: None
+cores: 4
+gzip: False
+seed: None
+2019-04-21 12:31:18,464 [28574] INFO     root: Initializing OncodriveCLUSTL...
+2019-04-21 12:31:18,464 [28574] WARNING  root: 
+Signatures will be calculated as mutation frequencies: # mutated ref>alt k-mer counts / # total substitutions
+Please, read Supplementary Methods to perform a more accurate signatures calculation
+2019-04-21 12:31:18,464 [28574] INFO     root: Input element: 1
+2019-04-21 12:31:18,464 [28574] INFO     root: KRAS
+2019-04-21 12:31:18,464 [28574] INFO     root: Parsing genomic regions and mutations...
+2019-04-21 12:31:19,441 [28574] INFO     root: Regions parsed
+2019-04-21 12:31:19,514 [28574] INFO     root: Mutations parsed
+2019-04-21 12:31:19,514 [28574] INFO     root: Validated elements in genomic regions: 1
+2019-04-21 12:31:19,514 [28574] INFO     root: Validated elements with mutations: 1
+2019-04-21 12:31:19,514 [28574] INFO     root: Total substitution mutations: 121
+2019-04-21 12:31:19,515 [28574] INFO     root: Computing signature...
+2019-04-21 12:31:19,515 [28574] INFO     bgsignature: Computing counts...
+2019-04-21 12:31:19,947 [28574] INFO     root: Signature computed
+2019-04-21 12:31:19,947 [28574] INFO     root: Calculating results 1 element...
+2019-04-21 12:31:19,948 [28574] INFO     root: Iteration 1 of 1
+2019-04-21 12:31:24,755 [28574] INFO     root: Elements results calculated
+2019-04-21 12:31:24,760 [28574] INFO     root: Clusters results calculated
+2019-04-21 12:31:25,504 [28574] INFO     root: Cluster plot for KRAS generated at: ./output_example/KRAS_plot.png
+2019-04-21 12:31:25,504 [28574] INFO     root: Finished

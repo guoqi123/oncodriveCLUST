@@ -156,18 +156,18 @@ Run the example
 ---------------
 
 After installing OncodriveCLUSTL, you can run an example of TCGA pancreatic adenocarcinomas (Ellrott et al. 2018) for coding regions (Mularoni et al., 2016) using 1000 simulations.
-First you need to download the example folder. Then you run OncodriveCLUSTL with default parameters as::
+First you need to download the example folder. Then you run OncodriveCLUSTL with default mode and parameters as::
 
-        $ oncodriveclustl -i ~/example/PAAD.tsv.gz -r ~/example/cds_regions.gz -o ~/example/output_example
+        $ oncodriveclustl -i ~/example/PAAD.tsv.gz -r ~/example/cds.hg19.regions.gz -o ~/example/output_example
 
 The results will be saved in a folder named ``output_example``.
 
-You can compute a more sophisticated analysis and generate a quantile-quantile plot by typing::
+You can compute a more sophisticated analysis using non-default parameters and generate a quantile-quantile plot by typing::
 
-        $ oncodriveclustl -i ~/example/PAAD.tsv.gz -r ~/example/cds_regions.gz -o ~/example/output_example -sw 15 -cw 15 -simw 35 -sim region_restricted --concatenate --qqplot
+        $ oncodriveclustl -i ~/example/PAAD.tsv.gz -r ~/example/cds.hg19.regions.gz -o ~/example/output_example -sw 15 -cw 15 -simw 35 -sim region_restricted --concatenate --qqplot
 
 If you want to run a specific GE and generate a plot its observed clusters, you can type::
 
-        $ oncodriveclustl -i ~/example/PAAD.tsv.gz -r ~/example/cds_regions.gz -o ~/example/output_example -sw 15 -cw 15 -simw 35 -sim region_restricted --concatenate --clustplot -e KRAS
+        $ oncodriveclustl -i ~/example/PAAD.tsv.gz -r ~/example/cds.hg19.regions.gz -o ~/example/output_example -sw 15 -cw 15 -simw 35 -sim region_restricted --concatenate --clustplot -e KRAS
 
 
