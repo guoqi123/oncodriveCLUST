@@ -93,7 +93,7 @@ If you have a VCF file or directory of VCF files containing somatic mutations, y
 
 Please, check 'parsers/vcf.py' module for more details.
 
-If you would like to run OncodriveCLUSTL using a per-calculated signature or mutational profile, you need to provide a dictionary containing the k-mer mutational probabilities in JSON format::
+If you would like to run OncodriveCLUSTL using a per-calculated signature or mutational profile, you need to provide a dictionary containing the reference k-mer to alternate mutational probabilities in JSON format::
 
         {
             "my_dataset": {
@@ -116,6 +116,8 @@ If you would like to run OncodriveCLUSTL using a per-calculated signature or mut
                 ...
             }
         }
+
+OncodriveCLUSTL requires non-collapsed k-mer probabilities (192 for tri-nucleotides, 3072 for penta-nucleotides).
 
 .. _readme outputdata:
 

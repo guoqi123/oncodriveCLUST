@@ -115,7 +115,7 @@ def main(input_file,
             By default (when no input signatures), OncodriveCLUSTL will calculate them from the mutations input file.
         elements_file (str): path to file containing one element per row (optional) to analyzed the listed elements.
             By default, OncodriveCLUSTL analyzes all genomic elements contained in `regions_file`.
-        elements (str): genomic element symbol (optional). The analysis will be performed only on the specified elements.
+        elements (str): genomic element symbol (optional). The analysis will be performed only on the specified GEs.
         genome (str): genome to use: 'hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast' and 'f344'
         element_mutations (int): minimum number of mutations per genomic element to undertake analysis
         cluster_mutations (int): minimum number of mutations to define a cluster
@@ -274,9 +274,9 @@ def main(input_file,
         By default, all substutions are taken into account to calculate the relative frequencies for each
         k-mer ref>alt. 
          
-        Alternatively, when specified by 'signature_calculation' parameter, k-mer mutation counts can be normalized
-        by the k-mer counts in the regions under analysis listed in 'regions_file'. In this case, only substitutions 
-        that fall inside the regions will contribute to the signature calculation.         
+        Alternatively, when specified through '--signature-calculation region_normalized', k-mer mutation counts 
+        can be normalized by the k-mer counts in the regions under analysis listed in 'regions_file'. In this case, 
+        only substitutions that fall inside the regions will contribute to the signature calculation.         
         
         For both options, k-mers are not collapsed (192 channels) and do not include N (unknown reference nucleotides).
         """
