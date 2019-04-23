@@ -3,8 +3,8 @@ Contains the command line parsing
 """
 
 # Import modules
-import logging
 import os
+import logging
 
 import bgsignature as bgsign
 import click
@@ -41,8 +41,8 @@ LOGS = {
               help='File containing input context based mutational probabilities (signature)')
 @click.option('-ef', '--elements-file', default=None, type=click.Path(exists=True),
               help='File with the symbols of the elements to analyze')
-@click.option('-e', '--element', default=None, multiple=True, type=click.STRING,
-              help='Symbol of the element to analyze')
+@click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
+              help='Symbol of the element(s) to analyze')
 @click.option('-g', '--genome', default='hg19',
               type=click.Choice(['hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
               help='Genome to use')
@@ -115,7 +115,7 @@ def main(input_file,
             By default (when no input signatures), OncodriveCLUSTL will calculate them from the mutations input file.
         elements_file (str): path to file containing one element per row (optional) to analyzed the listed elements.
             By default, OncodriveCLUSTL analyzes all genomic elements contained in `regions_file`.
-        elements (str): genomic element symbol (optional). The analysis will be performed only on the specified element.
+        elements (str): genomic element symbol (optional). The analysis will be performed only on the specified elements.
         genome (str): genome to use: 'hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast' and 'f344'
         element_mutations (int): minimum number of mutations per genomic element to undertake analysis
         cluster_mutations (int): minimum number of mutations to define a cluster

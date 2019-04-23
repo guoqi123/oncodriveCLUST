@@ -5,68 +5,67 @@ This module contains functions to parse input mutations files into tabular forma
 # Import modules
 import os
 import gzip
+import logging
 
 import click
-
+import daiquiri
 
 @click.command()
-@click.option('-i', '--input_directory', required=True, type=click.Path(exists=True),
-              help='Directory containing vcf files of somatic mutations')
-@click.option('-o', '--output_file_tsv', required=True, help='Output tsv file')
-def vcf_to_tsv(input_directory, output_file_tsv):
+@click.option('-i', '--input_path', required=True, type=click.Path(exists=True),
+              help='VCF File or directory containing VCF files of somatic mutations')
+@click.option('-o', '--output_file', required=True, help='Output TSV file')
+def vcf_to_tsv(input_path, output_file):
     """
-    Parse 'vcf' or 'vcf.gz' mutation files in a directory into tabular format with the following columns:
+    Parse 'vcf' or 'vcf.gz' mutation files into tabular format with the following columns:
         'CHROMOSOME'
         'POSITION'
         'REF'
         'ALT'
         'SAMPLE'
         'ID'
-    This function will parse all vcf files in the directory. It is assumed that one file corresponds to one sample.
-    Therefore, file name will be used as sample identifier ('SAMPLE' column). No filters are taken into account to
-    parse mutations.
+    This function will parse a single file or all vcf files in a directory.
+    It is assumed that one file corresponds to one sample. Therefore, file name will be used as sample identifier
+    ('SAMPLE' column). No filters are taken into account to parse mutations.
 
     Args:
-        input_directory (str): path to directory containing vcf files
-        output_file_tsv (str): path to output file
+        input_path (str): path to file or directory containing vcf files
+        output_file (str): path to output file
 
     Returns:
         None
 
     """
-    output_file_log = '{}.log'.format(output_file_tsv.split('.')[0])
 
-    with open(output_file_log, 'w') as logfd:
-        with open(output_file_tsv, 'w') as ofd:
-            ofd.write('{}\n'.format('\t'.join(['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE', 'ID'])))
+    daiquiri.setup(level=logging.INFO)
+    logger = daiquiri.getLogger()
 
-            for entry in os.scandir(input_directory):
+    # File(s) to reformat
+    files = set()
+    if os.path.isfile(input_path):
+        files.add(input_path)
+    elif os.path.isdir(input_path):
+        for entry in os.scandir(input_path):
+            if 'vcf' in entry.name:
+                files.add(entry.path)
+    # Reformat
+    with open(output_file, 'w') as ofd:
+        ofd.write('{}\n'.format('\t'.join(['CHROMOSOME', 'POSITION', 'REF', 'ALT', 'SAMPLE', 'ID'])))
+        for file in files:
+            if file.endswith('.vcf.gz'):
+                read_function, mode = gzip.open, 'rt'
+            else:
+                read_function, mode = open, 'r'
 
-                # Check compression
-                if os.path.isfile(entry.path):
-                    read_function = None
-                    mode = None
-                    if entry.name.endswith('.vcf.gz'):
-                        read_function = gzip.open
-                        mode = 'rt'
-                    elif entry.name.endswith('.vcf'):
-                        read_function = open
-                        mode = 'r'
-
-                    # Read
-                    if read_function and mode:
-                        with read_function(entry.path, mode) as fd:
-                            sample_ident = entry.name.split('.')[0]
-                            for line in fd:
-                                if not line.startswith('#'):
-                                    chrom, pos, mut_ident, ref, alt = line.strip().split('\t')[:5]
-                                    ofd.write('{}\n'.format('\t'.join([chrom, pos, ref, alt, sample_ident, mut_ident])))
-                        logfd.write('{}\tPARSED\n'.format(entry.path))
-                    else:
-                        logfd.write('{}\tPASS\n'.format(entry.path))
+            with read_function(file, mode) as fd:
+                sample_ident = file.split('/')[-1].split('.')[0]
+                for line in fd:
+                    if not line.startswith('#'):
+                        chrom, pos, mut_ident, ref, alt = line.strip().split('\t')[:5]
+                        ofd.write('{}\n'.format('\t'.join([chrom, pos, ref, alt, sample_ident, mut_ident])))
+            logger.info('{} PARSED'.format(file))
 
 
 """
-Once you have installed oncodriveclustl, you can run this function through the command line as: 
+Once you have installed OncodriveCLUSTL, you can run this function through the command line as: 
 ~$ parse_vcf -i [INPUT_DIRECTORY] -o [OUTPUT_FILE]
 """

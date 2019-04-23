@@ -87,7 +87,7 @@ OncodriveCLUSTL only requires two main inputs, the mutations file and the annota
 
 You can check the input formats in the files provided in the example.
 
-If you have a directory containing mutation files in VCF format, you can run our VCF parser to obtain a tabular file compatible with OncodriveCLUSTL input format::
+If you have a VCF file or directory of VCF files containing somatic mutations, you can run our VCF parser to obtain a tabular file compatible with OncodriveCLUSTL input format::
 
        $ parse_vcf -i [INPUT_DIRECTORY] -o [OUTPUT_FILE]
 
@@ -174,7 +174,7 @@ OncodriveCLUSTL is meant to be used through the command line.
 - '-o', '--output-directory': Output directory to be created (required)
 - '-sig', '--input-signature': File containing input context based mutational probabilities
 - '-ef', '--elements-file': File with the symbol of a set GEs to analyze, one per row
-- '-e', '--element': Symbol of the GE to analyze
+- '-e', '--elements': Symbol of the GE(s) to analyze
 - '-g', '--genome': Genome to use. Default is hg19
 - '-emut', '--element-mutations': Cutoff of element mutations. Default is 2
 - '-cmut', '--cluster-mutations': Cutoff of cluster mutations. Default is 2
