@@ -41,7 +41,7 @@ LOGS = {
               help='File containing input context based mutational probabilities (signature)')
 @click.option('-ef', '--elements-file', default=None, type=click.Path(exists=True),
               help='File with the symbols of the elements to analyze')
-@click.option('-e', '--elements', default=None, multiple=True, type=click.STRING,
+@click.option('-e', '--element', default=None, multiple=True, type=click.STRING,
               help='Symbol of the element to analyze')
 @click.option('-g', '--genome', default='hg19',
               type=click.Choice(['hg38', 'hg19', 'mm10', 'c3h', 'car', 'cast', 'f344']),
@@ -63,7 +63,7 @@ LOGS = {
 @click.option('-simw', '--simulation-window', type=click.IntRange(19, 101), default=31,
               help='Simulation window. Default is 31')
 @click.option('-sigcalc', '--signature-calculation', default='frequencies',
-              help='Signature calculation: mutation frequencies (default) or mutation counts normalized by k-mer '
+              help='Signature calculation: mutation frequencies (default) or k-mer mutation counts normalized by k-mer '
                    'region counts',
               type=click.Choice(['frequencies', 'region_normalized']))
 @click.option('-siggroup', '--signature-group', default=None,
