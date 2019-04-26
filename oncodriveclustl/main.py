@@ -172,6 +172,10 @@ def main(input_file,
     ))
     logger = daiquiri.getLogger()
 
+    # suppress log messages from some libraries
+    daiquiri.getLogger('bgdata').setLevel(logging.WARNING)
+    daiquiri.getLogger('bgsignature').setLevel(logging.WARNING)
+
     logger.info('OncodriveCLUSTL')
     logger.info('\n'.join([
         '',
