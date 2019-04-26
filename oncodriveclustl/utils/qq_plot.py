@@ -7,9 +7,6 @@ import pandas as pd
 import matplotlib
 matplotlib.use('agg')
 import matplotlib.pyplot as plt
-from matplotlib import rcParams
-rcParams['font.family'] = 'sans-serif'
-rcParams['font.sans-serif'] = ['Arial']
 
 
 def preprocess_dataframe(file, col_values, p_values_cutoff=None, remove_cgc=False):
