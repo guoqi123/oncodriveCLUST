@@ -4,32 +4,32 @@ From: debian:buster-slim
 %environment
     export BGDATA_LOCAL=/datasets
     export BBGLAB_HOME=/config
+    export BGDATA_OFFLINE=TRUE
     export LC_ALL=C.UTF-8
 
 %runscript
     exec "/usr/local/bin/oncodriveclustl" "$@"
 
 %files
-    dist/oncodriveclustl-1.0.0.tar.gz /oncodriveclustl-1.0.0.tar.gz
-    example/PAAD.tsv.gz /tmp/PAAD.tsv.gz
-    example/cds_regions.gz /tmp/cds_regions.gz
+    dist/oncodriveclustl-PKG_VERSION.tar.gz /oncodriveclustl.tar.gz
 
 %post
 
     # Load environment
     export BGDATA_LOCAL=/datasets
     export BBGLAB_HOME=/config
+    export BGDATA_OFFLINE=TRUE
     export LC_ALL=C.UTF-8
 
     # Install dependencies
     apt update
-    apt install -y python3.6 python3-pip python3-sklearn python3-statsmodels \
+    apt install -y python3 python3-pip python3-sklearn python3-statsmodels \
                    python3-matplotlib python3-scipy python3-pandas python3-numpy python3-pycurl \
                    python3-click python3-requests python3-tqdm python3-daiquiri python3-humanize \
                    python3-certifi python3-configobj python3-sortedcontainers
 
     # Install OncodriveCLUSTL
-    pip3 --no-cache-dir install /oncodriveclustl-1.0.0.tar.gz
+    pip3 --no-cache-dir install /oncodriveclustl.tar.gz
 
     # Clean unused things
     apt remove -y python3-pip
@@ -41,12 +41,7 @@ From: debian:buster-slim
     mkdir /config
 
     # Download hg19 from bgdata
-    bgdata datasets genomereference hg19
-
-    # Use bgdata offline
-    sed -i 's@# offline =@offline =@g' /config/bgdata.conf
+    bgdata get datasets/genomereference/GENOME
 
 %test
-    export LC_ALL=C.UTF-8 && export BGDATA_LOCAL=/datasets && export BBGLAB_HOME=/config && \
-    /usr/local/bin/oncodriveclustl -i /tmp/PAAD.tsv.gz -r /tmp/cds_regions.gz -o /tmp/output
-
+    /usr/local/bin/oncodriveclustl --help
