@@ -18,7 +18,6 @@ From: debian:buster-slim
     # Load environment
     export BGDATA_LOCAL=/datasets
     export BBGLAB_HOME=/config
-    export BGDATA_OFFLINE=TRUE
     export LC_ALL=C.UTF-8
 
     # Install dependencies
@@ -41,6 +40,8 @@ From: debian:buster-slim
     mkdir /config
 
     # Download hg19 from bgdata
+    bgdata get datasets/genomereference/GENOME
+    # A second call is needed to copy the tag file
     bgdata get datasets/genomereference/GENOME
 
 %test

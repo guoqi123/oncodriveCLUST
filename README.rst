@@ -47,6 +47,10 @@ The following command will show you the help::
         $ oncodriveclustl --help
 
 
+You can also download a singularity image
+from the `downloads page <https://bitbucket.org/bbglab/oncodriveclustl/downloads/>`_.
+Running the image invokes the oncodriveclustl command.
+
 .. _readme inputdata:
 
 Input data
