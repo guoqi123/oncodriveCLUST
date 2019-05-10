@@ -51,7 +51,7 @@ def read_regions(input_regions, elements):
         if elements and symbol not in elements:
             continue
         if int(start) != int(end):
-            if chromosome != 'MT':
+            if chromosome != 'MT':    # Skip MT regions
                 trees[chromosome][int(start): int(end) + 1] = symbol + '//' + ensid
                 regions_d[symbol + '//' + ensid].addi(int(start), (int(end) + 1))
                 chromosomes_d[symbol + '//' + ensid] = chromosome
