@@ -171,9 +171,8 @@ class Experiment:
         """
         nucleot = {'A', 'C', 'G', 'T'}
         probs_tree = defaultdict(IntervalTree)
-        nu = 0
         delta = 1 if self.kmer == 3 else 2
-        correction = 1
+        half_window = self.simulation_window // 2
         skip = False
 
         # Check signatures dictionaries per group
@@ -194,9 +193,9 @@ class Experiment:
             sequence = ''
             for interval in self.regions_d[element]:
                 probabilities = defaultdict(list)
-                expected_length = interval[1] - interval[0] + self.simulation_window - correction
-                start = interval[0] - (self.simulation_window // 2) - delta
-                size = interval[1] - interval[0] + (self.simulation_window - correction) + delta*2
+                expected_length = interval[1] - interval[0] + half_window*2
+                start = interval[0] - half_window - delta
+                size = interval[1] - interval[0] + half_window*2 + delta*2
                 try:
                     sequence = bgr.refseq(self.genome, self.chromosomes_d[element], start, size)
                 except ValueError as e:
@@ -205,7 +204,6 @@ class Experiment:
                 if sequence:
                     # Search kmer probabilities
                     for n in range(delta, len(sequence)-delta):  # start to end
-                        nu += 1
                         ref_kmer = sequence[n - delta: n + delta + 1]
                         prob = defaultdict(list)
                         if ref_kmer.count('N') == 0:
@@ -215,6 +213,8 @@ class Experiment:
                                 for group, signature in signatures_d.items():
                                     prob[group].append(signature.get('{}>{}'.format(ref_kmer, alt), 0))
                         else:
+                            logger.warning('Mutational probabilities for position {0} could not be calculated. '
+                                           'Reverting {0}>ALT probabilities to 0'.format(n))
                             for group, signature in signatures_d.items():
                                 prob[group].extend([0, 0, 0])
                         # Extend position info
@@ -332,7 +332,7 @@ class Experiment:
                 the genomic region. 
                 """
 
-                if (mutation.region[1] - mutation.region[0] + 1) >= self.simulation_window:
+                if (mutation.region[1] - mutation.region[0]) >= self.simulation_window:
                     # Check if hospot outside region
                     check_5 = expected_hotspot_begin < mutation.region[0]
                     check_3 = expected_hotspot_end > (mutation.region[1] - 1)
